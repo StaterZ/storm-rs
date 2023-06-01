@@ -1,0 +1,2 @@
+let foo = "abc \"123" == "geh";
+let bar = 42;
