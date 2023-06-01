@@ -107,8 +107,7 @@ fn next_token_kind(stream: &mut Stream<Chars>) -> Result<TokenKind, String> {
 					].into_iter().collect();
 				}
 
-				let c = stream.get().next();
-				match c {
+				match stream.get().current {
 					Some(c) => match RADICES.get(&c) {
 						Some(&radix) => {
 							stream.get().next();
@@ -138,7 +137,8 @@ fn next_token_kind(stream: &mut Stream<Chars>) -> Result<TokenKind, String> {
 
 		let mut has_trailing_underscore = false;
 		let mut value: u64 = 0;
-		for (i, c) in stream.get().enumerate() {
+		let mut i: usize = 0;
+		while let Some(c) = stream.get().current {
 			if c == '_' {
 				if i == 0 {
 					stream.pop();
@@ -146,28 +146,30 @@ fn next_token_kind(stream: &mut Stream<Chars>) -> Result<TokenKind, String> {
 				}
 
 				has_trailing_underscore = true;
-				continue;
+			} else {
+				match c.to_digit(36) {
+					Some(digit_value) => {
+						if digit_value >= radix {
+							stream.pop();
+							return if is_match {
+								Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
+							} else {
+								Ok(None)
+							}
+						}
+			
+						value *= radix as u64;
+						value += digit_value as u64;
+			
+						is_match = true;
+						has_trailing_underscore = false;
+					},
+					None => break,
+				};
 			}
 
-			match c.to_digit(36) {
-				Some(digit_value) => {
-					if digit_value >= radix {
-						stream.pop();
-						return if is_match {
-							Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
-						} else {
-							Ok(None)
-						}
-					}
-		
-					value *= radix as u64;
-					value += digit_value as u64;
-		
-					is_match = true;
-					has_trailing_underscore = false;
-				},
-				None => break,
-			};
+			stream.get().next();
+			i += 1;
 		}
 
 		if has_trailing_underscore {
@@ -221,7 +223,7 @@ fn next_token_kind(stream: &mut Stream<Chars>) -> Result<TokenKind, String> {
 		return Ok(TokenKind::Identifier(value));
 	}
 
-	if stream.current == None {
+	if stream.current.is_none() {
 		return Ok(TokenKind::Eof);
 	}
 
