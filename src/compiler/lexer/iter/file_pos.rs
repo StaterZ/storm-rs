@@ -1,4 +1,4 @@
-use szu::iter::{Consumed, ConsumedExt};
+use szu::iter::{EnumerateArtifact, ArtifactExt};
 use std::fmt::Display;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -16,14 +16,14 @@ struct State {
 }
 
 pub struct FilePos<I: Iterator> {
-	iter: Consumed<I>,
+	iter: EnumerateArtifact<I>,
 	state: Option<State>
 }
 
 impl<I: Iterator<Item = char>> FilePos<I> {
 	pub fn new(iter: I) -> Self {
 		Self {
-			iter: iter.consumed(),
+			iter: iter.enumerate_artifact(),
 			state: None,
 		}
 	}
@@ -33,7 +33,7 @@ impl<I: Iterator<Item = char>> FilePos<I> {
 	}
 
 	pub fn get_column(&self) -> Option<usize> {
-		self.state.as_ref().map(|state| self.iter.get_consumed() - state.line_start_index + 1)
+		self.state.as_ref().map(|state| self.iter.get_artifact().unwrap() - state.line_start_index + 1)
 	}
 }
 
@@ -43,15 +43,15 @@ impl<I: Iterator<Item = char>> Iterator for FilePos<I> {
 	fn next(&mut self) -> Option<Self::Item> {
 		let state = self.state.get_or_insert(State {
 			line: 1,
-			line_start_index: 1,
+			line_start_index: 0,
 			line_state: LineState::Other,
 		});
 
-		let x = self.iter.next().map(|c| {
+		let x = self.iter.next().map(|(i, c)| {
 			let is_new_line_continued = state.line_state == LineState::CarrageReturn && c == '\n';
 
 			if !is_new_line_continued && state.line_state != LineState::Other {
-				state.line_start_index = self.iter.get_consumed();
+				state.line_start_index = i;
 				state.line += 1;
 			}
 
