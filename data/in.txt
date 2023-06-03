@@ -1,2 +1,4 @@
-let foo = "abc \"123" == "geh";
-let bar = 42;
+let foo = "abc \"123" == "geh"; //haha "
+let @"ba\"r" = 0x42;
+//weeeeee
+let x = "❤n! ░▒▓█";

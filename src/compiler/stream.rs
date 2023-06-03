@@ -14,6 +14,10 @@ impl<I: Iterator> Stream<I> {
 		};
 	}
 
+	pub fn get_inner<'a>(&'a self) -> &'a I {
+		&self.iter
+	}
+
 	#[inline(always)]
 	pub fn check(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> bool {
 		match &self.current {

@@ -44,9 +44,9 @@ enum Kind {
 	Block { stmts: Vec<Node> },
 	Let { lhs: Box<Node>, rhs: Box<Node> },
 	BinOp { op: BinOpKind, lhs: Box<Node>, rhs: Box<Node> },
-	Indentifier { value: String },
-	StrLit { value: String },
 	IntLit { value: u64 },
+	StrLit { value: String },
+	Indentifier { value: String },
 }
 
 #[derive(Debug)]
@@ -71,12 +71,13 @@ impl TreeDisplay for Node {
 
 					CmpBinOpKind { lt: false, eq: false, gt: true } => ">",
 					CmpBinOpKind { lt: false, eq: true, gt: true } => ">=",
-					_ => panic!("bad {}", stringify!(CmpBinOpKind)),
+
+					cmp => panic!("bad {:?}", cmp),
 				}.to_string(),
 			},
-			Kind::Indentifier { value } => format!("{:?}", value.cyan()),
-			Kind::StrLit { value } => format!("{:?}", value.cyan()),
 			Kind::IntLit { value } => format!("{}", value.cyan()),
+			Kind::StrLit { value } => format!("{:?}", value.cyan()),
+			Kind::Indentifier { value } => format!("{}", value.cyan()),
 		};
 		format!("{}{}({})", text, t!(text.len() > 0 => " ", ""), self.kind.as_ref())
 	}
@@ -100,9 +101,9 @@ impl TreeDisplay for Node {
 				("lhs".to_string(), lhs.deref()),
 				("rhs".to_string(), rhs.deref()),
 			]),
-			Kind::Indentifier { value: _ } => None,
-			Kind::StrLit { value: _ } => None,
 			Kind::IntLit { value: _ } => None,
+			Kind::StrLit { value: _ } => None,
+			Kind::Indentifier { value: _ } => None,
 		}
 	}
 }
@@ -118,10 +119,12 @@ impl<T: std::fmt::Display> TreeDisplay for T {
 }
 
 fn discard_space(stream: &mut Stream<Iter<Token>>) {
-	while stream.expect(|&t| match t.kind {
-		TokenKind::Space |TokenKind::NewLine => true,
-		_ => false,
-	}).is_some() { };
+	while stream.expect(|&t| matches!(t.kind, 
+		TokenKind::Space |
+		TokenKind::NewLine |
+		TokenKind::Comment |
+		TokenKind::MultilineComment
+	)).is_some() { };
 }
 
 fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: TokenKind) -> Result<&'a Token, String> {
@@ -164,32 +167,31 @@ pub fn ast(tokens: &Vec<Token>) -> Result<Node, String> {
 fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, String> {
 	let lhs = expr_atom(stream)?;
 	
-	match stream.hypothetically(|stream| {
-		discard_space(stream);
-		if stream.expect(|&t| t.kind == TokenKind::Compare).is_none() {
-			return Ok(lhs);
-		}
-		
-		discard_space(stream);
-		let rhs = expr_atom(stream)?;
+	let mut stream = stream.dup();
+	discard_space(stream.get());
+	if stream.get().expect(|&t| t.kind == TokenKind::Compare).is_none() {
+		stream.pop();
+		return Ok(lhs);
+	}
+	
+	discard_space(stream.get());
+	let rhs = expr_atom(stream.get())?;
+	stream.nip();
 
-		return Ok(Node {
-			kind: Kind::BinOp { op: BinOpKind::Cmp(CmpBinOpKind { lt: false, eq: true, gt: false }),
+	return Ok(Node {
+		kind: Kind::BinOp { op: BinOpKind::Cmp(CmpBinOpKind { lt: false, eq: true, gt: false }),
 			lhs: Box::new(lhs),
 			rhs: Box::new(rhs),
-		} });
-	}) {
-		Ok(bin_op) => Ok(bin_op),
-		Err(err) => Err(err),
-	}
+		}
+	});
 }
 
 fn expr_atom(stream: &mut Stream<core::slice::Iter<Token>>) -> Result<Node, String> {
 	match stream.next() {
 		Some(token) => match &token.kind {
-			TokenKind::Identifier(value) => Ok(Node { kind: Kind::Indentifier { value: value.clone() } }),
-			TokenKind::StrLit(value) => Ok(Node { kind: Kind::StrLit { value: value.clone() } }),
 			TokenKind::IntLit(value) => Ok(Node { kind: Kind::IntLit { value: *value } }),
+			TokenKind::StrLit(value) => Ok(Node { kind: Kind::StrLit { value: value.clone() } }),
+			TokenKind::Identifier(value) => Ok(Node { kind: Kind::Indentifier { value: value.clone() } }),
 			_ => Err(format!("Unexpected token '{}' found", token.kind.as_ref())),
 		},
 		None => Err("No token found".to_string()),
