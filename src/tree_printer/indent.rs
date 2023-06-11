@@ -45,7 +45,7 @@ impl Indent {
 			*last = match last {
 				Symbol::Fork => Symbol::Line,
 				Symbol::Turn => Symbol::None,
-				_ => *last,
+				Symbol::Line | Symbol::None => *last,
 			}
 		}
 	}

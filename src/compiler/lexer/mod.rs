@@ -1,12 +1,11 @@
-mod iter;
-
-use std::{collections::HashMap, str::Chars};
+use std::{collections::HashMap, fmt::Display};
 use lazy_static::lazy_static;
 use strum;
-use szu::{tag_enum, tag_enum_helper};
-use self::iter::{FilePosExt, FilePos};
-
+use szu::{tag_enum, tag_enum_helper, replace_macro_arg};
+use file_pos::FilePosExt;
 use super::stream::Stream;
+
+mod file_pos;
 
 tag_enum!(
 	pub enum (
@@ -18,24 +17,30 @@ tag_enum!(
 		Comment,
 		MultilineComment,
 
-		Eof,
 		Dot,
 		Comma,
 		Semicolon,
 
-		Plus,
-		Dash,
-		Star,
-		Slash,
-
-		Equals,
-		Compare,
 		LParen,
 		RParen,
 		LBracket,
 		RBracket,
 		LBrace,
 		RBrace,
+
+		Plus,
+		Dash,
+		Star,
+		Slash,
+		Percent,
+		LShift,
+		RShift,
+		
+		Equals,
+		LessThan,
+		GreaterThan,
+		Equality,
+		Eof,
 
 		Let,
 		Ipt,
@@ -60,9 +65,51 @@ tag_enum!(
 );
 
 #[derive(Debug)]
+pub struct SourcePos {
+	pub index: usize,
+	pub line: usize,
+	pub column: usize,
+}
+
+#[derive(Debug)]
 pub struct SourceRange {
 	pub index: usize,
 	pub length: usize,
+}
+
+impl SourceRange {
+	pub fn get_end(&self) -> usize {
+		self.index + self.length
+	}
+
+	pub fn get_last(&self) -> usize {
+		self.get_end() - 1
+	}
+
+	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
+		&source[self.index .. self.get_end()]
+	}
+	
+	pub fn get_line<'a>(&self, source: &'a str) -> &'a str {
+		let line_start = source[..=self.index]
+			.char_indices()
+			.rev()
+			.find(|(_, c)| matches!(*c, '\n' | '\r'))
+			.map_or(0, |(i, _)| i + 1);
+
+		let line_last = self.get_last() + source[self.get_last()..]
+			.char_indices()
+			.find(|(_, c)| matches!(*c, '\n' | '\r'))
+			.map_or(source.len(), |(i, _)| i);
+		
+		&source[line_start .. line_last]
+	}
+}
+
+impl Display for SourceRange {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}-{}", self.index, self.get_end())
+	}
 }
 
 #[derive(Debug)]
@@ -84,7 +131,7 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 			].into_iter().collect();
 		}
 
-		match stream.get().current {
+		match *stream.get().get_current() {
 			Some(c) => match RADICES.get(&c) {
 				Some(&radix) => {
 					stream.get().next();
@@ -116,9 +163,9 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	let radix = radix.unwrap_or(10);
 
 	let mut has_trailing_underscore = false;
-	let mut value: u64 = 0;
-	let mut i: usize = 0;
-	while let Some(c) = stream.get().current {
+	let mut value = 0u64;
+	let mut i = 0usize;
+	while let Some(c) = *stream.get().get_current() {
 		if c == '_' {
 			if i == 0 {
 				stream.pop();
@@ -171,7 +218,7 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	return Ok(Some(value));
 }
 
-fn next_token_kind<I: Iterator<Item = char>>(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<TokenKind, String> {
+fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<TokenKind, String> {
 	{
 		fn is_space(c: &char) -> bool { matches!(c, ' ' | '\t') }
 		if stream.expect(is_space).is_some() {
@@ -188,25 +235,91 @@ fn next_token_kind<I: Iterator<Item = char>>(stream: &mut Stream<impl Iterator<I
 		}
 	}
 
+	if stream.expect(|c| *c == '.').is_some() {
+		return Ok(TokenKind::Dot);
+	}
+	if stream.expect(|c| *c == ',').is_some() {
+		return Ok(TokenKind::Comma);
+	}
+	if stream.expect(|c| *c == ';').is_some() {
+		return Ok(TokenKind::Semicolon);
+	}
+	
+	if stream.expect(|c| *c == '(').is_some() {
+		return Ok(TokenKind::LParen);
+	}
+	if stream.expect(|c| *c == ')').is_some() {
+		return Ok(TokenKind::RBrace);
+	}
+	if stream.expect(|c| *c == '[').is_some() {
+		return Ok(TokenKind::LBracket);
+	}
+	if stream.expect(|c| *c == ']').is_some() {
+		return Ok(TokenKind::RBracket);
+	}
+	if stream.expect(|c| *c == '{').is_some() {
+		return Ok(TokenKind::LBrace);
+	}
+	if stream.expect(|c| *c == '}').is_some() {
+		return Ok(TokenKind::RBrace);
+	}
+
+	if stream.expect(|c| *c == '+').is_some() {
+		return Ok(TokenKind::Plus);
+	}
+	if stream.expect(|c| *c == '-').is_some() {
+		return Ok(TokenKind::Dash);
+	}
+	if stream.expect(|c| *c == '*').is_some() {
+		return Ok(TokenKind::Star);
+	}
 	if stream.expect(|c| *c == '/').is_some() {
 		if stream.expect(|c| *c == '/').is_some() {
 			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
 			return Ok(TokenKind::Comment);
 		}
-
+		if stream.expect(|c| *c == '*').is_some() {
+			let mut indent = 0usize;
+			while indent > 0 {
+				match stream.next() {
+					Some(c) => match c {
+						'/' if stream.expect(|c| *c == '*').is_some() => indent += 1,
+						'*' if stream.expect(|c| *c == '/').is_some() => indent -= 1,
+						_ => {},
+					},
+					None => return Err("Multi-line comment not closed".to_string()),
+				}
+			}
+			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
+			return Ok(TokenKind::MultilineComment);
+		}
+		
 		return Ok(TokenKind::Slash);
+	}
+	if stream.expect(|c| *c == '%').is_some() {
+		return Ok(TokenKind::Percent);
+	}
+	if stream.expect(|c| *c == '<').is_some() {
+		if stream.expect(|c| *c == '<').is_some() {
+			return Ok(TokenKind::LShift);
+		}
+
+		return Ok(TokenKind::LessThan);
+	}
+	if stream.expect(|c| *c == '>').is_some() {
+		if stream.expect(|c| *c == '>').is_some() {
+			return Ok(TokenKind::RShift);
+		}
+
+		return Ok(TokenKind::GreaterThan);
 	}
 
 	if stream.expect(|c| *c == '=').is_some() {
 		if stream.expect(|c| *c == '=').is_some() {
-			return Ok(TokenKind::Compare);
+			return Ok(TokenKind::Equality);
 		}
 
 		return Ok(TokenKind::Equals);
-	}
-
-	if stream.expect(|c| *c == ';').is_some() {
-		return Ok(TokenKind::Semicolon);
 	}
 
 	if let Some(value) = parse_int(stream)? {
@@ -266,11 +379,11 @@ fn next_token_kind<I: Iterator<Item = char>>(stream: &mut Stream<impl Iterator<I
 		return Ok(TokenKind::Identifier(value));
 	}
 
-	if stream.current.is_none() {
+	if stream.get_current().is_none() {
 		return Ok(TokenKind::Eof);
 	}
 
-	return Err(format!("No token factory matching stream '{}'", match stream.current {
+	return Err(format!("No token factory matching stream '{}'", match stream.get_current() {
 		Some(c) => c.to_string(),
 		None => "EOF".to_string(),
 	}));
@@ -279,9 +392,9 @@ fn next_token_kind<I: Iterator<Item = char>>(stream: &mut Stream<impl Iterator<I
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 	let mut stream = Stream::new(src_in.chars().file_pos());
 	let mut tokens = Vec::<Token>::new();
-	let mut start_index: usize = 0;
+	let mut start_index = 0usize;
 	loop {
-		match next_token_kind::<Stream<FilePos<Chars>>>(&mut stream) {
+		match next_token_kind(&mut stream) {
 			Ok(kind) => {
 				let is_eof = kind == TokenKind::Eof;
 				
@@ -289,10 +402,10 @@ pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 					kind: kind,
 					source: SourceRange {
 						index: start_index,
-						length: stream.index - start_index,
+						length: stream.get_index() - start_index,
 					},
 				});
-				start_index = stream.index;
+				start_index = *stream.get_index();
 
 				if is_eof {
 					return Ok(tokens);

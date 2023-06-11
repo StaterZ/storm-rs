@@ -1,7 +1,7 @@
 pub struct Stream<I: Iterator> {
 	iter: I,
-	pub current: Option<I::Item>,
-	pub index: usize,
+	current: Option<I::Item>,
+	index: usize,
 }
 
 impl<I: Iterator> Stream<I> {
@@ -14,39 +14,52 @@ impl<I: Iterator> Stream<I> {
 		};
 	}
 
-	pub fn get_inner<'a>(&'a self) -> &'a I {
+	pub fn get_inner(&self) -> &I {
 		&self.iter
+	}
+
+	pub fn get_current(&self) -> &Option<I::Item> {
+		&self.current
+	}
+
+	pub fn get_index(&self) -> &usize {
+		&self.index
 	}
 
 	#[inline(always)]
 	pub fn check(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> bool {
-		match &self.current {
-			Some(c) => pred(c),
-			None => false,
-		}
+		(&self.current)
+			.as_ref()
+			.map_or(false, pred)
 	}
 	
 	#[inline(always)]
 	pub fn expect(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> Option<I::Item> {
-		if let Some(c) = &self.current {
-			if pred(c) {
-				let result = self.next();
-				assert!(result.is_some());
-				return result;
-			}
+		if self.check(pred) {
+			let result = self.next();
+			assert!(result.is_some());
+			result
+		} else {
+			None
 		}
-
-		return None;
+	}
+	
+	#[inline(always)]
+	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&I::Item) -> Option<T>) -> Option<(I::Item, T)> {
+		self.current
+			.as_ref()
+			.and_then(pred)
+			.map(|value| (self.next().unwrap(), value))
 	}
 
 	#[inline(always)]
 	pub fn expect_err(&mut self, pred: impl FnOnce(&I::Item) -> Result<(), String>) -> Result<I::Item, String> {
-		return match &self.current {
+		match &self.current {
 			Some(c) => match pred(c) {
 				Ok(()) => Ok(self.next().unwrap()),
 				Err(err) => Err(err),
 			},
-			None => Err("Stream iterator is exhausted".to_string()),
+			None => Err("iterator is exhausted".to_string()),
 		}
 	}
 }
@@ -54,6 +67,10 @@ impl<I: Iterator> Stream<I> {
 impl<I: Iterator + Clone> Stream<I>
 	where I::Item: Clone
 {
+	pub fn dup<'a>(&mut self) -> StreamHypothetical<I> {
+		StreamHypothetical::new(self)
+	}
+	
 	#[inline(always)]
 	pub fn hypothetically<T, E>(&mut self, func: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
 		let mut hypothetical = self.dup();
@@ -61,11 +78,7 @@ impl<I: Iterator + Clone> Stream<I>
 		let result = func(hypothetical.get());
 		hypothetical.nip_or_pop(result.is_ok());
 
-		return result;
-	}
-	
-	pub fn dup<'a>(&mut self) -> StreamHypothetical<I> {
-		StreamHypothetical::new(self)
+		result
 	}
 }
 
@@ -76,7 +89,7 @@ impl<I: Iterator + Clone> Clone for Stream<I>
 		Self {
 			iter: self.iter.clone(),
 			current: self.current.clone(),
-			index: self.index.clone()
+			index: self.index.clone(),
 		}
 	}
 }
@@ -87,7 +100,7 @@ impl<I: Iterator> Iterator for Stream<I> {
 	fn next(&mut self) -> Option<Self::Item> {
 		let prev_current = std::mem::replace(&mut self.current, self.iter.next());
 		self.index += 1;
-		return prev_current;
+		prev_current
 	}
 }
 

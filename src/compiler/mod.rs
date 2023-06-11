@@ -1,10 +1,12 @@
+use error_stack::Report;
+
 mod lexer;
 mod ast;
 mod stream;
 
 pub struct CompilerOutput {
 	pub lex: Option<Result<Vec<lexer::Token>, String>>,
-	pub ast: Option<Result<ast::Node, String>>,
+	pub ast: Option<Result<ast::Node, Report<ast::AstError>>>,
 	pub sat: Option<Result<String, String>>,
 	pub gen: Option<Result<String, String>>,
 }
@@ -17,9 +19,9 @@ pub fn compile<'a>(src_in: String) -> CompilerOutput {
 		gen: None,
 	};
 
-	let tokens = lexer::lex(src_in.as_str());
+	let tokens = lexer::lex(&src_in);
 	if let Ok(tokens) = &tokens {
-		let ast = ast::ast(&tokens);
+		let ast = ast::ast(&src_in, &tokens);
 		if let Ok(_ast) = &ast {
 			let sat = Ok("TODO".to_string());
 			if let Ok(_sat) = &sat {

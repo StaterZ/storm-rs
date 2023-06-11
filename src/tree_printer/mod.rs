@@ -1,9 +1,9 @@
-mod tree_display;
-mod indent;
-
 pub use tree_display::TreeDisplay;
 use indent::Indent;
 use owo_colors::OwoColorize;
+
+mod tree_display;
+mod indent;
 
 pub fn print_tree(label: &str, node: &impl TreeDisplay) {
 	print_tree_node(label, node, &mut Indent::new());

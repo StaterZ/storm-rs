@@ -9,6 +9,8 @@ edition = "2021"
 owo-colors = "3.5.0"
 lazy_static = "1.4.0"
 string-builder = "0.2.0"
+enum-as-inner = "0.6.0"
+error-stack = "0.3.1"
 clap = { version = "4.2.7", features= ["derive"] }
 strum = { version = "0.24.1", features = ["derive"] }
 szu = { version = "0.1.0", path = "../szu" }

@@ -51,6 +51,7 @@ fn compile() {
 		match result.ast.unwrap() {
 			Err(err) => {
 				println!("AST Failed: {}", err.on_red());
+				println!("{:?}", err);
 				return;
 			},
 			Ok(root) => {

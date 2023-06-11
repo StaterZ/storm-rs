@@ -15,6 +15,12 @@ struct State {
 	line_state: LineState,
 }
 
+/*impl State {
+	pub fn column(&self) -> usize {
+		self.index - self.line_start_index
+	}
+}*/
+
 pub struct FilePos<I: Iterator> {
 	iter: EnumerateArtifact<I>,
 	state: Option<State>
@@ -29,11 +35,15 @@ impl<I: Iterator<Item = char>> FilePos<I> {
 	}
 
 	pub fn get_line(&self) -> Option<usize> {
-		self.state.as_ref().map(|state| state.line)
+		self.state
+			.as_ref()
+			.map(|state| state.line)
 	}
 
 	pub fn get_column(&self) -> Option<usize> {
-		self.state.as_ref().map(|state| self.iter.get_artifact().unwrap() - state.line_start_index + 1)
+		self.state
+			.as_ref()
+			.map(|state| self.iter.get_artifact().unwrap() - state.line_start_index + 1)
 	}
 }
 
@@ -47,7 +57,7 @@ impl<I: Iterator<Item = char>> Iterator for FilePos<I> {
 			line_state: LineState::Other,
 		});
 
-		let x = self.iter.next().map(|(i, c)| {
+		self.iter.next().map(|(i, c)| {
 			let is_new_line_continued = state.line_state == LineState::CarrageReturn && c == '\n';
 
 			if !is_new_line_continued && state.line_state != LineState::Other {
@@ -62,11 +72,7 @@ impl<I: Iterator<Item = char>> Iterator for FilePos<I> {
 			};
 
 			c
-		});
-
-		println!("{}: {:?}", self, x);
-
-		x
+		})
 	}
 }
 
