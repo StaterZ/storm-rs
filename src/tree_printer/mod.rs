@@ -11,8 +11,8 @@ pub fn print_tree(label: &str, node: &impl TreeDisplay) {
 
 fn print_tree_node(label: &str, node: &(impl TreeDisplay + ?Sized), indent: &mut Indent) {
 	println!("{}{}: {}", indent.as_string(), label.green(), node.get_text_line());
-	let children = node.get_children();
-	if let Some(children) = children {
+	
+	if let Some(children) = node.get_children() {
 		indent.stretch();
 
 		if children.len() > 0 {
