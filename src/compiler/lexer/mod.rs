@@ -1,9 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 use lazy_static::lazy_static;
 use strum;
-use szu::{tag_enum, tag_enum_helper, replace_macro_arg};
+use szu::{tag_enum, tag_enum_helper, replace_macro_arg, iter::ArtifactExt};
 use file_pos::FilePosExt;
-use super::stream::Stream;
+use super::stream::{Stream, StreamExt};
 
 mod file_pos;
 
@@ -65,39 +65,36 @@ tag_enum!(
 );
 
 #[derive(Debug)]
-pub struct SourcePos {
-	pub index: usize,
-	pub line: usize,
-	pub column: usize,
-}
-
-#[derive(Debug)]
 pub struct SourceRange {
-	pub index: usize,
-	pub length: usize,
+	pub begin: file_pos::Pos,
+	pub end: file_pos::Pos,
 }
 
 impl SourceRange {
-	pub fn get_end(&self) -> usize {
-		self.index + self.length
+	pub fn get_length(&self) -> usize {
+		debug_assert!(self.begin.index <= self.end.index);
+		self.end.index - self.begin.index
 	}
 
-	pub fn get_last(&self) -> usize {
-		self.get_end() - 1
+	pub fn get_last(&self) -> file_pos::Pos {
+		debug_assert_ne!(self.end.index, self.end.line_start_index); //"No support yet for last being on previous line"
+		let mut result = self.end;
+		result.index -= 1;
+		return result;
 	}
 
 	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
-		&source[self.index .. self.get_end()]
+		&source[self.begin.index .. self.end.index]
 	}
 	
 	pub fn get_line<'a>(&self, source: &'a str) -> &'a str {
-		let line_start = source[..=self.index]
+		let line_start = source[..=self.begin.index]
 			.char_indices()
 			.rev()
 			.find(|(_, c)| matches!(*c, '\n' | '\r'))
 			.map_or(0, |(i, _)| i + 1);
 
-		let line_last = self.get_last() + source[self.get_last()..]
+		let line_last = self.get_last().index + source[self.get_last().index..]
 			.char_indices()
 			.find(|(_, c)| matches!(*c, '\n' | '\r'))
 			.map_or(source.len(), |(i, _)| i);
@@ -108,7 +105,7 @@ impl SourceRange {
 
 impl Display for SourceRange {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}-{}", self.index, self.get_end())
+		write!(f, "{}..<{}", self.begin.index, self.end.index)
 	}
 }
 
@@ -131,8 +128,8 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 			].into_iter().collect();
 		}
 
-		match *stream.get().get_current() {
-			Some(c) => match RADICES.get(&c) {
+		match stream.get().get_current() {
+			Some(c) => match RADICES.get(c) {
 				Some(&radix) => {
 					stream.get().next();
 					stream.nip();
@@ -165,8 +162,8 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(c) = *stream.get().get_current() {
-		if c == '_' {
+	while let Some(c) = stream.get().get_current() {
+		if *c == '_' {
 			if i == 0 {
 				stream.pop();
 				return Err("Leading underscore, this is not allowed".to_string());
@@ -390,28 +387,39 @@ fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> R
 }
 
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
-	let mut stream = Stream::new(src_in.chars().file_pos());
+	let mut stream0 = src_in
+		.chars()
+		.file_pos()
+		.peekable()
+		.artifact(|item| item.pos);
+	let mut stream = stream0
+		.map(|item| item.item)
+		.stream();
+
 	let mut tokens = Vec::<Token>::new();
-	let mut start_index = 0usize;
+	let mut start_pos = stream0.get_artifact().unwrap().pos;
+
 	loop {
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
 				let is_eof = kind == TokenKind::Eof;
+
+				let end_pos = stream.get_current().unwrap().pos;
 				
 				tokens.push(Token{
 					kind: kind,
 					source: SourceRange {
-						index: start_index,
-						length: stream.get_index() - start_index,
+						begin: start_pos,
+						end: end_pos,
 					},
 				});
-				start_index = *stream.get_index();
+				start_pos = end_pos;
 
 				if is_eof {
 					return Ok(tokens);
 				}
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", stream.get_inner(), err)),
+			Err(err) => return Err(format!("[pos:{:?}] {}", stream.get_current().unwrap(), err)),
 		}
 	}
 }

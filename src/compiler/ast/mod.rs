@@ -55,7 +55,7 @@ pub fn ast(source: &str, tokens: &Vec<Token>) -> Result<Node, AstError> {
 			let pos = &stream.get_current().unwrap().source;
 			let pos_string = format!("[{}] ", pos);
 			let line = pos.get_line(source);
-			format!("{:>6$}|\n{}|{}\n{:>6$}|{:>7$}{:^>8$}here", "", pos_string, line, "", "", "", pos_string.len(), pos.index, pos.length)
+			format!("{:>6$}|\n{}|{}\n{:>6$}|{:>7$}{:^>8$}here", "", pos_string, line, "", "", "", pos_string.len(), pos.begin.index, pos.get_length())
 		})),
 	}
 }

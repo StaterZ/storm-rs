@@ -1,36 +1,27 @@
+use std::iter::Peekable;
+
 pub struct Stream<I: Iterator> {
-	iter: I,
-	current: Option<I::Item>,
-	index: usize,
+	iter: Peekable<I>,
 }
 
 impl<I: Iterator> Stream<I> {
 	pub fn new(mut iter: I) -> Self {
-		let start = iter.next();
-		return Self{
-			iter,
-			current: start,
-			index: 0,
-		};
+		Self{
+			iter: iter.peekable(),
+		}
 	}
 
 	pub fn get_inner(&self) -> &I {
-		&self.iter
+		unsafe { self.iter.as_inner() }
 	}
 
-	pub fn get_current(&self) -> &Option<I::Item> {
-		&self.current
-	}
-
-	pub fn get_index(&self) -> &usize {
-		&self.index
+	pub fn get_current(&self) -> Option<&I::Item> {
+		self.iter.peek()
 	}
 
 	#[inline(always)]
 	pub fn check(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> bool {
-		(&self.current)
-			.as_ref()
-			.map_or(false, pred)
+		self.get_current().map_or(false, pred)
 	}
 	
 	#[inline(always)]
@@ -46,15 +37,14 @@ impl<I: Iterator> Stream<I> {
 	
 	#[inline(always)]
 	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&I::Item) -> Option<T>) -> Option<(I::Item, T)> {
-		self.current
-			.as_ref()
+		self.get_current()
 			.and_then(pred)
 			.map(|value| (self.next().unwrap(), value))
 	}
 
 	#[inline(always)]
 	pub fn expect_err(&mut self, pred: impl FnOnce(&I::Item) -> Result<(), String>) -> Result<I::Item, String> {
-		match &self.current {
+		match &self.get_current() {
 			Some(c) => match pred(c) {
 				Ok(()) => Ok(self.next().unwrap()),
 				Err(err) => Err(err),
@@ -82,29 +72,23 @@ impl<I: Iterator + Clone> Stream<I>
 	}
 }
 
+impl<I: Iterator> Iterator for Stream<I> {
+	type Item = I::Item;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next()
+	}
+}
+
 impl<I: Iterator + Clone> Clone for Stream<I>
 	where I::Item: Clone
 {
 	fn clone(&self) -> Self {
 		Self {
 			iter: self.iter.clone(),
-			current: self.current.clone(),
-			index: self.index.clone(),
 		}
 	}
 }
-
-impl<I: Iterator> Iterator for Stream<I> {
-	type Item = I::Item;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let prev_current = std::mem::replace(&mut self.current, self.iter.next());
-		self.index += 1;
-		prev_current
-	}
-}
-
-
 
 pub struct StreamHypothetical<'a, I: Iterator> {
 	hypothetical: Option<Stream<I>>,
@@ -147,3 +131,14 @@ impl<'a, I: Iterator> Drop for StreamHypothetical<'a, I> {
 		assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
 	}
 }
+
+pub trait StreamExt : Iterator {
+	fn stream(self) -> Stream<Self>
+	where
+		Self: Sized
+	{
+		Stream::new(self)
+	}
+}
+
+impl<I: Iterator> StreamExt for I {}
