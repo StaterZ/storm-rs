@@ -147,3 +147,14 @@ impl<'a, I: Iterator> Drop for StreamHypothetical<'a, I> {
 		assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
 	}
 }
+
+pub trait StreamExt : Iterator {
+	fn stream(self) -> Stream<Self>
+	where
+		Self: Sized
+	{
+		Stream::new(self)
+	}
+}
+
+impl<I: Iterator> StreamExt for I {}

@@ -20,7 +20,7 @@ impl Block {
 #[derive(Debug)]
 pub struct Let {
 	pub lhs: Box<Node>,
-	pub rhs: Box<Node>,
+	pub rhs: Option<Box<Node>>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -70,6 +70,12 @@ impl PartialOrd for MathBinOpVariant {
 	}
 }
 
+impl Display for MathBinOpVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", ternary!(self.allow_wrap => "%", ""), self.kind.as_ref())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Ord)]
 pub struct CmpBinOpKind {
 	pub lt: bool,
@@ -104,6 +110,7 @@ impl Display for CmpBinOpKind {
 pub enum BinOpKind {
 	Math(MathBinOpVariant),
 	Cmp(CmpBinOpKind),
+	Assign(Option<MathBinOpVariant>),
 }
 
 impl Display for BinOpKind {
@@ -111,6 +118,7 @@ impl Display for BinOpKind {
 		match self {
 			BinOpKind::Math(math) => f.write_str(math.kind.as_ref()),
 			BinOpKind::Cmp(cmp) => f.write_str(cmp.to_string().as_str()),
+			BinOpKind::Assign(assign) => f.write_str(assign.as_ref().map_or("none".to_string(), |op| op.to_string()).as_str()),
 		}
 	}
 }
@@ -162,11 +170,14 @@ impl TreeDisplay for Node {
 			),
 			NodeKind::Let(value) => Some(vec![
 				("lhs".to_string(), value.lhs.deref()),
-				("rhs".to_string(), value.rhs.deref()),
+				("rhs".to_string(), value.rhs.as_ref().map_or(&"none", |rhs| rhs.deref())),
 			]),
 			NodeKind::BinOp(value) => Some(vec![
 				//("kind".to_string(), &value.op.kind.as_ref()),
-				//("allowWrap".to_string(), &value.op.allow_wrap),
+				/*("allowWrap".to_string(), match &value.op {
+					BinOpKind::Math(math) => ternary!(math.allow_wrap => "true", "false"),
+					BinOpKind::Cmp(cmp) => cmp,
+				}),*/
 				("lhs".to_string(), value.lhs.deref()),
 				("rhs".to_string(), value.rhs.deref()),
 			]),
@@ -186,3 +197,23 @@ impl<T: std::fmt::Display> TreeDisplay for T {
 		None
 	}
 }
+
+/*impl<T: TreeDisplay> TreeDisplay for Option<T> {
+	fn get_text_line(&self) -> String {
+		self.map_or("none".magenta(), |some| some.get_text_line())
+	}
+
+	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
+		self.map(|some| some.get_children())
+	}
+}
+
+impl<T: TreeDisplay> TreeDisplay for Box<T> {
+	fn get_text_line(&self) -> String {
+		self.deref().get_text_line()
+	}
+
+	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
+		self.deref().get_children()
+	}
+}*/

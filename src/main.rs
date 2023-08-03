@@ -1,15 +1,15 @@
+use clap::Parser;
+use owo_colors::OwoColorize;
+
 mod compiler;
 mod tree_printer;
-
-use owo_colors::OwoColorize;
-use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
 struct Args {
-    #[arg(short = 'i', long = "in")]
+	#[arg(short = 'i', long = "in")]
 	in_path: Option<std::path::PathBuf>,
-    #[arg(short = 'o', long = "out")]
+	#[arg(short = 'o', long = "out")]
 	out_path: Option<std::path::PathBuf>,
 	#[arg(short = 'd', long = "debug", action = clap::ArgAction::SetTrue)]
 	is_debug: bool,
@@ -25,7 +25,10 @@ fn compile() {
 	let path = if args.is_debug {
 		std::path::Path::new("data/in.txt")
 	} else {
-		args.in_path.as_ref().expect("No input file").as_path()
+		args.in_path
+			.as_ref()
+			.expect("No input file")
+			.as_path()
 	};
 
 	if let Ok(src_in) = std::fs::read_to_string(path) {
@@ -43,7 +46,7 @@ fn compile() {
 				println!();
 				println!("=== Tokens ===");
 				for token in tokens.iter() {
-					println!("{:?}", token);
+					println!("{}", token);
 				}
 			}
 		}

@@ -6,11 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-owo-colors = "3.5.0"
-lazy_static = "1.4.0"
-string-builder = "0.2.0"
-enum-as-inner = "0.6.0"
-error-stack = "0.3.1"
-clap = { version = "4.2.7", features= ["derive"] }
-strum = { version = "0.24.1", features = ["derive"] }
-szu = { version = "0.1.0", path = "../szu" }
+#terminal stuff
+clap = { version = "4.2.7", features= ["derive"] } # command line parser
+owo-colors = "3.5.0" # ansi color formatter
+color-print = "0.3.4" # ansi color formatter
+
+#misc
+lazy_static = "1.4.0" # generate LUTs and other data at comptime
+string-builder = "0.2.0" # basic string builder utility
+enum-as-inner = "0.6.0" # unwarp for enum fields without needing annyong pattern mathing
+strum = { version = "0.24.1", features = ["derive"] } # get names of enum fields as strings
+
+#error handling
+thiserror = "1.0.44" # error type generation
+error-stack = "0.3.1" # good error handling
+anyhow = { version = "1.0.72", features = ["backtrace"] } # simple error handling
+
+#custom
+szu = { version = "0.1.0", path = "../szu" } # custom utils lib

@@ -1,49 +1,59 @@
-use szu::iter::{EnumerateArtifact, ArtifactExt};
 use std::fmt::Display;
+use std::iter::Enumerate;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum LineState {
 	Other,
 	LineFeed,
 	CarrageReturn,
 }
 
-#[derive(Clone)]
-struct State {
-	line: usize,
-	line_start_index: usize,
-	line_state: LineState,
+#[derive(Debug, Clone)]
+pub struct Pos {
+	pub index: usize,
+	pub line_start_index: usize,
+	pub line: usize,
 }
 
-/*impl State {
-	pub fn column(&self) -> usize {
+impl Pos {
+	pub fn column0(&self) -> usize {
 		self.index - self.line_start_index
 	}
-}*/
+
+	pub fn column(&self) -> usize {
+		self.column0() + 1
+	}
+}
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line, self.column())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct State {
+	pos: Pos,
+	prev_line_state: LineState,
+}
 
 pub struct FilePos<I: Iterator> {
-	iter: EnumerateArtifact<I>,
+	iter: Enumerate<I>,
 	state: Option<State>
 }
 
 impl<I: Iterator<Item = char>> FilePos<I> {
 	pub fn new(iter: I) -> Self {
 		Self {
-			iter: iter.enumerate_artifact(),
+			iter: iter.enumerate(),
 			state: None,
 		}
 	}
 
-	pub fn get_line(&self) -> Option<usize> {
+	pub fn get_pos(&self) -> Option<&Pos> {
 		self.state
 			.as_ref()
-			.map(|state| state.line)
-	}
-
-	pub fn get_column(&self) -> Option<usize> {
-		self.state
-			.as_ref()
-			.map(|state| self.iter.get_artifact().unwrap() - state.line_start_index + 1)
+			.map(|state| &state.pos)
 	}
 }
 
@@ -52,24 +62,30 @@ impl<I: Iterator<Item = char>> Iterator for FilePos<I> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let state = self.state.get_or_insert(State {
-			line: 1,
-			line_start_index: 0,
-			line_state: LineState::Other,
+			pos: Pos { index: 0, line_start_index: 0, line: 1 },
+			prev_line_state: LineState::Other,
 		});
 
 		self.iter.next().map(|(i, c)| {
-			let is_new_line_continued = state.line_state == LineState::CarrageReturn && c == '\n';
-
-			if !is_new_line_continued && state.line_state != LineState::Other {
-				state.line_start_index = i;
-				state.line += 1;
-			}
-
-			state.line_state = match c {
+			let line_state = match c {
 				'\n' => LineState::LineFeed,
 				'\r' => LineState::CarrageReturn,
 				_ => LineState::Other,
 			};
+
+			let is_new_line_continued = state.prev_line_state == LineState::CarrageReturn && line_state == LineState::LineFeed;
+
+			state.pos.index = i;
+			if !is_new_line_continued && state.prev_line_state != LineState::Other {
+				state.pos.line_start_index = state.pos.index;
+				state.pos.line += 1;
+			}
+
+			if line_state == LineState::Other {
+
+			}
+
+			state.prev_line_state = line_state;
 
 			c
 		})
@@ -87,10 +103,8 @@ impl<I: Iterator<Item = char> + Clone> Clone for FilePos<I> {
 
 impl<I: Iterator<Item = char>> Display for FilePos<I> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}",
-			self.get_line().unwrap_or(0),
-			self.get_column().unwrap_or(0)
-		)
+		let state = self.state.as_ref().unwrap();
+		write!(f, "{}:{}", state.pos.line, state.pos.column())
 	}
 }
 
