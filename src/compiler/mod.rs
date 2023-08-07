@@ -1,9 +1,10 @@
 use error_stack::Report;
+use source_meta::SourceFile;
 
 mod lexer;
 mod ast;
 mod stream;
-pub mod source_file;
+pub mod source_meta;
 
 pub struct CompilerOutput {
 	pub lex: Option<Result<Vec<lexer::Token>, String>>,
@@ -12,7 +13,7 @@ pub struct CompilerOutput {
 	pub gen: Option<Result<String, String>>,
 }
 
-pub fn compile<'a>(src_in: String) -> CompilerOutput {
+pub fn compile<'a>(src_in: &'a SourceFile) -> CompilerOutput {
 	let mut result = CompilerOutput {
 		lex: None,
 		ast: None,
@@ -20,7 +21,7 @@ pub fn compile<'a>(src_in: String) -> CompilerOutput {
 		gen: None,
 	};
 
-	let tokens = lexer::lex(&src_in);
+	let tokens = lexer::lex(src_in.get_content());
 	if let Ok(tokens) = &tokens {
 		let ast = ast::ast(&src_in, &tokens);
 		if let Ok(_ast) = &ast {

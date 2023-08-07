@@ -9,7 +9,6 @@ impl Display for TokenStreamExhaustedError {
 
 impl Error for TokenStreamExhaustedError {}
 
-
 #[derive(Debug)]
 struct BlockNotClosedError {}
 

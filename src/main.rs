@@ -2,6 +2,8 @@
 
 use clap::Parser;
 use owo_colors::OwoColorize;
+use std::path::{Path, PathBuf};
+use compiler::source_meta::SourceFile;
 
 mod compiler;
 mod tree_printer;
@@ -10,9 +12,9 @@ mod tree_printer;
 #[clap(author = "StaterZ")]
 struct Args {
 	#[arg(short = 'i', long = "in")]
-	in_path: Option<std::path::PathBuf>,
+	in_path: Option<PathBuf>,
 	#[arg(short = 'o', long = "out")]
-	out_path: Option<std::path::PathBuf>,
+	out_path: Option<PathBuf>,
 	#[arg(short = 'd', long = "debug", action = clap::ArgAction::SetTrue)]
 	is_debug: bool,
 }
@@ -25,27 +27,31 @@ fn compile() {
 	let args = Args::parse();
 
 	let path = if args.is_debug {
-		std::path::Path::new("data/in.txt")
+		Path::new("data/in.txt").to_path_buf()
+	} else if let Some(in_path) = args.in_path {
+		in_path
 	} else {
-		args.in_path.as_ref().expect("No input file").as_path()
+		println!("No input path");
+		return
 	};
-
+	
 	if let Ok(src_in) = std::fs::read_to_string(path) {
 		println!("=== Source ===");
 		println!("{}", src_in);
-
-		let result = compiler::compile(src_in);
+		let src_file = SourceFile::new(path, src_in);
+		
+		let result = compiler::compile(&src_file);
 
 		match result.lex.unwrap() {
 			Err(err) => {
 				println!("Lexer Failed: {}", err.on_red());
 				return;
-			}
+			},
 			Ok(tokens) => {
 				println!();
 				println!("=== Tokens ===");
 				for token in tokens.iter() {
-					println!("{}", token);
+					println!("{}", token.with_source(&src_file));
 				}
 			}
 		}
@@ -55,7 +61,7 @@ fn compile() {
 				println!("AST Failed: {}", err.on_red());
 				println!("{:?}", err);
 				return;
-			}
+			},
 			Ok(root) => {
 				println!();
 				println!("=== AST ===");
@@ -67,7 +73,7 @@ fn compile() {
 			Err(err) => {
 				println!("SAT Failed: {}", err.on_red());
 				return;
-			}
+			},
 			Ok(root) => {
 				println!();
 				println!("=== SAT ===");
@@ -79,7 +85,7 @@ fn compile() {
 			Err(err) => {
 				println!("GEN Failed: {}", err.on_red());
 				return;
-			}
+			},
 			Ok(output) => {
 				println!();
 				println!("=== GEN ===");

@@ -5,6 +5,7 @@ use color_print::cformat;
 use super::{
 	lexer::{Token, TokenKind},
 	stream::{Stream, StreamExt},
+	source_meta::SourceFile,
 };
 pub use self::node::{
 	NodeKind,
@@ -48,16 +49,16 @@ fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: Token
 	}).map_err(|err| Report::new(AstError{}).attach_printable(err))
 }
 
-pub fn ast<'a>(source: &'a str, tokens: &'a Vec<Token>) -> Result<Node, AstError> {
+pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, AstError> {
 	let mut stream = tokens.iter().stream();
 	match parse_file(&mut stream) {
 		Ok(t) => Ok(t),
 		Err(err) => Err(err.attach_printable({
 			let file_path = "/filePathGoesHere.storm";
 
-			let pos = &stream.get_current().unwrap().source;
-			let pos_string = format!("[{}]", pos);
-			let line = pos.get_line(source);
+			let source_range = &stream.get_current().unwrap().source;
+			let source_range_string = format!("[{}]", source_range.with_source(source));
+			let line = source_range.get_line(source);
 			let line_trunc_length = line
 				.chars()
 				.position(|c| !matches!(c, '\t' | ' '))
@@ -65,17 +66,17 @@ pub fn ast<'a>(source: &'a str, tokens: &'a Vec<Token>) -> Result<Node, AstError
 			let line = &line[line_trunc_length..];
 
 			cformat!(
-				"<cyan>{empty:>pos_string_len$}--></><green>{file_path}</>\n\
-				 <cyan>{empty:>pos_string_len$} | </>\n\
-				 <cyan>{pos_string            } | </>{line}\n\
-				 <cyan>{empty:>pos_string_len$} | </><red>{empty:>error_inset$}{empty:^>error_length$}here</>",
+				"<cyan>{empty:>source_range_string_len$}--></><green>{file_path}</>\n\
+				 <cyan>{empty:>source_range_string_len$} | </>\n\
+				 <cyan>{source_range_string            } | </>{line}\n\
+				 <cyan>{empty:>source_range_string_len$} | </><red>{empty:>error_inset$}{empty:^>error_length$}here</>",
 				empty = "",
-				pos_string = pos_string,
-				pos_string_len = pos_string.len(),
+				source_range_string = source_range_string,
+				source_range_string_len = source_range_string.len(),
 				file_path = file_path,
 				line = line,
-				error_inset = pos.begin.column0() - line_trunc_length,
-				error_length = pos.get_length(),
+				error_inset = source_range.begin.with_meta(source).column0() - line_trunc_length,
+				error_length = source_range.get_length(),
 			)
 		})),
 	}

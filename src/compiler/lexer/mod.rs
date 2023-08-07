@@ -2,8 +2,11 @@ use std::{collections::HashMap, fmt::Display};
 use lazy_static::lazy_static;
 use strum;
 use szu::{tag_enum, tag_enum_helper, replace_macro_arg};
-use file_pos::FilePosExt;
-use super::stream::{Stream, StreamExt};
+
+use super::{
+	stream::{Stream, StreamExt},
+	source_meta::{SourcePos, SourceRange, SourceFile},
+};
 
 mod file_pos;
 
@@ -65,76 +68,28 @@ tag_enum!(
 );
 
 #[derive(Debug)]
-pub struct SourcePos {
-	pub index: usize,
-	pub line: usize,
-	pub column: usize,
-}
-
-#[derive(Debug)]
-pub struct SourceRange {
-	pub begin: file_pos::Pos,
-	pub end: file_pos::Pos,
-}
-
-impl SourceRange {
-	pub fn get_length(&self) -> usize {
-		debug_assert!(self.begin.index <= self.end.index);
-		self.end.index - self.begin.index
-	}
-
-	pub fn get_last(&self) -> file_pos::Pos {
-		debug_assert_ne!(self.end.index, self.end.line_start_index); //"No support yet for last being on previous line"
-		let mut result = self.end.clone();
-		result.index -= 1;
-		return result;
-	}
-
-	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
-		&source[self.begin.index .. self.end.index]
-	}
-	
-	pub fn get_line<'a>(&self, source: &'a str) -> &'a str {
-		let line_start = source[..=self.begin.index]
-			.char_indices()
-			.rev()
-			.find(|(_, c)| matches!(*c, '\n' | '\r'))
-			.map_or(0, |(i, _)| i + 1);
-
-		let line_last = self.get_last().index + source[self.get_last().index..]
-			.char_indices()
-			.find(|(_, c)| matches!(*c, '\n' | '\r'))
-			.map_or(source.len(), |(i, _)| i);
-		
-		&source[line_start .. line_last]
-	}
-}
-
-impl Display for SourceRange {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if self.begin.line == self.end.line {
-			if self.begin.index == self.end.index {
-				write!(f, "{} (0 sized)", self.begin)
-			} else if self.begin.index + 1 == self.end.index {
-				write!(f, "{}", self.begin)
-			} else {
-				write!(f, "{}-{}", self.begin, self.end.column())
-			}
-		} else {
-			write!(f, "{}-{}", self.begin, self.end)
-		}
-	}
-}
-
-#[derive(Debug)]
 pub struct Token {
 	pub kind: TokenKind,
 	pub source: SourceRange,
 }
 
-impl Display for Token {
+impl Token {
+	pub fn with_source<'a>(&'a self, source: &'a SourceFile) -> TokenWithSource<'a> {
+		TokenWithSource {
+			inner: self,
+			source,
+		}
+	}
+}
+
+pub struct TokenWithSource<'a> {
+	pub inner: &'a Token,
+	pub source: &'a SourceFile,
+}
+
+impl<'a> Display for TokenWithSource<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{} -> {:?}", self.source, self.kind)
+		write!(f, "{} -> {:?}", self.inner.source.with_source(self.source), self.inner.kind)
 	}
 }
 
@@ -411,31 +366,29 @@ fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> R
 
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 	let mut tokens = Vec::<Token>::new();
-	let mut stream = src_in.chars().file_pos().stream();
+	let mut stream = src_in.chars().enumerate().peekable();
 
-	let mut start_pos = stream.get_inner().get_pos().unwrap().clone();
 	loop {
+		let begin_index = SourcePos::new(stream.peek().unwrap().0);
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
-				let is_eof = kind == TokenKind::Eof;
+				let end_index = SourcePos::new(stream.peek().unwrap().0);
 
-				let end_pos = stream.get_inner().get_pos().unwrap().clone();
+				let is_eof = kind == TokenKind::Eof;
 				
 				tokens.push(Token{
 					kind: kind,
 					source: SourceRange {
-						begin: start_pos,
-						end: end_pos.clone(),
+						begin: begin_index,
+						end: end_index,
 					},
 				});
 				
-				start_pos = end_pos;
-
 				if is_eof {
 					return Ok(tokens);
 				}
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", stream.get_inner(), err)),
+			Err(err) => return Err(format!("[pos:{}] {}", stream.peek().0, err)),
 		}
 	}
 }
