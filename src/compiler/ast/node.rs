@@ -71,9 +71,9 @@ impl PartialOrd for MathBinOpVariant {
 }
 
 impl Display for MathBinOpVariant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", ternary!(self.allow_wrap => "%", ""), self.kind.as_ref())
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}{}", ternary!(self.allow_wrap => "%", ""), self.kind.as_ref())
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Ord)]

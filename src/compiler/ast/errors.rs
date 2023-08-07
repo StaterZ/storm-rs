@@ -21,6 +21,7 @@ impl Display for BlockNotClosedError {
 
 impl Error for BlockNotClosedError {}
 
+
 #[derive(Debug)]
 struct UnexpectedTokenError {}
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use clap::Parser;
 use owo_colors::OwoColorize;
 
@@ -25,23 +27,20 @@ fn compile() {
 	let path = if args.is_debug {
 		std::path::Path::new("data/in.txt")
 	} else {
-		args.in_path
-			.as_ref()
-			.expect("No input file")
-			.as_path()
+		args.in_path.as_ref().expect("No input file").as_path()
 	};
 
 	if let Ok(src_in) = std::fs::read_to_string(path) {
 		println!("=== Source ===");
 		println!("{}", src_in);
-		
+
 		let result = compiler::compile(src_in);
 
 		match result.lex.unwrap() {
 			Err(err) => {
 				println!("Lexer Failed: {}", err.on_red());
 				return;
-			},
+			}
 			Ok(tokens) => {
 				println!();
 				println!("=== Tokens ===");
@@ -56,7 +55,7 @@ fn compile() {
 				println!("AST Failed: {}", err.on_red());
 				println!("{:?}", err);
 				return;
-			},
+			}
 			Ok(root) => {
 				println!();
 				println!("=== AST ===");
@@ -68,7 +67,7 @@ fn compile() {
 			Err(err) => {
 				println!("SAT Failed: {}", err.on_red());
 				return;
-			},
+			}
 			Ok(root) => {
 				println!();
 				println!("=== SAT ===");
@@ -80,7 +79,7 @@ fn compile() {
 			Err(err) => {
 				println!("GEN Failed: {}", err.on_red());
 				return;
-			},
+			}
 			Ok(output) => {
 				println!();
 				println!("=== GEN ===");

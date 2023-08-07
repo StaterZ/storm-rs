@@ -3,6 +3,7 @@ use error_stack::Report;
 mod lexer;
 mod ast;
 mod stream;
+pub mod source_file;
 
 pub struct CompilerOutput {
 	pub lex: Option<Result<Vec<lexer::Token>, String>>,

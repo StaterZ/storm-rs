@@ -16,6 +16,8 @@ lazy_static = "1.4.0" # generate LUTs and other data at comptime
 string-builder = "0.2.0" # basic string builder utility
 enum-as-inner = "0.6.0" # unwarp for enum fields without needing annyong pattern mathing
 strum = { version = "0.24.1", features = ["derive"] } # get names of enum fields as strings
+itertools = "0.11.0"
+streaming-iterator = "0.1.9"
 
 #error handling
 thiserror = "1.0.44" # error type generation

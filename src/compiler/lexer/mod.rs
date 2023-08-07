@@ -113,7 +113,13 @@ impl SourceRange {
 impl Display for SourceRange {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if self.begin.line == self.end.line {
-			write!(f, "{}-{}", self.begin, self.end.column())
+			if self.begin.index == self.end.index {
+				write!(f, "{} (0 sized)", self.begin)
+			} else if self.begin.index + 1 == self.end.index {
+				write!(f, "{}", self.begin)
+			} else {
+				write!(f, "{}-{}", self.begin, self.end.column())
+			}
 		} else {
 			write!(f, "{}-{}", self.begin, self.end)
 		}
