@@ -6,10 +6,6 @@ enum Symbol {
 	None,
 }
 
-pub struct Indent {
-	symbols: Vec<Symbol>,
-}
-
 impl Symbol {
 	pub fn get_symbol(&self) -> &'static str {
 		match self {
@@ -21,6 +17,10 @@ impl Symbol {
 	}
 }
 
+pub struct Indent {
+	symbols: Vec<Symbol>,
+}
+
 impl Indent {
 	pub fn new() -> Self {
 		Self{
@@ -28,8 +28,8 @@ impl Indent {
 		}
 	}
 
-	pub fn as_string(&self) -> String {
-		self.symbols.iter().map(|s| s.get_symbol()).collect::<String>()
+	pub fn to_string(&self) -> String {
+		self.symbols.iter().map(|s| s.get_symbol()).collect()
 	}
 
 	pub fn push(&mut self, is_last: bool) {
@@ -40,12 +40,12 @@ impl Indent {
 		self.symbols.pop();
 	}
 
-	pub fn stretch(&mut self) {
+	pub fn extend(&mut self) {
 		if let Some(last) = self.symbols.last_mut() {
 			*last = match last {
 				Symbol::Fork => Symbol::Line,
 				Symbol::Turn => Symbol::None,
-				Symbol::Line | Symbol::None => *last,
+				_ => *last,
 			}
 		}
 	}

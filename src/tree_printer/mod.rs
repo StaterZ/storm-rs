@@ -1,6 +1,6 @@
 pub use tree_display::TreeDisplay;
 use indent::Indent;
-use owo_colors::OwoColorize;
+use color_print::cprintln;
 
 mod tree_display;
 mod indent;
@@ -10,10 +10,10 @@ pub fn print_tree(label: &str, node: &impl TreeDisplay) {
 }
 
 fn print_tree_node(label: &str, node: &(impl TreeDisplay + ?Sized), indent: &mut Indent) {
-	println!("{}{}: {}", indent.as_string(), label.green(), node.get_text_line());
+	cprintln!("{}<green>{}</>: {}", indent.to_string(), label, node.get_text_line());
 	
 	if let Some(children) = node.get_children() {
-		indent.stretch();
+		indent.extend();
 
 		if children.len() > 0 {
 			for (i, (label, child)) in children.iter().enumerate() {
@@ -23,7 +23,7 @@ fn print_tree_node(label: &str, node: &(impl TreeDisplay + ?Sized), indent: &mut
 			}
 		} else {
 			indent.push(true);
-			println!("{}{}", indent.as_string(), "none".magenta());
+			cprintln!("{}<magenta>none</>", indent.to_string());
 			indent.pop();
 		}
 	}

@@ -35,7 +35,7 @@ fn compile() {
 		return
 	};
 	
-	if let Ok(src_in) = std::fs::read_to_string(path) {
+	if let Ok(src_in) = std::fs::read_to_string(path.as_path()) {
 		println!("=== Source ===");
 		println!("{}", src_in);
 		let src_file = SourceFile::new(path, src_in);

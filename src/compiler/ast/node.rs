@@ -1,8 +1,8 @@
 use std::fmt::Display;
 use enum_as_inner::EnumAsInner;
 use lazy_static::__Deref;
-use owo_colors::OwoColorize;
 use strum::AsRefStr;
+use color_print::cformat;
 use szu::ternary;
 use super::super::super::tree_printer::TreeDisplay;
 
@@ -152,9 +152,9 @@ impl TreeDisplay for Node {
 			NodeKind::Block(_) => "".to_string(),
 			NodeKind::Let(_) => "".to_string(),
 			NodeKind::BinOp(value) => format!("{}", value.op),
-			NodeKind::IntLit(value) => format!("{}", value.cyan()),
-			NodeKind::StrLit(value) => format!("{:?}", value.cyan()),
-			NodeKind::Indentifier(value) => format!("{}", value.cyan()),
+			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
+			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value),
+			NodeKind::Indentifier(value) => cformat!("<cyan>{}</>", value),
 		};
 		format!("{}{}({})", text, ternary!(text.len() > 0 => " ", ""), self.kind.as_ref())
 	}
@@ -190,7 +190,7 @@ impl TreeDisplay for Node {
 
 impl<T: std::fmt::Display> TreeDisplay for T {
 	fn get_text_line(&self) -> String {
-		format!("{}", self.cyan())
+		cformat!("<cyan>{}</>", self)
 	}
 
 	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
