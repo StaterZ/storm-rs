@@ -1,6 +1,5 @@
 use core::slice::Iter;
-use std::{fmt::Display, error::Error};
-use error_stack::{Report, Result, ResultExt};
+use error_stack::Report;
 use color_print::cformat;
 use super::{
 	lexer::{Token, TokenKind},
@@ -18,19 +17,29 @@ pub use self::node::{
 	BinOpKind,
 	CmpBinOpKind
 };
+pub use thiserror;
 
 mod node;
 
-#[derive(Debug)]
-pub struct AstError {}
-
-impl Display for AstError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Abstract Syntax Tree Error")
-	}
+#[derive(Debug, thiserror::Error)]
+pub enum AstError {
+	#[error("Hard")]
+	Hard,
+	#[error("Soft")]
+	Soft,
 }
 
-impl Error for AstError {}
+macro_rules! try_hard {
+	($expr:expr) => {
+		match $expr {
+			Ok(ok) => Ok(ok),
+			Err(err) => match err.current_context() {
+				AstError::Hard => return Err(err),
+				AstError::Soft => Err(err),
+			}
+		}
+	};
+}
 
 fn discard_space(stream: &mut Stream<Iter<Token>>) {
 	while stream.expect(|&t| matches!(t.kind,
@@ -41,27 +50,25 @@ fn discard_space(stream: &mut Stream<Iter<Token>>) {
 	)).is_some() { };
 }
 
-fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: TokenKind) -> Result<&'a Token, AstError> {
+fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: TokenKind) -> Result<&'a Token, String> {
 	stream.expect_err(|&t| if t.kind == kind {
 		Ok(())
 	} else {
 		Err(format!("Expected token '{}' but found '{}'", kind.as_ref(), t.kind.as_ref()))
-	}).map_err(|err| Report::new(AstError{}).attach_printable(err))
+	})
 }
 
-pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, AstError> {
+pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
 	let mut stream = tokens.iter().stream();
 	match parse_file(&mut stream) {
 		Ok(t) => Ok(t),
 		Err(err) => Err(err.attach_printable({
-			let file_path = "/filePathGoesHere.storm";
-
 			let source_range = &stream.get_current().unwrap().source;
 			let source_range_string = format!("[{}]", source_range.with_source(source));
 			let line = source_range.get_line(source);
 			let line_trunc_length = line
-				.chars()
-				.position(|c| !matches!(c, '\t' | ' '))
+				.char_indices()
+				.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
 				.unwrap_or(0);
 			let line = &line[line_trunc_length..];
 
@@ -73,46 +80,57 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, A
 				empty = "",
 				source_range_string = source_range_string,
 				source_range_string_len = source_range_string.len(),
-				file_path = file_path,
+				file_path = source.get_path().display(),
 				line = line,
-				error_inset = source_range.begin.with_meta(source).column0() - line_trunc_length,
-				error_length = source_range.get_length(),
+				error_inset = source_range.begin.with_meta(source).unwrap().column0() - line_trunc_length,
+				error_length = source_range.get_length().unwrap(),
 			)
 		})),
 	}
 }
 
-fn parse_file(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
+fn parse_file(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
 	let mut block = Block::new();
 	loop {
 		discard_space(stream);
-		match stream.get_current() {
-			Some(token) => {
-				match token.kind {
-					TokenKind::Eof => {
-						stream.next();
-						return Ok(Node { kind: NodeKind::Block(block) })
-					},
-					TokenKind::Let => {
-						block.stmts.push(parse_let(stream)?);
-					},
-					TokenKind::LBrace => {
-						stream.next();
-						discard_space(stream);
-						block.stmts.push(parse_block(stream)?);
-					},
-					_ => return Err(Report::new(AstError{})
-						.attach_printable(format!("Unexpected token '{}'", token.kind.as_ref()))),
-				}
-			},
-			None => return Err(Report::new(AstError{})
+
+		if stream.expect(|&t| t.kind == TokenKind::Eof).is_some() {
+			return Ok(Node { kind: NodeKind::Block(block) });
+		}
+		
+		if let Ok(stmt) = try_hard!(parse_stmt(stream)) {
+			block.stmts.push(stmt);
+			continue;
+		}
+
+		return match stream.get_current() {
+			Some(token) => Err(Report::new(AstError::Soft)
+				.attach_printable(format!("Failed to parse file. token: '{}'", token.kind.as_ref()))),
+			None => Err(Report::new(AstError::Soft)
 				.attach_printable("Token stream was exhausted".to_string())),
 		};
 	};
 }
 
-fn parse_let(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
-	stream_expect_token_kind(stream, TokenKind::Let)?;
+fn parse_stmt(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+	if let Ok(stmt) = try_hard!(parse_let(stream)) {
+		return Ok(stmt);
+	}
+	if let Ok(stmt) = try_hard!(parse_assignment(stream)) {
+		return Ok(stmt);
+	}
+	if let Ok(stmt) = try_hard!(parse_block(stream)) {
+		return Ok(stmt);
+	}
+
+	return Err(Report::new(AstError::Soft)
+		.attach_printable("Failed to parse stmt"));
+}
+
+fn parse_let(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+	if let Err(err) = stream_expect_token_kind(stream, TokenKind::Let) {
+		return Err(Report::new(AstError::Soft).attach_printable(err));
+	}
 	
 	discard_space(stream);
 	let lhs = Box::new(expr(stream)?);
@@ -126,41 +144,63 @@ fn parse_let(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
 	};
 	
 	discard_space(stream);
-	stream_expect_token_kind(stream, TokenKind::Semicolon)?;
+	stream_expect_token_kind(stream, TokenKind::Semicolon)
+		.map_err(|err| Report::new(AstError::Hard)
+			.attach_printable(err))?;
 	
 	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
 }
 
-fn parse_block(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
-	stream_expect_token_kind(stream, TokenKind::LBrace)?;
+fn parse_assignment(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+	let lhs = match try_hard!(expr(stream)) {
+		Ok(lhs) => Box::new(lhs),
+		Err(err) => return Err(Report::new(AstError::Soft).attach_printable(err)),
+	};
+	
 	discard_space(stream);
-
-	let mut block = Block::new();
-	loop {
-		if stream.hypothetically(|stream| match stream.get_current() {
-			Some(token) => match token.kind {
-				TokenKind::RBrace => {
-					stream.next();
-					Ok(true)
-				},
-				TokenKind::Let => {
-					block.stmts.push(parse_let(stream)?);
-					Ok(false)
-				},
-				_ => Err(Report::new(AstError{})
-					.attach_printable(format!("Unexpected token '{}'", token.kind.as_ref())))
-					.attach_printable("Trying to parse statement"),
-			},
-			None => Err(Report::new(AstError{})
-				.attach_printable("Block not closed".to_string())),
-		})? {
-			return Ok(Node { kind: NodeKind::Block(block) });
-		}
+	let rhs = if stream.expect(|c| c.kind == TokenKind::Equals).is_some() {
 		discard_space(stream);
-	}
+		Some(Box::new(expr(stream)?))
+	} else {
+		None
+	};
+	
+	discard_space(stream);
+	stream_expect_token_kind(stream, TokenKind::Semicolon)
+		.map_err(|err| Report::new(AstError::Hard)
+			.attach_printable(err))?;
+	
+	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
 }
 
-fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
+fn parse_block(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+	stream_expect_token_kind(stream, TokenKind::LBrace)
+		.map_err(|err| Report::new(AstError::Soft)
+			.attach_printable(err))?;
+	
+	let mut block = Block::new();
+	loop {
+		discard_space(stream);
+
+		if stream.expect(|&t| t.kind == TokenKind::RParen).is_some() {
+			return Ok(Node { kind: NodeKind::Block(block) });
+		}
+		
+		if let Ok(stmt) = try_hard!(parse_stmt(stream)) {
+			block.stmts.push(stmt);
+			continue;
+		}
+
+		return match stream.get_current() {
+			Some(token) => Err(Report::new(AstError::Soft)
+				.attach_printable(format!("Failed to parse block. token: '{}'", token.kind.as_ref()))),
+			None => Err(Report::new(AstError::Soft)
+				.attach_printable("Token stream was exhausted".to_string())),
+		};
+	};
+}
+
+fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
 	let lhs = expr_atom(stream)?;
 	
 	let mut stream = stream.dup();
@@ -223,25 +263,17 @@ fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
 	})
 }
 
-fn expr_atom(stream: &mut Stream<Iter<Token>>) -> Result<Node, AstError> {
+fn expr_atom(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
 	stream.hypothetically(|stream| match stream.next() {
 		Some(token) => match &token.kind {
 			TokenKind::IntLit(value) => Ok(Node { kind: NodeKind::IntLit(*value) }),
 			TokenKind::StrLit(value) => Ok(Node { kind: NodeKind::StrLit(value.clone()) }),
 			TokenKind::Identifier(value) => Ok(Node { kind: NodeKind::Indentifier(value.clone()) }),
-			TokenKind::LBrace => {
-				discard_space(stream);
-				parse_block(stream)
-			}
-			/*TokenKind::Let => {
-				discard_space(stream);
-				parse_let(stream)
-			},*/
-			_ => Err(Report::new(AstError{})
-				.attach_printable(format!("Unexpected token '{}'", token.kind.as_ref()))
-				.attach_printable("Trying to parse atom")),
+			_ => Err(Report::new(AstError::Soft)
+				.attach_printable("Trying to parse atom")
+				.attach_printable(format!("Unexpected token '{}'", token.kind.as_ref()))),
 		},
-		None => Err(Report::new(AstError{})
+		None => Err(Report::new(AstError::Soft)
 			.attach_printable("Token stream was exhausted".to_string())),
 	})
 }

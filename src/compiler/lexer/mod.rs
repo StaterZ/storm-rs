@@ -366,13 +366,13 @@ fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> R
 
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 	let mut tokens = Vec::<Token>::new();
-	let mut stream = src_in.chars().enumerate().peekable();
+	let mut stream = src_in.chars().stream();
 
 	loop {
-		let begin_index = SourcePos::new(stream.peek().unwrap().0);
+		let begin_index = SourcePos::new(stream.get_index());
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
-				let end_index = SourcePos::new(stream.peek().unwrap().0);
+				let end_index = SourcePos::new(stream.get_index());
 
 				let is_eof = kind == TokenKind::Eof;
 				
@@ -388,7 +388,7 @@ pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 					return Ok(tokens);
 				}
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", stream.peek().0, err)),
+			Err(err) => return Err(format!("[pos:{}] {}", stream.get_index().unwrap(), err)),
 		}
 	}
 }
