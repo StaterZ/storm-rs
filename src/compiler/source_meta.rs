@@ -5,29 +5,36 @@ use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug, Clone)]
 pub struct SourcePos {
-	pub index: Option<usize>,
+	pub byte_index: usize,
+	pub char_index: usize,
 }
 
 impl SourcePos {
-	pub fn new(index: Option<usize>) -> SourcePos {
-		SourcePos { index }
-	}
-
-	pub fn with_meta(&self, source: &SourceFile) -> Option<SourcePosMeta> {
-		self.index.map(|index| source.get_pos_meta(index))
+	pub fn with_meta(self, source: &SourceFile) -> SourcePosMeta {
+		source.get_pos_meta(self)
 	}
 }
 
+impl PartialEq for SourcePos {
+	fn eq(&self, other: &Self) -> bool {
+		let char_ok = self.char_index == other.char_index;
+		let byte_ok = self.byte_index == other.byte_index;
+		assert!(char_ok == byte_ok);
+		byte_ok
+	}
+}
+
+
 #[derive(Debug, Clone)]
 pub struct SourcePosMeta {
-	pub index: usize,
-	pub line_begin_index: usize,
+	pub pos: SourcePos,
+	pub line_begin: SourcePos,
 	pub line: usize,
 }
 
 impl SourcePosMeta {
 	pub fn column0(&self) -> usize {
-		self.index - self.line_begin_index
+		self.pos.char_index - self.line_begin.char_index
 	}
 
 	pub fn column(&self) -> usize {
@@ -48,67 +55,61 @@ pub struct SourceRange {
 }
 
 impl SourceRange {
-	pub fn get_length(&self) -> Option<usize> {
-		debug_assert!(self.begin.index <= self.end.index);
-		match (self.begin.index, self.end.index) {
-			(Some(begin), Some(end)) => begin - end,
-			_ => None,
-		}
+	pub fn get_length(&self) -> usize {
+		debug_assert!(self.begin.char_index <= self.end.char_index);
+		self.begin.char_index - self.end.char_index
 	}
 
 	pub fn get_last(&self) -> Option<SourcePos> {
-		self.end.index.and_then(|index| if index == 0 {
+		if self.end.char_index == 0 {
 			None
 		} else {
 			Some(SourcePos {
-				index: Some(index - 1)
+				char_index: self.end.char_index - 1,
+				byte_index: 666,
 			})
-		})
+		}
 	}
 
 	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
-		&source[self.begin.index .. self.end.index]
+		&source[self.begin.byte_index .. self.end.byte_index]
 	}
 	
-	pub fn get_line<'a>(&self, source: &'a SourceFile) -> &'a str {
-		let begin = self.begin.with_meta(source);
-		let last = self.get_last().expect("").with_meta(source);
-		assert_eq!(begin.line_begin_index, last.line_begin_index);
+	pub fn get_line<'a>(&self, source: &'a SourceFile) -> Option<&'a str> {
+		let begin = self.begin.clone().with_meta(source);
+		let last = self.get_last()?.with_meta(source);
+		assert_eq!(begin.line_begin, last.line_begin);
 
-		let end_index = if begin.line < source.lines_begin_indices.len() {
+		let end_byte_index = if begin.line < source.lines_begin_indices.len() {
 			source.lines_begin_indices[begin.line] - 1
 		} else {
 			source.content.len()
 		};
-		&source.content[begin.line_begin_index .. end_index]
+		Some(&source.content[begin.line_begin.byte_index .. end_byte_index])
 	}
-}
-
-impl SourceRange {
-	pub fn with_source<'a>(&'a self, source: &'a SourceFile) -> SourceRangeWithSource<'a> {
+	
+	pub fn with_source<'a>(&'a self, file: &'a SourceFile) -> SourceRangeWithSource<'a> {
 		SourceRangeWithSource {
-			inner: self,
-			source,
+			range: self,
+			file,
 		}
 	}
 }
 
 pub struct SourceRangeWithSource<'a> {
-	pub inner: &'a SourceRange,
-	pub source: &'a SourceFile,
+	pub range: &'a SourceRange,
+	pub file: &'a SourceFile,
 }
 
 impl<'a> Display for SourceRangeWithSource<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let begin = self.inner.begin.with_meta(&self.source);
-		let last = self.inner.get_last().and_then(|last| last.with_meta(&self.source));
+		let begin = self.range.begin.clone().with_meta(&self.file);
+		let last = self.range.get_last().map(|last| last.with_meta(&self.file));
 
-		if let Some(begin) = begin {
-			if let Some(last) = last {
-				if Some(begin.index) == self.inner.end.index {
-					write!(f, "{} (0 sized)", begin)
-				} else if begin.line == last.line {
-					if begin.index == last.index {
+		match last {
+			Some(last) if self.range.begin != self.range.end => {
+				if begin.line == last.line {
+					if begin.pos.char_index == last.pos.char_index {
 						write!(f, "{}", begin)
 					} else {
 						write!(f, "{}-{}", begin, last.column())
@@ -116,12 +117,11 @@ impl<'a> Display for SourceRangeWithSource<'a> {
 				} else {
 					write!(f, "{}-{}", begin, last)
 				}
-			} else {
-				write!(f, "{}-EOF", begin)
-			}
-		} else {
-			write!(f, "EOF (0 sized)")
+			},
+			_ => write!(f, "{} (0 sized)", begin),
 		}
+		
+		//write!(f, "{}-EOF", begin)
 	}
 }
 
@@ -135,7 +135,8 @@ pub struct SourceFile {
 impl SourceFile {
 	pub fn new(path: PathBuf, content: String) -> Self {
 		let lines_begin_indices = content
-			.char_indices()
+			.chars()
+			.enumerate()
 			.window_option()
 			.filter_map_deref(|(prev_c, (i, c))| {
 				let prev_c = prev_c.as_ref().map(|(_, prev_c)| prev_c);
@@ -169,18 +170,21 @@ impl SourceFile {
 		&self.content
 	}
 
-	pub fn get_line_index(&self, index: usize) -> usize {
-		match self.lines_begin_indices.binary_search(&index) {
+	pub fn get_line_index(&self, char_index: usize) -> usize {
+		match self.lines_begin_indices.binary_search(&char_index) {
 			Ok(line_index) => line_index,
 			Err(binary_search_left) => binary_search_left - 1, //error value name is scuffed but it works
 		}
 	}
 
-	pub fn get_pos_meta(&self, index: usize) -> SourcePosMeta {
-		let line_index = self.get_line_index(index);
+	pub fn get_pos_meta(&self, pos: SourcePos) -> SourcePosMeta {
+		let line_index = self.get_line_index(pos.char_index);
 		SourcePosMeta {
-			index,
-			line_begin_index: self.lines_begin_indices[line_index],
+			pos,
+			line_begin: SourcePos {
+				char_index: self.lines_begin_indices[line_index],
+				byte_index: 666,
+			},
 			line: line_index + 1,
 		}
 	}

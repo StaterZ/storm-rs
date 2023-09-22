@@ -106,8 +106,8 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 			].into_iter().collect();
 		}
 
-		match *stream.get().get_current() {
-			Some(c) => match RADICES.get(&c) {
+		match stream.get().get_current() {
+			Some(&c) => match RADICES.get(&c) {
 				Some(&radix) => {
 					stream.get().next();
 					stream.nip();
@@ -140,7 +140,7 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(c) = *stream.get().get_current() {
+	while let Some(&c) = stream.get().get_current() {
 		if c == '_' {
 			if i == 0 {
 				stream.pop();
@@ -369,18 +369,28 @@ pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 	let mut stream = src_in.chars().stream();
 
 	loop {
-		let begin_index = SourcePos::new(stream.get_index());
+		let begin_index = stream
+			.get_index()
+			.map(|char_index| SourcePos{
+				char_index,
+				byte_index: 666,
+			});
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
-				let end_index = SourcePos::new(stream.get_index());
+				let end_index = stream
+					.get_index()
+					.map(|char_index| SourcePos{
+						char_index,
+						byte_index: 666,
+					});
 
 				let is_eof = kind == TokenKind::Eof;
 				
 				tokens.push(Token{
 					kind: kind,
 					source: SourceRange {
-						begin: begin_index,
-						end: end_index,
+						begin: begin_index.unwrap(), //TODO: remove unwrap
+						end: end_index.unwrap(), //TODO: remove unwrap
 					},
 				});
 				

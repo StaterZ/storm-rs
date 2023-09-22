@@ -5,7 +5,7 @@ use std::iter::Enumerate;
 enum LineState {
 	Other,
 	LineFeed,
-	CarrageReturn,
+	CarriageReturn,
 }
 
 #[derive(Debug, Clone)]
@@ -69,11 +69,11 @@ impl<I: Iterator<Item = char>> Iterator for FilePos<I> {
 		self.iter.next().map(|(i, c)| {
 			let line_state = match c {
 				'\n' => LineState::LineFeed,
-				'\r' => LineState::CarrageReturn,
+				'\r' => LineState::CarriageReturn,
 				_ => LineState::Other,
 			};
 
-			let is_new_line_continued = state.prev_line_state == LineState::CarrageReturn && line_state == LineState::LineFeed;
+			let is_new_line_continued = state.prev_line_state == LineState::CarriageReturn && line_state == LineState::LineFeed;
 
 			state.pos.index = i;
 			if !is_new_line_continued && state.prev_line_state != LineState::Other {

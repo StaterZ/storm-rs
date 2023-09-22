@@ -67,10 +67,11 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 			let source_range_string = format!("[{}]", source_range.with_source(source));
 			let line = source_range.get_line(source);
 			let line_trunc_length = line
-				.char_indices()
-				.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
-				.unwrap_or(0);
-			let line = &line[line_trunc_length..];
+				.map_or(0, |line| line
+					.char_indices()
+					.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
+					.unwrap_or(0));
+			let line = line.map(|line| &line[line_trunc_length..]);
 
 			cformat!(
 				"<cyan>{empty:>source_range_string_len$}--></><green>{file_path}</>\n\
@@ -81,9 +82,9 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 				source_range_string = source_range_string,
 				source_range_string_len = source_range_string.len(),
 				file_path = source.get_path().display(),
-				line = line,
-				error_inset = source_range.begin.with_meta(source).unwrap().column0() - line_trunc_length,
-				error_length = source_range.get_length().unwrap(),
+				line = line.unwrap_or("!!! NO LINE !!!"),
+				error_inset = source_range.begin.clone().with_meta(source).column0() - line_trunc_length,
+				error_length = source_range.get_length(),
 			)
 		})),
 	}
