@@ -1,7 +1,7 @@
 use std::{path::{Path, PathBuf}, fmt::Display};
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
-use unicode_width::UnicodeWidthChar;
+//use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug, Clone)]
 pub struct SourcePos {
@@ -10,7 +10,14 @@ pub struct SourcePos {
 }
 
 impl SourcePos {
-	pub fn with_meta(self, source: &SourceFile) -> SourcePosMeta {
+	pub fn get_prev(&self) -> Option<SourcePos> {
+		(self.char_index > 0).then_some(SourcePos {
+			char_index: self.char_index - 1,
+			byte_index: self.byte_index - 1, //TODO: this will break with unicode
+		})
+	}
+
+	pub fn to_meta(self, source: &SourceFile) -> SourcePosMeta {
 		source.get_pos_meta(self)
 	}
 }
@@ -19,7 +26,7 @@ impl PartialEq for SourcePos {
 	fn eq(&self, other: &Self) -> bool {
 		let char_ok = self.char_index == other.char_index;
 		let byte_ok = self.byte_index == other.byte_index;
-		assert!(char_ok == byte_ok);
+		debug_assert_eq!(char_ok, byte_ok);
 		byte_ok
 	}
 }
@@ -29,7 +36,7 @@ impl PartialEq for SourcePos {
 pub struct SourcePosMeta {
 	pub pos: SourcePos,
 	pub line_begin: SourcePos,
-	pub line: usize,
+	pub line_index: usize,
 }
 
 impl SourcePosMeta {
@@ -44,51 +51,28 @@ impl SourcePosMeta {
 
 impl Display for SourcePosMeta {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}", self.line, self.column())
+		write!(f, "{}:{}", self.line_index + 1, self.column())
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct SourceRange {
-	pub begin: SourcePos,
-	pub end: SourcePos,
+	pub begin: Option<SourcePos>,
+	pub end: Option<SourcePos>,
 }
 
 impl SourceRange {
-	pub fn get_length(&self) -> usize {
-		debug_assert!(self.begin.char_index <= self.end.char_index);
-		self.begin.char_index - self.end.char_index
-	}
-
-	pub fn get_last(&self) -> Option<SourcePos> {
-		if self.end.char_index == 0 {
-			None
-		} else {
-			Some(SourcePos {
-				char_index: self.end.char_index - 1,
-				byte_index: 666,
-			})
+	pub fn to_workable(self) -> Option<WorkableSourceRange> {
+		match (self.begin, self.end) {
+			(Some(begin), Some(end)) => Some(WorkableSourceRange {
+				begin,
+				end,
+			}),
+			_ => None,
 		}
 	}
 
-	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
-		&source[self.begin.byte_index .. self.end.byte_index]
-	}
-	
-	pub fn get_line<'a>(&self, source: &'a SourceFile) -> Option<&'a str> {
-		let begin = self.begin.clone().with_meta(source);
-		let last = self.get_last()?.with_meta(source);
-		assert_eq!(begin.line_begin, last.line_begin);
-
-		let end_byte_index = if begin.line < source.lines_begin_indices.len() {
-			source.lines_begin_indices[begin.line] - 1
-		} else {
-			source.content.len()
-		};
-		Some(&source.content[begin.line_begin.byte_index .. end_byte_index])
-	}
-	
-	pub fn with_source<'a>(&'a self, file: &'a SourceFile) -> SourceRangeWithSource<'a> {
+	pub fn with_source<'a>(&'a self, file: &'a SourceFile) -> SourceRangeWithSource<'a, Self> {
 		SourceRangeWithSource {
 			range: self,
 			file,
@@ -96,19 +80,77 @@ impl SourceRange {
 	}
 }
 
-pub struct SourceRangeWithSource<'a> {
-	pub range: &'a SourceRange,
+#[derive(Debug, Clone)]
+pub struct WorkableSourceRange {
+	pub begin: SourcePos,
+	pub end: SourcePos,
+}
+
+impl WorkableSourceRange {
+	pub fn get_length(&self) -> usize {
+		debug_assert!(self.begin.char_index <= self.end.char_index);
+		self.end.char_index - self.begin.char_index
+	}
+
+	pub fn get_slice<'a>(&self, source: &'a str) -> &'a str {
+		&source[self.begin.byte_index .. self.end.byte_index]
+	}
+	
+	pub fn get_line<'a>(&self, file: &'a SourceFile) -> &'a str {
+		let begin = self.begin.clone().to_meta(file);
+		let last = self.end.get_prev().map(|last| last.to_meta(file));
+		debug_assert_eq!(begin.line_begin, last.map_or(SourcePos {
+			byte_index: 0,
+			char_index: 0,
+		}, |last| last.line_begin));
+
+		let end_byte_index = if (begin.line_index + 1) < file.lines_begin_indices.len() {
+			file.lines_begin_indices[begin.line_index + 1].byte_index - 1
+		} else {
+			file.content.len()
+		};
+
+		&file.content[begin.line_begin.byte_index .. end_byte_index]
+	}
+	
+	pub fn with_source<'a>(&'a self, file: &'a SourceFile) -> SourceRangeWithSource<'a, Self> {
+		SourceRangeWithSource {
+			range: self,
+			file,
+		}
+	}
+}
+
+pub struct SourceRangeWithSource<'a, T> {
+	pub range: &'a T,
 	pub file: &'a SourceFile,
 }
 
-impl<'a> Display for SourceRangeWithSource<'a> {
+impl<'a> Display for SourceRangeWithSource<'a, SourceRange> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let begin = self.range.begin.clone().with_meta(&self.file);
-		let last = self.range.get_last().map(|last| last.with_meta(&self.file));
+		let begin = self.range.begin
+			.clone()
+			.map(|begin| begin.to_meta(&self.file));
+		let last = self.range.end
+			.as_ref()
+			.and_then(|end| end.get_prev())
+			.map(|last| last.to_meta(&self.file));
 
-		match last {
-			Some(last) if self.range.begin != self.range.end => {
-				if begin.line == last.line {
+		match (begin, last, &self.range.end) {
+			(_, Some(_), None) => unreachable!(),
+			(None, None, Some(_)) => unreachable!(),
+			(Some(begin), None, Some(end)) => if begin.pos != *end {
+				unreachable!()
+			} else {
+				write!(f, "{} (0 sized)", begin)
+			},
+
+			(None, _, None) => write!(f, "BOF-EOF"),
+			(None, Some(last), _) => write!(f, "BOF-{}", last),
+			(Some(begin), _, None) => write!(f, "{}-EOF", begin),
+
+			(Some(begin), Some(last), _) => {
+				if begin.line_index == last.line_index {
 					if begin.pos.char_index == last.pos.char_index {
 						write!(f, "{}", begin)
 					} else {
@@ -118,23 +160,21 @@ impl<'a> Display for SourceRangeWithSource<'a> {
 					write!(f, "{}-{}", begin, last)
 				}
 			},
-			_ => write!(f, "{} (0 sized)", begin),
 		}
 		
 		//write!(f, "{}-EOF", begin)
 	}
 }
-
 #[derive(Debug)]
 pub struct SourceFile {
 	path: PathBuf,
 	content: String,
-	lines_begin_indices: Vec<usize>,
+	lines_begin_indices: Vec<SourcePos>,
 }
 
 impl SourceFile {
 	pub fn new(path: PathBuf, content: String) -> Self {
-		let lines_begin_indices = content
+		let lines_begin_indices: Vec<SourcePos> = content
 			.chars()
 			.enumerate()
 			.window_option()
@@ -148,12 +188,15 @@ impl SourceFile {
 					(None, _) => true,
 					_ => false,
 				} {
-					Some(*i)
+					Some(SourcePos{
+						char_index: *i,
+						byte_index: *i, //TODO: this is wrong and very scary bug nucleation site
+					})
 				} else {
 					None
 				}
 			})
-			.collect::<Vec<usize>>();
+			.collect();
 
 		Self {
 			path,
@@ -170,22 +213,19 @@ impl SourceFile {
 		&self.content
 	}
 
-	pub fn get_line_index(&self, char_index: usize) -> usize {
-		match self.lines_begin_indices.binary_search(&char_index) {
+	pub fn get_line_index(&self, pos: &SourcePos) -> usize {
+		match self.lines_begin_indices.binary_search_by_key(&pos.char_index, |pos| pos.char_index) {
 			Ok(line_index) => line_index,
-			Err(binary_search_left) => binary_search_left - 1, //error value name is scuffed but it works
+			Err(binary_search_left) => binary_search_left - 1,
 		}
 	}
 
 	pub fn get_pos_meta(&self, pos: SourcePos) -> SourcePosMeta {
-		let line_index = self.get_line_index(pos.char_index);
+		let line_index = self.get_line_index(&pos);
 		SourcePosMeta {
 			pos,
-			line_begin: SourcePos {
-				char_index: self.lines_begin_indices[line_index],
-				byte_index: 666,
-			},
-			line: line_index + 1,
+			line_begin: self.lines_begin_indices[line_index].clone(),
+			line_index,
 		}
 	}
 }

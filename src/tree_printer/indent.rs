@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Symbol {
 	Fork,
@@ -6,14 +8,14 @@ enum Symbol {
 	None,
 }
 
-impl Symbol {
-	pub fn get_symbol(&self) -> &'static str {
-		match self {
+impl Display for Symbol {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", match self {
 			Symbol::Fork => "├→",
 			Symbol::Line => "│ ",
 			Symbol::Turn => "╰→",
 			Symbol::None => "· ",
-		}
+		})
 	}
 }
 
@@ -26,10 +28,6 @@ impl Indent {
 		Self{
 			symbols: vec!(),
 		}
-	}
-
-	pub fn to_string(&self) -> String {
-		self.symbols.iter().map(|s| s.get_symbol()).collect()
 	}
 
 	pub fn push(&mut self, is_last: bool) {
@@ -48,5 +46,15 @@ impl Indent {
 				_ => *last,
 			}
 		}
+	}
+}
+
+
+impl Display for Indent {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		for c in self.symbols.iter() {
+			write!(f, "{}", c)?;
+		}
+		Ok(())
 	}
 }

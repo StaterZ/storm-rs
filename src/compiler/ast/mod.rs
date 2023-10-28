@@ -1,6 +1,6 @@
-use core::slice::Iter;
 use error_stack::Report;
 use color_print::cformat;
+
 use super::{
 	lexer::{Token, TokenKind},
 	stream::{Stream, StreamExt},
@@ -41,8 +41,22 @@ macro_rules! try_hard {
 	};
 }
 
-fn discard_space(stream: &mut Stream<Iter<Token>>) {
-	while stream.expect(|&t| matches!(t.kind,
+trait TokStreamIter<'i> = Iterator<Item = &'i Token>;
+trait TokStreamRF<'i> = for<'a> Fn(&'a &'i Token) -> &'a &'i Token;
+trait TokStreamMF<'i> = Fn(&'i Token) -> &'i Token;
+type TokStream<'i,
+	I/*: TokStreamIter<'i>*/,
+	RF/*: TokStreamRF<'i>*/,
+	MF/*: TokStreamMF<'i>*/,
+> = Stream<I, RF, MF, &'i Token>;
+
+fn discard_space<'i>(stream: &mut TokStream<
+	'i,
+	impl TokStreamIter<'i>,
+	impl TokStreamRF<'i>,
+	impl TokStreamMF<'i>,
+>) {
+	while stream.expect(|t| matches!(t.kind,
 		| TokenKind::Space
 		| TokenKind::NewLine
 		| TokenKind::Comment
@@ -50,8 +64,12 @@ fn discard_space(stream: &mut Stream<Iter<Token>>) {
 	)).is_some() { };
 }
 
-fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: TokenKind) -> Result<&'a Token, String> {
-	stream.expect_err(|&t| if t.kind == kind {
+fn stream_expect_token_kind<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i>,
+	impl TokStreamRF<'i>,
+	impl TokStreamMF<'i>,
+>, kind: TokenKind) -> Result<&'i Token, String> {
+	stream.expect_err(|t| if t.kind == kind {
 		Ok(())
 	} else {
 		Err(format!("Expected token '{}' but found '{}'", kind.as_ref(), t.kind.as_ref()))
@@ -59,19 +77,32 @@ fn stream_expect_token_kind<'a>(stream: &'a mut Stream<Iter<Token>>, kind: Token
 }
 
 pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
-	let mut stream = tokens.iter().stream();
+	let mut stream = tokens.iter().stream(
+		|t| t,
+		|t| t,
+	);
+
 	match parse_file(&mut stream) {
 		Ok(t) => Ok(t),
 		Err(err) => Err(err.attach_printable({
-			let source_range = &stream.get_current().unwrap().source;
+			let source_range = stream.get_peeker().get_current().unwrap().source.clone();
 			let source_range_string = format!("[{}]", source_range.with_source(source));
-			let line = source_range.get_line(source);
-			let line_trunc_length = line
-				.map_or(0, |line| line
-					.char_indices()
-					.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
-					.unwrap_or(0));
-			let line = line.map(|line| &line[line_trunc_length..]);
+			let (line, error_inset, error_length) = if let Some(workable_source_range) = source_range.to_workable() {
+				let line = workable_source_range.get_line(source);
+				let line_trunc_length = line
+						.char_indices()
+						.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
+						.unwrap_or(0);
+				let line = &line[line_trunc_length..];
+
+				let error_inset = workable_source_range.begin.clone().to_meta(source).column0() - line_trunc_length;
+				let error_length = workable_source_range.get_length();
+
+				(line, error_inset, error_length)
+			} else {
+				let line = "!!! NO LINE !!!";
+				(line, 0, line.len())
+			};
 
 			cformat!(
 				"<cyan>{empty:>source_range_string_len$}--></><green>{file_path}</>\n\
@@ -82,15 +113,19 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 				source_range_string = source_range_string,
 				source_range_string_len = source_range_string.len(),
 				file_path = source.get_path().display(),
-				line = line.unwrap_or("!!! NO LINE !!!"),
-				error_inset = source_range.begin.clone().with_meta(source).column0() - line_trunc_length,
-				error_length = source_range.get_length(),
+				line = line,
+				error_inset = error_inset,
+				error_length = error_length,
 			)
 		})),
 	}
 }
 
-fn parse_file(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn parse_file<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	let mut block = Block::new();
 	loop {
 		discard_space(stream);
@@ -104,7 +139,7 @@ fn parse_file(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>
 			continue;
 		}
 
-		return match stream.get_current() {
+		return match stream.get_peeker().get_current() {
 			Some(token) => Err(Report::new(AstError::Soft)
 				.attach_printable(format!("Failed to parse file. token: '{}'", token.kind.as_ref()))),
 			None => Err(Report::new(AstError::Soft)
@@ -113,7 +148,11 @@ fn parse_file(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>
 	};
 }
 
-fn parse_stmt(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn parse_stmt<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	if let Ok(stmt) = try_hard!(parse_let(stream)) {
 		return Ok(stmt);
 	}
@@ -128,7 +167,11 @@ fn parse_stmt(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>
 		.attach_printable("Failed to parse stmt"));
 }
 
-fn parse_let(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn parse_let<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	if let Err(err) = stream_expect_token_kind(stream, TokenKind::Let) {
 		return Err(Report::new(AstError::Soft).attach_printable(err));
 	}
@@ -152,7 +195,11 @@ fn parse_let(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>>
 	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
 }
 
-fn parse_assignment(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn parse_assignment<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	let lhs = match try_hard!(expr(stream)) {
 		Ok(lhs) => Box::new(lhs),
 		Err(err) => return Err(Report::new(AstError::Soft).attach_printable(err)),
@@ -174,7 +221,11 @@ fn parse_assignment(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<Ast
 	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
 }
 
-fn parse_block(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn parse_block<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	stream_expect_token_kind(stream, TokenKind::LBrace)
 		.map_err(|err| Report::new(AstError::Soft)
 			.attach_printable(err))?;
@@ -192,7 +243,7 @@ fn parse_block(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError
 			continue;
 		}
 
-		return match stream.get_current() {
+		return match stream.get_peeker().get_current() {
 			Some(token) => Err(Report::new(AstError::Soft)
 				.attach_printable(format!("Failed to parse block. token: '{}'", token.kind.as_ref()))),
 			None => Err(Report::new(AstError::Soft)
@@ -201,7 +252,11 @@ fn parse_block(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError
 	};
 }
 
-fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn expr<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	let lhs = expr_atom(stream)?;
 	
 	let mut stream = stream.dup();
@@ -264,7 +319,11 @@ fn expr(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
 	})
 }
 
-fn expr_atom(stream: &mut Stream<Iter<Token>>) -> Result<Node, Report<AstError>> {
+fn expr_atom<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
 	stream.hypothetically(|stream| match stream.next() {
 		Some(token) => match &token.kind {
 			TokenKind::IntLit(value) => Ok(Node { kind: NodeKind::IntLit(*value) }),

@@ -93,7 +93,12 @@ impl<'a> Display for TokenWithSource<'a> {
 	}
 }
 
-fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<Option<u32>, String> {
+fn parse_radix(stream: &mut Stream<
+	impl Iterator<Item = (usize, (usize, char))> + Clone,
+	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
+	impl (Fn((usize, (usize, char))) -> char) + Clone,
+	char,
+>) -> Result<Option<u32>, String> {
 	let mut stream = stream.dup();
 	if stream.get().expect(|c| *c == '0').is_some() {
 		lazy_static!{
@@ -106,8 +111,8 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 			].into_iter().collect();
 		}
 
-		match stream.get().get_current() {
-			Some(&c) => match RADICES.get(&c) {
+		match stream.get().get_peeker().get_current() {
+			Some(c) => match RADICES.get(&c) {
 				Some(&radix) => {
 					stream.get().next();
 					stream.nip();
@@ -115,8 +120,9 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 				},
 				None => match c {
 					'a'..='z' | 'A'..='Z' => {
+						let msg = format!("Invalid radix symbol \'{:?}\'", c);
 						stream.nip();
-						return Err(format!("Invalid radix symbol \'{:?}\'", c));
+						return Err(msg);
 					},
 					_ => stream.pop(),
 				}
@@ -130,7 +136,12 @@ fn parse_radix(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Resul
 	Ok(None)
 }
 
-fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<Option<u64>, String> {
+fn parse_int(stream: &mut Stream<
+	impl Iterator<Item = (usize, (usize, char))> + Clone,
+	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
+	impl (Fn((usize, (usize, char))) -> char) + Clone,
+	char,
+>) -> Result<Option<u64>, String> {
 	let mut stream = stream.dup();
 
 	let radix = parse_radix(&mut stream.get())?;
@@ -140,7 +151,7 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(&c) = stream.get().get_current() {
+	while let Some(&c) = stream.get().get_peeker().get_current() {
 		if c == '_' {
 			if i == 0 {
 				stream.pop();
@@ -152,12 +163,14 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 			match c.to_digit(36) {
 				Some(digit_value) => {
 					if digit_value >= radix {
-						stream.pop();
-						return if is_match {
+						let result = if is_match {
 							Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
 						} else {
 							Ok(None)
-						}
+						};
+						stream.pop();
+
+						return result;
 					}
 		
 					value *= radix as u64;
@@ -193,9 +206,14 @@ fn parse_int(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<
 	return Ok(Some(value));
 }
 
-fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> Result<TokenKind, String> {
+fn next_token_kind(stream: &mut Stream<
+	impl Iterator<Item = (usize, (usize, char))> + Clone,
+	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
+	impl (Fn((usize, (usize, char))) -> char) + Clone,
+	char,
+>) -> Result<TokenKind, String> {
 	{
-		fn is_space(c: &char) -> bool { matches!(c, ' ' | '\t') }
+		fn is_space(c: &char) -> bool { matches!(*c, ' ' | '\t') }
 		if stream.expect(is_space).is_some() {
 			while stream.expect(is_space).is_some() { }
 			return Ok(TokenKind::Space);
@@ -354,11 +372,11 @@ fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> R
 		return Ok(TokenKind::Identifier(value));
 	}
 
-	if stream.get_current().is_none() {
+	if stream.get_peeker().get_current().is_none() {
 		return Ok(TokenKind::Eof);
 	}
 
-	return Err(format!("No token factory matching stream '{}'", match stream.get_current() {
+	return Err(format!("No token factory matching stream '{}'", match stream.get_peeker().get_current() {
 		Some(c) => c.to_string(),
 		None => "EOF".to_string(),
 	}));
@@ -366,31 +384,35 @@ fn next_token_kind(stream: &mut Stream<impl Iterator<Item = char> + Clone>) -> R
 
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 	let mut tokens = Vec::<Token>::new();
-	let mut stream = src_in.chars().stream();
+	let mut stream = src_in.char_indices().enumerate().stream(|(_, (_, c))| c, |(_, (_, c))| c);
+
+	fn get_current_source_pos(stream: &mut Stream<
+		impl Iterator<Item = (usize, (usize, char))>,
+		impl Fn(&(usize, (usize, char))) -> &char,
+		impl Fn((usize, (usize, char))) -> char,
+		char,
+	>) -> Option<SourcePos> {
+		stream
+			.get_peeker()
+			.get_current_raw()
+			.map(|&(char_index, (byte_index, _))| SourcePos{
+				char_index,
+				byte_index,
+			})
+	}
 
 	loop {
-		let begin_index = stream
-			.get_index()
-			.map(|char_index| SourcePos{
-				char_index,
-				byte_index: 666,
-			});
+		let begin_index = get_current_source_pos(&mut stream);
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
-				let end_index = stream
-					.get_index()
-					.map(|char_index| SourcePos{
-						char_index,
-						byte_index: 666,
-					});
-
+				let end_index = get_current_source_pos(&mut stream);
 				let is_eof = kind == TokenKind::Eof;
 				
 				tokens.push(Token{
 					kind: kind,
 					source: SourceRange {
-						begin: begin_index.unwrap(), //TODO: remove unwrap
-						end: end_index.unwrap(), //TODO: remove unwrap
+						begin: begin_index,
+						end: end_index,
 					},
 				});
 				
@@ -398,7 +420,7 @@ pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
 					return Ok(tokens);
 				}
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", stream.get_index().unwrap(), err)),
+			Err(err) => return Err(format!("[pos:{}] {}", stream.get_peeker().get_current_raw().unwrap().0, err)),
 		}
 	}
 }

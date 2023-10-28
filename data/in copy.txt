@@ -1,0 +1,8 @@
+let foo = "abc \"123" == "geh"; //haha "
+let haha;
+{
+	grub = 0x42 + 5 * 2 - 0b1001;
+	/*let @"ba\"r" = 0x42 + 5 * 2 - 0b1001;
+	//weeeeee*/
+	let x = "❤️n! ░▒▓█";
+}

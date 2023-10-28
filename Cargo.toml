@@ -10,6 +10,7 @@ edition = "2021"
 clap = { version = "4.2.7", features= ["derive"] } # command line parser
 owo-colors = "3.5.0" # ansi color formatter
 color-print = "0.3.4" # ansi color formatter
+prettytable-rs = "^0.10"
 unicode-width = "0.1.10"
 
 #misc
@@ -22,7 +23,7 @@ streaming-iterator = "0.1.9" #streaming iterators
 
 #error handling
 thiserror = "1.0.44" # error type generation
-error-stack = "0.3.1" # good error handling
+error-stack = "0.4.1" # good error handling
 anyhow = { version = "1.0.72", features = ["backtrace"] } # simple error handling
 
 #custom

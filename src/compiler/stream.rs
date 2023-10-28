@@ -1,120 +1,177 @@
-use std::iter::{Enumerate, Peekable};
+use std::iter::Peekable;
 
-pub struct Stream<I: Iterator> {
-	iter: Peekable<Enumerate<I>>,
+pub struct Stream<I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
+	iter: Peekable<I>,
+	rf: RF,
+	mf: MF,
 }
 
-impl<I: Iterator> Stream<I> {
-	pub fn new(iter: I) -> Self {
+impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
+	pub fn new(iter: I, rf: RF, mf: MF) -> Self {
 		return Self{
-			iter: iter.enumerate().peekable(),
+			iter: iter.peekable(),
+			rf,
+			mf,
 		};
 	}
 
-	pub fn get_inner(&self) -> &Peekable<Enumerate<I>> {
-		&self.iter
+	pub fn get_peeker(&mut self) -> Peeker<'_, I, RF, B> {
+		Peeker {
+			peeked: self.iter.peek(),
+			rf: &self.rf,
+		}
 	}
 
-	pub fn get_current(&mut self) -> Option<&I::Item> {
-		self.iter.peek().map(|(_, item)| item)
-	}
-
-	pub fn get_index(&mut self) -> Option<usize> {
-		self.iter.peek().map(|(i, _)| *i)
-	}
-
-	#[inline(always)]
-	pub fn check(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> bool {
+	pub fn check(&mut self, pred: impl FnOnce(&B) -> bool) -> bool {
 		self
+			.get_peeker()
 			.get_current()
 			.map_or(false, pred)
 	}
 	
-	#[inline(always)]
-	pub fn expect(&mut self, pred: impl FnOnce(&I::Item) -> bool) -> Option<I::Item> {
-		if self.check(pred) {
-			let result = self.next();
-			assert!(result.is_some());
-			result
-		} else {
-			None
-		}
+	pub fn expect(&mut self, pred: impl FnOnce(&B) -> bool) -> Option<B> {
+		self
+			.check(pred)
+			.then(|| self.next().unwrap())
 	}
 	
-	#[inline(always)]
-	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&I::Item) -> Option<T>) -> Option<(I::Item, T)> {
+	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
 		self
+			.get_peeker()
 			.get_current()
 			.and_then(pred)
 			.map(|value| (self.next().unwrap(), value))
 	}
 
-	#[inline(always)]
-	pub fn expect_err(&mut self, pred: impl FnOnce(&I::Item) -> Result<(), String>) -> Result<I::Item, String> {
-		match self.get_current() {
-			Some(c) => match pred(c) {
-				Ok(()) => Ok(self.next().unwrap()),
-				Err(err) => Err(err),
-			},
+	pub fn expect_err(&mut self, pred: impl FnOnce(&B) -> Result<(), String>) -> Result<B, String> {
+		match self.get_peeker().get_current() {
+			Some(c) => pred(c).map(|_| self.next().unwrap()),
 			None => Err("iterator is exhausted".to_string()),
 		}
 	}
 }
 
-impl<I: Iterator + Clone> Stream<I>
-	where I::Item: Clone
+impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+	I: Iterator + Clone,
+	I::Item: Clone,
+	RF: Fn(&I::Item) -> &B,
+	RF: Clone,
+	MF: Fn(I::Item) -> B,
+	MF: Clone,
 {
-	pub fn dup<'a>(&mut self) -> StreamHypothetical<I> {
+	pub fn dup<'a>(&mut self) -> StreamHypothetical<I, RF, MF, B> {
 		StreamHypothetical::new(self)
 	}
 	
 	#[inline(always)]
-	pub fn hypothetically<T, E>(&mut self, func: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
+	pub fn hypothetically<T, E>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
 		let mut hypothetical = self.dup();
 
-		let result = func(hypothetical.get());
+		let result = f(hypothetical.get());
 		hypothetical.nip_or_pop(result.is_ok());
 
 		result
 	}
 }
 
-impl<I: Iterator + Clone> Clone for Stream<I>
-	where I::Item: Clone
+impl<I, RF, MF, B> Clone for Stream<I, RF, MF, B> where
+	I: Iterator + Clone,
+	I::Item: Clone,
+	RF: Fn(&I::Item) -> &B,
+	RF: Clone,
+	MF: Fn(I::Item) -> B,
+	MF: Clone,
 {
 	fn clone(&self) -> Self {
 		Self {
 			iter: self.iter.clone(),
+			rf: self.rf.clone(),
+			mf: self.mf.clone(),
 		}
 	}
 }
 
-impl<I: Iterator> Iterator for Stream<I> {
-	type Item = I::Item;
+impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
+	type Item = B;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next().map(|(_, item)| item)
+		self.iter
+			.next()
+			.map(|item| (self.mf)(item))
 	}
 }
 
-
-
-pub struct StreamHypothetical<'a, I: Iterator> {
-	hypothetical: Option<Stream<I>>,
-	original: &'a mut Stream<I>,
+impl<I, RF, MF, B> ExactSizeIterator for Stream<I, RF, MF, B>
+where
+	I: ExactSizeIterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
+	fn len(&self) -> usize {
+		self.iter.len()
+	}
 }
 
-impl<'a, I: Iterator + Clone> StreamHypothetical<'a, I>
-	where I::Item: Clone
+pub struct Peeker<'p, I, RF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
 {
-	pub fn new(stream: &'a mut Stream<I>) -> Self {
+	peeked: Option<&'p <Peekable<I> as Iterator>::Item>,
+	rf: &'p RF,
+}
+
+impl<'p, I, RF, B> Peeker<'p, I, RF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+{
+	pub fn get_current_raw(&self) -> Option<&<Peekable<I> as Iterator>::Item> {
+		self.peeked.clone()
+	}
+
+	pub fn get_current(&self) -> Option<&B> {
+		self
+			.get_current_raw()
+			.map(|item| (self.rf)(item))
+	}
+}
+
+pub struct StreamHypothetical<'a, I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
+	hypothetical: Option<Stream<I, RF, MF, B>>,
+	original: &'a mut Stream<I, RF, MF, B>,
+}
+
+impl<'a, I, RF, MF, B> StreamHypothetical<'a, I, RF, MF, B> where
+	I: Iterator + Clone,
+	I::Item: Clone,
+	RF: Fn(&I::Item) -> &B,
+	RF: Clone,
+	MF: Fn(I::Item) -> B,
+	MF: Clone
+{
+	pub fn new(stream: &'a mut Stream<I, RF, MF, B>) -> Self {
 		Self {
 			hypothetical: Some(stream.clone()),
 			original: stream,
 		}
 	}
 
-	pub fn get(&mut self) -> &mut Stream<I> {
+	pub fn get(&mut self) -> &mut Stream<I, RF, MF, B> {
 		self.hypothetical.as_mut().unwrap()
 	}
 
@@ -135,18 +192,24 @@ impl<'a, I: Iterator + Clone> StreamHypothetical<'a, I>
 	}
 }
 
-impl<'a, I: Iterator> Drop for StreamHypothetical<'a, I> {
+impl<'a, I, RF, MF, B> Drop for StreamHypothetical<'a, I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+{
 	fn drop(&mut self) {
-		assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
+		debug_assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
 	}
 }
 
+
 pub trait StreamExt : Iterator {
-	fn stream(self) -> Stream<Self>
-	where
-		Self: Sized
+	fn stream<RF, MF, B>(self, rf: RF, mf: MF) -> Stream<Self, RF, MF, B> where
+		Self: Sized,
+		RF: Fn(&Self::Item) -> &B,
+		MF: Fn(Self::Item) -> B,
 	{
-		Stream::new(self)
+		Stream::new(self, rf, mf)
 	}
 }
 

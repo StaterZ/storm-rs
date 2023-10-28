@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![feature(trait_alias)]
 
 use clap::Parser;
 use owo_colors::OwoColorize;
@@ -36,9 +37,9 @@ fn compile() {
 	};
 	
 	if let Ok(src_in) = std::fs::read_to_string(path.as_path()) {
-		println!("=== Source ===");
-		println!("{}", src_in);
 		let src_file = SourceFile::new(path, src_in);
+		println!("=== Source ===");
+		println!("{:?}", src_file.get_content());
 		
 		let result = compiler::compile(&src_file);
 
