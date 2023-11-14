@@ -1,10 +1,10 @@
 use error_stack::Report;
-use source_meta::SourceFile;
+use source::SourceFile;
 
+pub mod source;
 mod lexer;
 mod ast;
 mod stream;
-pub mod source_meta;
 
 pub struct CompilerOutput {
 	pub lex: Option<Result<Vec<lexer::Token>, String>>,

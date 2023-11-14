@@ -1,4 +1,5 @@
-use std::iter::Peekable;
+use std::{iter::{Peekable, FusedIterator}, fmt::Display};
+use super::{Peeker, StreamHypothetical};
 
 pub struct Stream<I, RF, MF, B> where
 	I: Iterator,
@@ -54,8 +55,27 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	pub fn expect_err(&mut self, pred: impl FnOnce(&B) -> Result<(), String>) -> Result<B, String> {
 		match self.get_peeker().get_current() {
 			Some(c) => pred(c).map(|_| self.next().unwrap()),
-			None => Err("iterator is exhausted".to_string()),
+			None => Err("Iterator is exhausted".to_string()),
 		}
+	}
+}
+
+impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+	B: Display + PartialEq,
+{
+	pub fn expect_eq(&mut self, expected: &B) -> Option<B> {
+		self.expect(|c| c == expected)
+	}
+
+	pub fn expect_eq_err(&mut self, expected: &B) -> Result<B, String> {
+		self.expect_err(|c| if c == expected {
+			Ok(())
+		} else {
+			Err(format!("found '{}'", c))
+		}).map_err(|err| format!("Expected '{}' but {}", expected, err))
 	}
 }
 
@@ -106,6 +126,7 @@ impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
 {
 	type Item = B;
 
+	#[inline]
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter
 			.next()
@@ -124,93 +145,30 @@ where
 	}
 }
 
-pub struct Peeker<'p, I, RF, B> where
-	I: Iterator,
-	RF: Fn(&I::Item) -> &B,
-{
-	peeked: Option<&'p <Peekable<I> as Iterator>::Item>,
-	rf: &'p RF,
-}
-
-impl<'p, I, RF, B> Peeker<'p, I, RF, B> where
-	I: Iterator,
-	RF: Fn(&I::Item) -> &B,
-{
-	pub fn get_current_raw(&self) -> Option<&<Peekable<I> as Iterator>::Item> {
-		self.peeked.clone()
-	}
-
-	pub fn get_current(&self) -> Option<&B> {
-		self
-			.get_current_raw()
-			.map(|item| (self.rf)(item))
-	}
-}
-
-pub struct StreamHypothetical<'a, I, RF, MF, B> where
-	I: Iterator,
+impl<I, RF, MF, B> DoubleEndedIterator for Stream<I, RF, MF, B>
+where
+	I: DoubleEndedIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
-	hypothetical: Option<Stream<I, RF, MF, B>>,
-	original: &'a mut Stream<I, RF, MF, B>,
-}
-
-impl<'a, I, RF, MF, B> StreamHypothetical<'a, I, RF, MF, B> where
-	I: Iterator + Clone,
-	I::Item: Clone,
-	RF: Fn(&I::Item) -> &B,
-	RF: Clone,
-	MF: Fn(I::Item) -> B,
-	MF: Clone
-{
-	pub fn new(stream: &'a mut Stream<I, RF, MF, B>) -> Self {
-		Self {
-			hypothetical: Some(stream.clone()),
-			original: stream,
-		}
+	#[inline]
+	fn next_back(&mut self) -> Option<Self::Item> {
+		self.iter
+			.next_back()
+			.map(|item| (self.mf)(item))
 	}
 
-	pub fn get(&mut self) -> &mut Stream<I, RF, MF, B> {
-		self.hypothetical.as_mut().unwrap()
-	}
-
-	pub fn nip(mut self) {
-		*self.original = self.hypothetical.take().unwrap();
-	}
-	
-	pub fn pop(mut self) {
-		self.hypothetical = None;
-	}
-
-	pub fn nip_or_pop(self, cond: bool) {
-		if cond {
-			self.nip();
-		} else {
-			self.pop();
-		}
+	#[inline]
+	fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+		self.iter
+			.nth_back(n)
+			.map(|item| (self.mf)(item))
 	}
 }
 
-impl<'a, I, RF, MF, B> Drop for StreamHypothetical<'a, I, RF, MF, B> where
-	I: Iterator,
+impl<I, RF, MF, B> FusedIterator for Stream<I, RF, MF, B>
+where
+	I: FusedIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
-{
-	fn drop(&mut self) {
-		debug_assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
-	}
-}
-
-
-pub trait StreamExt : Iterator {
-	fn stream<RF, MF, B>(self, rf: RF, mf: MF) -> Stream<Self, RF, MF, B> where
-		Self: Sized,
-		RF: Fn(&Self::Item) -> &B,
-		MF: Fn(Self::Item) -> B,
-	{
-		Stream::new(self, rf, mf)
-	}
-}
-
-impl<I: Iterator> StreamExt for I {}
+{ }

@@ -4,7 +4,7 @@
 use clap::Parser;
 use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
-use compiler::source_meta::SourceFile;
+use compiler::source::SourceFile;
 
 mod compiler;
 mod tree_printer;
@@ -37,7 +37,13 @@ fn compile() {
 	};
 	
 	if let Ok(src_in) = std::fs::read_to_string(path.as_path()) {
-		let src_file = SourceFile::new(path, src_in);
+		let src_file = SourceFile::new(
+			path
+				.into_os_string()
+				.to_string_lossy()
+				.to_string(),
+			src_in
+		);
 		println!("=== Source ===");
 		println!("{:?}", src_file.get_content());
 		
@@ -52,7 +58,7 @@ fn compile() {
 				println!();
 				println!("=== Tokens ===");
 				for token in tokens.iter() {
-					println!("{}", token.with_source(&src_file));
+					println!("{}", token.with_meta(&src_file));
 				}
 			}
 		}

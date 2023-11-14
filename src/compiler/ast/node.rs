@@ -4,7 +4,7 @@ use lazy_static::__Deref;
 use strum::AsRefStr;
 use color_print::cformat;
 use szu::ternary;
-use super::super::super::tree_printer::TreeDisplay;
+use crate::tree_printer::TreeDisplay;
 
 #[derive(Debug)]
 pub struct Block {

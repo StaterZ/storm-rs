@@ -5,7 +5,7 @@ use szu::{tag_enum, tag_enum_helper, replace_macro_arg};
 
 use super::{
 	stream::{Stream, StreamExt},
-	source_meta::{SourcePos, SourceRange, SourceFile},
+	source::{SourcePos, SourceRange, SourceFile},
 };
 
 mod file_pos;
@@ -74,33 +74,41 @@ pub struct Token {
 }
 
 impl Token {
-	pub fn with_source<'a>(&'a self, source: &'a SourceFile) -> TokenWithSource<'a> {
-		TokenWithSource {
-			inner: self,
-			source,
+	pub fn with_meta<'a>(&'a self, file: &'a SourceFile) -> TokenMeta<'a> {
+		TokenMeta {
+			token: self,
+			file,
 		}
 	}
 }
 
-pub struct TokenWithSource<'a> {
-	pub inner: &'a Token,
-	pub source: &'a SourceFile,
+pub struct TokenMeta<'a> {
+	pub token: &'a Token,
+	pub file: &'a SourceFile,
 }
 
-impl<'a> Display for TokenWithSource<'a> {
+impl<'a> Display for TokenMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{} -> {:?}", self.inner.source.with_source(self.source), self.inner.kind)
+		write!(f, "{} -> {:?}", self.token.source.clone().to_meta(self.file), self.token.kind)
 	}
 }
 
-fn parse_radix(stream: &mut Stream<
-	impl Iterator<Item = (usize, (usize, char))> + Clone,
-	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
-	impl (Fn((usize, (usize, char))) -> char) + Clone,
-	char,
+trait CharStreamIter = Iterator<Item = (usize, char)>;
+trait CharStreamRF = for<'a> Fn(&'a (usize, char)) -> &'a char;
+trait CharStreamMF = Fn((usize, char)) -> char;
+type CharStream<
+	I/*: CharStreamIter*/,
+	RF/*: CharStreamRF*/,
+	MF/*: CharStreamMF*/,
+> = Stream<I, RF, MF, char>;
+
+fn parse_radix(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
 >) -> Result<Option<u32>, String> {
 	let mut stream = stream.dup();
-	if stream.get().expect(|c| *c == '0').is_some() {
+	if stream.get().expect_eq(&'0').is_some() {
 		lazy_static!{
 			static ref RADICES: HashMap<char, u32> = vec![
 				('b', 2),
@@ -136,11 +144,10 @@ fn parse_radix(stream: &mut Stream<
 	Ok(None)
 }
 
-fn parse_int(stream: &mut Stream<
-	impl Iterator<Item = (usize, (usize, char))> + Clone,
-	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
-	impl (Fn((usize, (usize, char))) -> char) + Clone,
-	char,
+fn parse_int(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
 >) -> Result<Option<u64>, String> {
 	let mut stream = stream.dup();
 
@@ -206,11 +213,10 @@ fn parse_int(stream: &mut Stream<
 	return Ok(Some(value));
 }
 
-fn next_token_kind(stream: &mut Stream<
-	impl Iterator<Item = (usize, (usize, char))> + Clone,
-	impl (Fn(&(usize, (usize, char))) -> &char) + Clone,
-	impl (Fn((usize, (usize, char))) -> char) + Clone,
-	char,
+fn next_token_kind(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
 >) -> Result<TokenKind, String> {
 	{
 		fn is_space(c: &char) -> bool { matches!(*c, ' ' | '\t') }
@@ -221,63 +227,63 @@ fn next_token_kind(stream: &mut Stream<
 	}
 
 	{
-		let r = stream.expect(|c| *c == '\r').is_some();
-		let n = stream.expect(|c| *c == '\n').is_some();
+		let r = stream.expect_eq(&'\r').is_some();
+		let n = stream.expect_eq(&'\n').is_some();
 		if r || n {
 			return Ok(TokenKind::NewLine);
 		}
 	}
 
-	if stream.expect(|c| *c == '.').is_some() {
+	if stream.expect_eq(&'.').is_some() {
 		return Ok(TokenKind::Dot);
 	}
-	if stream.expect(|c| *c == ',').is_some() {
+	if stream.expect_eq(&',').is_some() {
 		return Ok(TokenKind::Comma);
 	}
-	if stream.expect(|c| *c == ';').is_some() {
+	if stream.expect_eq(&';').is_some() {
 		return Ok(TokenKind::Semicolon);
 	}
 	
-	if stream.expect(|c| *c == '(').is_some() {
+	if stream.expect_eq(&'(').is_some() {
 		return Ok(TokenKind::LParen);
 	}
-	if stream.expect(|c| *c == ')').is_some() {
+	if stream.expect_eq(&')').is_some() {
 		return Ok(TokenKind::RBrace);
 	}
-	if stream.expect(|c| *c == '[').is_some() {
+	if stream.expect_eq(&'[').is_some() {
 		return Ok(TokenKind::LBracket);
 	}
-	if stream.expect(|c| *c == ']').is_some() {
+	if stream.expect_eq(&']').is_some() {
 		return Ok(TokenKind::RBracket);
 	}
-	if stream.expect(|c| *c == '{').is_some() {
+	if stream.expect_eq(&'{').is_some() {
 		return Ok(TokenKind::LBrace);
 	}
-	if stream.expect(|c| *c == '}').is_some() {
+	if stream.expect_eq(&'}').is_some() {
 		return Ok(TokenKind::RBrace);
 	}
 
-	if stream.expect(|c| *c == '+').is_some() {
+	if stream.expect_eq(&'+').is_some() {
 		return Ok(TokenKind::Plus);
 	}
-	if stream.expect(|c| *c == '-').is_some() {
+	if stream.expect_eq(&'-').is_some() {
 		return Ok(TokenKind::Dash);
 	}
-	if stream.expect(|c| *c == '*').is_some() {
+	if stream.expect_eq(&'*').is_some() {
 		return Ok(TokenKind::Star);
 	}
-	if stream.expect(|c| *c == '/').is_some() {
-		if stream.expect(|c| *c == '/').is_some() {
+	if stream.expect_eq(&'/').is_some() {
+		if stream.expect_eq(&'/').is_some() {
 			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
 			return Ok(TokenKind::Comment);
 		}
-		if stream.expect(|c| *c == '*').is_some() {
+		if stream.expect_eq(&'*').is_some() {
 			let mut indent = 0usize;
 			while indent > 0 {
 				match stream.next() {
 					Some(c) => match c {
-						'/' if stream.expect(|c| *c == '*').is_some() => indent += 1,
-						'*' if stream.expect(|c| *c == '/').is_some() => indent -= 1,
+						'/' if stream.expect_eq(&'*').is_some() => indent += 1,
+						'*' if stream.expect_eq(&'/').is_some() => indent -= 1,
 						_ => {},
 					},
 					None => return Err("Multi-line comment not closed".to_string()),
@@ -289,26 +295,26 @@ fn next_token_kind(stream: &mut Stream<
 		
 		return Ok(TokenKind::Slash);
 	}
-	if stream.expect(|c| *c == '%').is_some() {
+	if stream.expect_eq(&'%').is_some() {
 		return Ok(TokenKind::Percent);
 	}
-	if stream.expect(|c| *c == '<').is_some() {
-		if stream.expect(|c| *c == '<').is_some() {
+	if stream.expect_eq(&'<').is_some() {
+		if stream.expect_eq(&'<').is_some() {
 			return Ok(TokenKind::LShift);
 		}
 
 		return Ok(TokenKind::LessThan);
 	}
-	if stream.expect(|c| *c == '>').is_some() {
-		if stream.expect(|c| *c == '>').is_some() {
+	if stream.expect_eq(&'>').is_some() {
+		if stream.expect_eq(&'>').is_some() {
 			return Ok(TokenKind::RShift);
 		}
 
 		return Ok(TokenKind::GreaterThan);
 	}
 
-	if stream.expect(|c| *c == '=').is_some() {
-		if stream.expect(|c| *c == '=').is_some() {
+	if stream.expect_eq(&'=').is_some() {
+		if stream.expect_eq(&'=').is_some() {
 			return Ok(TokenKind::Equality);
 		}
 
@@ -320,11 +326,11 @@ fn next_token_kind(stream: &mut Stream<
 	}
 
 	{
-		let ident_str = stream.expect(|c| *c == '@').is_some();
-		if stream.expect(|c| *c == '\"').is_some() {
+		let ident_str = stream.expect_eq(&'@').is_some();
+		if stream.expect_eq(&'\"').is_some() {
 			let mut value = String::new();
-			while stream.expect(|c| *c == '\"').is_none() {
-				stream.expect(|c| *c == '\\');
+			while stream.expect_eq(&'\"').is_none() {
+				stream.expect_eq(&'\\');
 				match stream.next() {
 					Some(c) => value.push(c),
 					None => return Err("String literal not closed".to_string()),
@@ -383,44 +389,54 @@ fn next_token_kind(stream: &mut Stream<
 }
 
 pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
-	let mut tokens = Vec::<Token>::new();
-	let mut stream = src_in.char_indices().enumerate().stream(|(_, (_, c))| c, |(_, (_, c))| c);
-
+	let mut stream = src_in.chars().enumerate().stream(
+		|(_, c)| c,
+		|(_, c)| c,
+	);
+	
 	fn get_current_source_pos(stream: &mut Stream<
-		impl Iterator<Item = (usize, (usize, char))>,
-		impl Fn(&(usize, (usize, char))) -> &char,
-		impl Fn((usize, (usize, char))) -> char,
+		impl Iterator<Item = (usize, char)>,
+		impl Fn(&(usize, char)) -> &char,
+		impl Fn((usize, char)) -> char,
 		char,
 	>) -> Option<SourcePos> {
 		stream
-			.get_peeker()
-			.get_current_raw()
-			.map(|&(char_index, (byte_index, _))| SourcePos{
-				char_index,
-				byte_index,
-			})
+		.get_peeker()
+		.get_current_raw()
+		.map(|&(char_index, _)| SourcePos::new(char_index))
 	}
-
+		
+	let mut tokens = Vec::new();
 	loop {
 		let begin_index = get_current_source_pos(&mut stream);
-		match next_token_kind(&mut stream) {
-			Ok(kind) => {
-				let end_index = get_current_source_pos(&mut stream);
-				let is_eof = kind == TokenKind::Eof;
-				
-				tokens.push(Token{
-					kind: kind,
-					source: SourceRange {
-						begin: begin_index,
-						end: end_index,
-					},
-				});
-				
-				if is_eof {
-					return Ok(tokens);
-				}
+		match begin_index {
+			None => return Ok(tokens),
+			Some(begin_index) => match next_token_kind(&mut stream) {
+				Ok(kind) => {
+					let is_eof = kind == TokenKind::Eof;
+
+					let end_index = get_current_source_pos(&mut stream).unwrap_or(SourcePos::new(666)); //TODO: make enumerate continue 1 extra somehow so we can get the end index
+					tokens.push(Token{
+						kind: kind,
+						source: SourceRange {
+							begin: begin_index,
+							end: end_index,
+						},
+					});
+
+					if is_eof {
+						return Ok(tokens);
+					}
+				},
+				Err(err) => return Err(format!(
+					"[pos:{}] {}",
+					stream
+						.get_peeker()
+						.get_current_raw()
+						.unwrap().0,
+					err
+				)),
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", stream.get_peeker().get_current_raw().unwrap().0, err)),
 		}
 	}
 }
