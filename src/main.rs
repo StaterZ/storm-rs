@@ -2,6 +2,7 @@
 #![feature(trait_alias)]
 
 use clap::Parser;
+use color_print::cprintln;
 use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
 use compiler::source::SourceFile;
@@ -46,57 +47,57 @@ fn compile() {
 		);
 		println!("=== Source ===");
 		println!("{:?}", src_file.get_content());
-		
+		println!();
+
 		let result = compiler::compile(&src_file);
 
 		match result.lex.unwrap() {
 			Err(err) => {
-				println!("Lexer Failed: {}", err.on_red());
+				cprintln!("<red>Lexer Failed:</>\n{}", err);
 				return;
 			},
 			Ok(tokens) => {
-				println!();
 				println!("=== Tokens ===");
 				for token in tokens.iter() {
 					println!("{}", token.with_meta(&src_file));
 				}
+				println!();
 			}
 		}
 
 		match result.ast.unwrap() {
 			Err(err) => {
-				println!("AST Failed: {}", err.on_red());
-				println!("{:?}", err);
+				cprintln!("<red>AST Failed:</>\n{:?}", err);
 				return;
 			},
 			Ok(root) => {
-				println!();
 				println!("=== AST ===");
 				tree_printer::print_tree("Root", &root);
+				println!();
 			}
 		}
 
 		match result.sat.unwrap() {
 			Err(err) => {
-				println!("SAT Failed: {}", err.on_red());
+				cprintln!("<red>SAT Failed:</>\n{:?}", err);
 				return;
 			},
 			Ok(root) => {
-				println!();
 				println!("=== SAT ===");
 				println!("\t{}", root);
+				println!();
 			}
 		}
 
 		match result.gen.unwrap() {
 			Err(err) => {
-				println!("GEN Failed: {}", err.on_red());
+				cprintln!("<red>GEN Failed:</>\n{}", err.on_red());
 				return;
 			},
 			Ok(output) => {
-				println!();
 				println!("=== GEN ===");
 				println!("\t{}", output);
+				println!();
 			}
 		}
 	}

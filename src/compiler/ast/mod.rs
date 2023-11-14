@@ -116,7 +116,7 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 		|t| t,
 	);
 
-	match parse_file(&mut stream) {
+	match rule("file", &mut stream, parse_file) {
 		Ok(t) => Ok(t),
 		Err(err) => Err(match stream.get_peeker().get_current() {
 			None => err,
@@ -167,7 +167,7 @@ fn parse_file<'i>(stream: &mut TokStream<'i,
 	loop {
 		discard_space(stream);
 
-		if stream.expect(|&t| t.kind == TokenKind::Eof).is_some() {
+		if expect_eq_err(stream, TokenKind::Eof).is_ok() {
 			return Ok(Node { kind: NodeKind::Block(block) });
 		}
 		

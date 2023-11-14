@@ -9,3 +9,4 @@ mod pos;
 mod pos_meta;
 mod range;
 mod range_meta;
+mod column;

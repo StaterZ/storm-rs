@@ -25,6 +25,10 @@ impl<'a> SourcePosMeta<'a> {
 		self.line_index() + 1
 	}
 
+	pub fn is_eof(&self) -> bool {
+		self.pos >= self.file.get_num_chars()
+	}
+
 	pub fn get_line(&self) -> SourceRangeMeta<'a> {
 		let line = self.line_index();
 		let next_line = line + 1;
@@ -50,6 +54,10 @@ impl<'a> SourcePosMeta<'a> {
 
 impl<'a> Display for SourcePosMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}", self.line_number(), self.column_number())
+		if self.is_eof() {
+			write!(f, "EOF")
+		} else {
+			write!(f, "{}:{}", self.line_number(), self.column_number())
+		}
 	}
 }

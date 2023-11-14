@@ -48,6 +48,8 @@ impl<'a> Display for SourceRangeMeta<'a> {
 			write!(f, "{}-{}", begin, last)
 		} else if begin.pos == last.pos {
 			write!(f, "{}", begin)
+		} else if last.is_eof() {
+			write!(f, "{}-EOF", begin)
 		} else {
 			write!(f, "{}-{}", begin, last.column_number())
 		}
