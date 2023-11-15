@@ -62,6 +62,25 @@ type TokStream<'i,
 	MF/*: TokStreamMF<'i>*/,
 > = Stream<I, RF, MF, &'i Token>;
 
+fn expect_eq<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i>,
+	impl TokStreamRF<'i>,
+	impl TokStreamMF<'i>,
+>, expected: TokenKind) -> Option<&'i Token> {
+	stream.expect(|t| t.kind == expected)
+}
+
+fn expect_eq_err<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i>,
+	impl TokStreamRF<'i>,
+	impl TokStreamMF<'i>,
+>, expected: TokenKind) -> Result<&'i Token, String> {
+	stream.expect_err(|t| if t.kind == expected {
+		Ok(())
+	} else {
+		Err(format!("found '{}'", t.kind.as_ref()))
+	}).map_err(|err| format!("Expected '{}' but {}", expected.as_ref(), err))
+}
 
 fn rule<'i, I, RF, MF>(
 	rule_name: &'static str,
@@ -98,18 +117,6 @@ fn discard_space<'i>(stream: &mut TokStream<
 	)).is_some() { };
 }
 
-fn expect_eq_err<'i>(stream: &mut TokStream<'i,
-	impl TokStreamIter<'i>,
-	impl TokStreamRF<'i>,
-	impl TokStreamMF<'i>,
->, expected: TokenKind) -> Result<&'i Token, String> {
-	stream.expect_err(|t| if t.kind == expected {
-		Ok(())
-	} else {
-		Err(format!("found '{}'", t.kind.as_ref()))
-	}).map_err(|err| format!("Expected '{}' but {}", expected.as_ref(), err))
-}
-
 pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
 	let mut stream = tokens.iter().stream(
 		|t| t,
@@ -131,7 +138,7 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 							.unwrap_or(0);
 					let line = &line[line_trunc_length..];
 
-					let error_inset = source_range.get_begin().column_index() - line_trunc_length;
+					let error_inset = source_range.get_begin().column().unwrap().index() - line_trunc_length;
 					let error_length = source_range.range.get_length();
 
 					(line, error_inset, error_length)
@@ -357,7 +364,7 @@ fn expr_atom<'i>(stream: &mut TokStream<'i,
 		Some(token) => match &token.kind {
 			TokenKind::IntLit(value) => Ok(Node { kind: NodeKind::IntLit(*value) }),
 			TokenKind::StrLit(value) => Ok(Node { kind: NodeKind::StrLit(value.clone()) }),
-			TokenKind::Identifier(value) => Ok(Node { kind: NodeKind::Indentifier(value.clone()) }),
+			TokenKind::Identifier(value) => Ok(Node { kind: NodeKind::Identifier(value.clone()) }),
 			_ => Err(Report::new(AstError::Soft(format!("Unexpected '{}'", token.kind.as_ref())))),
 		},
 		None => Err(Report::new(AstError::Soft("Stream is exhausted".to_string()))),

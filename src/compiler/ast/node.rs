@@ -24,7 +24,7 @@ pub struct Let {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Precidence {
+pub enum Precedence {
 	Constant,
 	Linear,
 	//Exponential,
@@ -43,11 +43,11 @@ pub enum MathBinOpKind {
 }
 
 impl MathBinOpKind {
-	fn precedence(&self) -> Precidence {
+	fn precedence(&self) -> Precedence {
 		match self {
-			MathBinOpKind::Add | MathBinOpKind::Sub => Precidence::Constant,
-			MathBinOpKind::Mul | MathBinOpKind::Div | MathBinOpKind::Mod => Precidence::Linear,
-			MathBinOpKind::Shl | MathBinOpKind::Shr => Precidence::Bitwise,
+			MathBinOpKind::Add | MathBinOpKind::Sub => Precedence::Constant,
+			MathBinOpKind::Mul | MathBinOpKind::Div | MathBinOpKind::Mod => Precedence::Linear,
+			MathBinOpKind::Shl | MathBinOpKind::Shr => Precedence::Bitwise,
 		}
 	}
 }
@@ -137,7 +137,7 @@ pub enum NodeKind {
 	BinOp(BinOp),
 	IntLit(u64),
 	StrLit(String),
-	Indentifier(String),
+	Identifier(String),
 }
 
 #[derive(Debug)]
@@ -154,7 +154,7 @@ impl TreeDisplay for Node {
 			NodeKind::BinOp(value) => format!("{}", value.op),
 			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
 			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value),
-			NodeKind::Indentifier(value) => cformat!("<cyan>{}</>", value),
+			NodeKind::Identifier(value) => cformat!("<cyan>{}</>", value),
 		};
 		format!("{}{}({})", text, ternary!(text.len() > 0 => " ", ""), self.kind.as_ref())
 	}
@@ -183,7 +183,7 @@ impl TreeDisplay for Node {
 			]),
 			NodeKind::IntLit(_) => None,
 			NodeKind::StrLit(_) => None,
-			NodeKind::Indentifier(_) => None,
+			NodeKind::Identifier(_) => None,
 		}
 	}
 }

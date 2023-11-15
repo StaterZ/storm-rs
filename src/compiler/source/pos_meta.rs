@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{SourcePos, SourceFile, SourceRange, SourceRangeMeta};
+use super::{SourcePos, SourceFile, Line, Column, LineMeta};
 
 #[derive(Debug, Clone)]
 pub struct SourcePosMeta<'a> {
@@ -9,42 +9,19 @@ pub struct SourcePosMeta<'a> {
 }
 
 impl<'a> SourcePosMeta<'a> {
-	pub fn column_index(&self) -> usize {
-		self.pos - self.get_line().range.begin
+	pub fn line(&self) -> Option<LineMeta> {
+		(!self.is_eof()).then_some(LineMeta{
+			line: Line::new(self.file.get_line_index(self.pos)),
+			file: self.file},
+		)
 	}
 
-	pub fn column_number(&self) -> usize {
-		self.column_index() + 1
-	}
-	
-	pub fn line_index(&self) -> usize {
-		self.file.get_line_index(self.pos)
-	}
-
-	pub fn line_number(&self) -> usize {
-		self.line_index() + 1
+	pub fn column(&self) -> Option<Column> {
+		(!self.is_eof()).then_some(Column::new(self.pos - self.line().unwrap().range().range.begin))
 	}
 
 	pub fn is_eof(&self) -> bool {
 		self.pos >= self.file.get_num_chars()
-	}
-
-	pub fn get_line(&self) -> SourceRangeMeta<'a> {
-		let line = self.line_index();
-		let next_line = line + 1;
-
-		let lines_begin_indices = self.file.get_lines_begin_indices();
-		let begin = lines_begin_indices[line];
-		let end = if next_line < lines_begin_indices.len() {
-			lines_begin_indices[next_line]
-		} else {
-			SourcePos::new(self.file.get_num_chars())
-		};
-		
-		SourceRange{
-			begin,
-			end,
-		}.to_meta(self.file)
 	}
 
 	pub fn get_byte_index(&self, pos: SourcePos) -> usize {

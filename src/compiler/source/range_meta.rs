@@ -23,13 +23,13 @@ impl<'a> SourceRangeMeta<'a> {
 		let begin = self.range.begin.to_meta(self.file);
 		
 		let last = (self.range.end - 1).map(|last| last.to_meta(self.file));
-		debug_assert_eq!(Some(begin.line_index()), last.map(|last| last.line_index()));
+		debug_assert_eq!(Some(begin.line().index()), last.map(|last| last.line().index()));
 
-		begin.get_line().get_str()
+		begin.line().unwrap().range().get_str()
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.file.get_content()[self.range.begin.into() .. self.range.end.into()]
+		&self.file.get_content()[self.range.begin.get_inner() .. self.range.end.get_inner()]
 	}
 }
 
@@ -44,14 +44,12 @@ impl<'a> Display for SourceRangeMeta<'a> {
 
 		if self.range.begin == self.range.end {
 			write!(f, "{} (0 sized)", begin)
-		} else if begin.line_index() != last.line_index() {
+		} else if begin.line() != last.line() {
 			write!(f, "{}-{}", begin, last)
 		} else if begin.pos == last.pos {
 			write!(f, "{}", begin)
-		} else if last.is_eof() {
-			write!(f, "{}-EOF", begin)
 		} else {
-			write!(f, "{}-{}", begin, last.column_number())
+			write!(f, "{}-{}", begin, last.column().unwrap())
 		}
 	}
 }

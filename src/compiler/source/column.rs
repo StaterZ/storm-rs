@@ -1,15 +1,19 @@
 use std::fmt::Display;
 
-struct Column(usize);
+pub struct Column(usize);
 
 impl Column {
 	pub fn new(index: usize) -> Self {
 		Self(index)
 	}
+
+	pub fn index(&self) -> usize {
+		self.0
+	}
 }
 
 impl Display for Column {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, self.0)
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.index() + 1)
+	}
 }

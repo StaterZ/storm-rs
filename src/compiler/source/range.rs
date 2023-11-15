@@ -7,7 +7,7 @@ pub struct SourceRange {
 }
 
 impl SourceRange {
-	pub fn to_meta<'a>(self, file: &'a SourceFile) -> SourceRangeMeta<'a> {
+	pub fn to_meta(self, file: &SourceFile) -> SourceRangeMeta {
 		SourceRangeMeta {
 			range: self,
 			file,

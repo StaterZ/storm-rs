@@ -10,7 +10,7 @@ impl SourcePos {
 		Self(inner)
 	}
 
-	pub fn to_meta<'a>(self, file: &'a SourceFile) -> SourcePosMeta<'a> {
+	pub fn to_meta(self, file: &SourceFile) -> SourcePosMeta {
 		SourcePosMeta {
 			pos: self,
 			file,
@@ -19,12 +19,6 @@ impl SourcePos {
 
 	pub fn get_inner(&self) -> usize {
 		self.0
-	}
-}
-
-impl Into<usize> for SourcePos {
-	fn into(self) -> usize {
-		self.get_inner()
 	}
 }
 
