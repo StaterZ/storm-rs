@@ -1,2 +1,1 @@
-let foo = "abc \"123" == "geh";
-let bar = 3 + 4 *2 - 1;
+let a = 12r123 * 4 + 2;

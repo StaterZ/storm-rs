@@ -47,10 +47,10 @@ fn compile() {
 		);
 		println!("=== Source ===");
 		println!("{:?}", src_file.get_content());
-		println!();
-
+		
 		let result = compiler::compile(&src_file);
-
+		
+		println!();
 		match result.lex.unwrap() {
 			Err(err) => {
 				cprintln!("<red>Lexer Failed:</>\n{}", err);
@@ -61,10 +61,10 @@ fn compile() {
 				for token in tokens.iter() {
 					println!("{}", token.with_meta(&src_file));
 				}
-				println!();
 			}
 		}
-
+		
+		println!();
 		match result.ast.unwrap() {
 			Err(err) => {
 				cprintln!("<red>AST Failed:</>\n{:?}", err);
@@ -73,10 +73,10 @@ fn compile() {
 			Ok(root) => {
 				println!("=== AST ===");
 				tree_printer::print_tree("Root", &root);
-				println!();
 			}
 		}
-
+		
+		println!();
 		match result.sat.unwrap() {
 			Err(err) => {
 				cprintln!("<red>SAT Failed:</>\n{:?}", err);
@@ -85,10 +85,10 @@ fn compile() {
 			Ok(root) => {
 				println!("=== SAT ===");
 				println!("\t{}", root);
-				println!();
 			}
 		}
-
+		
+		println!();
 		match result.gen.unwrap() {
 			Err(err) => {
 				cprintln!("<red>GEN Failed:</>\n{}", err.on_red());
@@ -97,7 +97,6 @@ fn compile() {
 			Ok(output) => {
 				println!("=== GEN ===");
 				println!("\t{}", output);
-				println!();
 			}
 		}
 	}

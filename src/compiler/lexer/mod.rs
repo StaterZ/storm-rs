@@ -1,97 +1,20 @@
-use std::{collections::HashMap, fmt::Display};
+pub use token::Token;
+pub use token_meta::TokenMeta;
+pub use token_kind::{TokenKind, TokenKindTag};
+
+use std::collections::HashMap;
 use lazy_static::lazy_static;
-use strum;
-use szu::{tag_enum, tag_enum_helper, replace_macro_arg};
+
+use crate::compiler::source::SourcePosMeta;
 
 use super::{
 	stream::{Stream, StreamExt},
 	source::{SourcePos, SourceRange, SourceFile},
 };
 
-mod file_pos;
-
-tag_enum!(
-	pub enum (
-		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr)] TokenKind,
-		#[derive(Debug, PartialEq, Eq, Clone, Copy)] TokenKindTag,
-	) {
-		Space,
-		NewLine,
-		Comment,
-		MultilineComment,
-
-		Dot,
-		Comma,
-		Semicolon,
-
-		LParen,
-		RParen,
-		LBracket,
-		RBracket,
-		LBrace,
-		RBrace,
-
-		Plus,
-		Dash,
-		Star,
-		Slash,
-		Percent,
-		LShift,
-		RShift,
-		
-		Equals,
-		LessThan,
-		GreaterThan,
-		Equality,
-		Eof,
-
-		Let,
-		Ipt,
-		Yield,
-		
-		IntLit(u64),
-		StrLit(String),
-		Identifier(String),
-
-		KeywordGet,
-		KeywordSet,
-		KeywordMov,
-		KeywordAdd,
-		KeywordSub,
-		KeywordMul,
-		KeywordDiv,
-		KeywordLbl,
-		KeywordJmp,
-		KeywordBeqz,
-		KeywordBltz,
-	}
-);
-
-#[derive(Debug)]
-pub struct Token {
-	pub kind: TokenKind,
-	pub source: SourceRange,
-}
-
-impl Token {
-	pub fn with_meta<'a>(&'a self, file: &'a SourceFile) -> TokenMeta<'a> {
-		TokenMeta {
-			token: self,
-			file,
-		}
-	}
-}
-
-pub struct TokenMeta<'a> {
-	pub token: &'a Token,
-	pub file: &'a SourceFile,
-}
-
-impl<'a> Display for TokenMeta<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{} -> {:?}", self.token.source.clone().to_meta(self.file), self.token.kind)
-	}
-}
+mod token;
+mod token_meta;
+mod token_kind;
 
 trait CharStreamIter = Iterator<Item = (usize, char)>;
 trait CharStreamRF = for<'a> Fn(&'a (usize, char)) -> &'a char;
@@ -106,11 +29,12 @@ fn parse_radix(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<Option<u32>, String> {
+>) -> Result<Option<u64>, String> {
 	let mut stream = stream.dup();
+
 	if stream.get().expect_eq(&'0').is_some() {
 		lazy_static!{
-			static ref RADICES: HashMap<char, u32> = vec![
+			static ref RADICES: HashMap<char, u64> = vec![
 				('b', 2),
 				('q', 4),
 				('o', 8),
@@ -151,7 +75,7 @@ fn parse_int(stream: &mut CharStream<
 >) -> Result<Option<u64>, String> {
 	let mut stream = stream.dup();
 
-	let radix = parse_radix(&mut stream.get())?;
+	let radix = parse_radix(stream.get())?;
 	let mut is_match = radix.is_some();
 	let radix = radix.unwrap_or(10);
 
@@ -169,6 +93,8 @@ fn parse_int(stream: &mut CharStream<
 		} else {
 			match c.to_digit(36) {
 				Some(digit_value) => {
+					let digit_value = digit_value as u64;
+					
 					if digit_value >= radix {
 						let result = if is_match {
 							Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
@@ -180,8 +106,8 @@ fn parse_int(stream: &mut CharStream<
 						return result;
 					}
 		
-					value *= radix as u64;
-					value += digit_value as u64;
+					value *= radix;
+					value += digit_value;
 		
 					is_match = true;
 					has_trailing_underscore = false;
@@ -194,23 +120,23 @@ fn parse_int(stream: &mut CharStream<
 		i += 1;
 	}
 
-	if has_trailing_underscore {
-		stream.pop();
-		return Err("Trailing underscore, this is not allowed".to_string());
-	}
-
 	if !is_match {
 		stream.pop();
 		return Ok(None);
+	}
+
+	if has_trailing_underscore {
+		stream.pop();
+		return Err("Trailing underscore, this is not allowed".to_string());
 	}
 
 	if stream.get().check(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '_')) {
 		stream.pop();
 		return Ok(None);
 	}
-
+	
 	stream.nip();
-	return Ok(Some(value));
+	Ok(Some(value))
 }
 
 fn next_token_kind(stream: &mut CharStream<
@@ -388,55 +314,50 @@ fn next_token_kind(stream: &mut CharStream<
 	}));
 }
 
-pub fn lex(src_in: &str) -> Result<Vec<Token>, String> {
-	let mut stream = src_in.chars().enumerate().stream(
+pub fn lex(file: &SourceFile) -> Result<Vec<Token>, String> {
+	let mut stream = file.chars().enumerate().stream(
 		|(_, c)| c,
 		|(_, c)| c,
 	);
 	
-	fn get_current_source_pos(stream: &mut Stream<
-		impl Iterator<Item = (usize, char)>,
+	fn get_current_source_pos<'a>(file: &'a SourceFile, stream: &mut Stream<
+		impl ExactSizeIterator<Item = (usize, char)>,
 		impl Fn(&(usize, char)) -> &char,
 		impl Fn((usize, char)) -> char,
 		char,
-	>) -> Option<SourcePos> {
-		stream
-		.get_peeker()
-		.get_current_raw()
-		.map(|&(char_index, _)| SourcePos::new(char_index))
+	>) -> SourcePosMeta<'a> {
+		let pos = stream
+			.get_peeker()
+			.get_current_raw()
+			.map(|&(i, _)| SourcePos::new(i))
+			.unwrap_or_else(|| SourcePos::new(file.chars().len()));
+
+		SourcePosMeta {
+			pos,
+			file,
+		}
 	}
 		
 	let mut tokens = Vec::new();
+	let mut begin = get_current_source_pos(file, &mut stream);
 	loop {
-		let begin_index = get_current_source_pos(&mut stream);
-		match begin_index {
-			None => return Ok(tokens),
-			Some(begin_index) => match next_token_kind(&mut stream) {
-				Ok(kind) => {
-					let is_eof = kind == TokenKind::Eof;
+		match next_token_kind(&mut stream) {
+			Ok(kind) => {
+				let is_eof = kind == TokenKind::Eof;
 
-					let end_index = get_current_source_pos(&mut stream).unwrap_or(SourcePos::new(666)); //TODO: make enumerate continue 1 extra somehow so we can get the end index
-					tokens.push(Token{
-						kind: kind,
-						source: SourceRange {
-							begin: begin_index,
-							end: end_index,
-						},
-					});
+				let end = get_current_source_pos(file, &mut stream);
+				tokens.push(Token{
+					kind: kind,
+					source: SourceRange::new(begin, end),
+				});
 
-					if is_eof {
-						return Ok(tokens);
-					}
-				},
-				Err(err) => return Err(format!(
-					"[pos:{}] {}",
-					stream
-						.get_peeker()
-						.get_current_raw()
-						.unwrap().0,
-					err
-				)),
+				if is_eof {
+					return Ok(tokens);
+				}
+
+				begin = end;
 			},
+			Err(err) => return Err(format!("[pos:{}] {}", begin.pos.char_index(), err)),
 		}
 	}
 }

@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use super::{SourceFile, LineMeta};
 
+#[derive(Debug, Clone)]
 pub struct Line(usize);
 
 impl Line {
@@ -25,10 +26,4 @@ impl Display for Line {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.index() + 1)
 	}
-}
-
-impl PartialEq for Line {
-    fn eq(&self, other: &Self) -> bool {
-        self.index() == other.index()
-    }
 }

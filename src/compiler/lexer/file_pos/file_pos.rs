@@ -1,34 +1,13 @@
 use std::fmt::Display;
 use std::iter::Enumerate;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+use super::Pos;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LineState {
 	Other,
 	LineFeed,
 	CarriageReturn,
-}
-
-#[derive(Debug, Clone)]
-pub struct Pos {
-	pub index: usize,
-	pub line_start_index: usize,
-	pub line: usize,
-}
-
-impl Pos {
-	pub fn column0(&self) -> usize {
-		self.index - self.line_start_index
-	}
-
-	pub fn column(&self) -> usize {
-		self.column0() + 1
-	}
-}
-
-impl Display for Pos {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}", self.line, self.column())
-	}
 }
 
 #[derive(Debug, Clone)]
@@ -107,14 +86,3 @@ impl<I: Iterator<Item = char>> Display for FilePos<I> {
 		write!(f, "{}:{}", state.pos.line, state.pos.column())
 	}
 }
-
-pub trait FilePosExt : Iterator<Item = char> {
-	fn file_pos(self) -> FilePos<Self>
-	where
-		Self: Sized
-	{
-		FilePos::new(self)
-	}
-}
-
-impl<I: Iterator<Item = char>> FilePosExt for I {}

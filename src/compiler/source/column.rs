@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+#[derive(Debug, Clone)]
 pub struct Column(usize);
 
 impl Column {

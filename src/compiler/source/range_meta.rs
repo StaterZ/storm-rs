@@ -1,9 +1,8 @@
-use std::fmt::Display;
-
-use crate::compiler::source::SourcePos;
+use std::fmt::{Display, Debug};
 
 use super::{SourceRange, SourceFile, SourcePosMeta};
 
+#[derive(Clone, Copy)]
 pub struct SourceRangeMeta<'a> {
 	pub range: SourceRange,
 	pub file: &'a SourceFile,
@@ -11,45 +10,45 @@ pub struct SourceRangeMeta<'a> {
 
 impl<'a> SourceRangeMeta<'a> {
 	pub fn get_begin(&self) -> SourcePosMeta<'a> {
-		self.range.begin.clone().to_meta(self.file)
+		self.range.begin.to_meta(self.file)
 	}
 
 	pub fn get_end(&self) -> SourcePosMeta<'a> {
-		self.range.end.clone().to_meta(self.file)
+		self.range.end.to_meta(self.file)
 	}
 
-	//TODO: move this out of here? this makes no sense here...
-	pub fn get_line(&self) -> &'a str {
-		let begin = self.range.begin.to_meta(self.file);
-		
-		let last = (self.range.end - 1).map(|last| last.to_meta(self.file));
-		debug_assert_eq!(Some(begin.line().index()), last.map(|last| last.line().index()));
-
-		begin.line().unwrap().range().get_str()
+	pub fn get_length(&self) -> usize {
+		self.get_end() - self.get_begin()
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.file.get_content()[self.range.begin.get_inner() .. self.range.end.get_inner()]
+		&self.file.get_content()[self.range.begin.char_index() .. self.range.end.char_index()]
 	}
 }
 
 impl<'a> Display for SourceRangeMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let begin = self.range.begin.to_meta(&self.file);
-		let last = (self.range.end - 1)
-			.unwrap_or(SourcePos::new(0))
-			.to_meta(&self.file);
+		let begin = self.get_begin();
+		let end = self.get_end();
 
-		debug_assert!(self.range.begin <= self.range.end);
-
-		if self.range.begin == self.range.end {
+		if begin == end {
 			write!(f, "{} (0 sized)", begin)
-		} else if begin.line() != last.line() {
-			write!(f, "{}-{}", begin, last)
-		} else if begin.pos == last.pos {
-			write!(f, "{}", begin)
 		} else {
-			write!(f, "{}-{}", begin, last.column().unwrap())
+			let last = end - 1;
+
+			if begin.line() != last.line() {
+				write!(f, "{}-{}", begin, last)
+			} else if begin == last {
+				write!(f, "{}", begin)
+			} else {
+				write!(f, "{}-{}", begin, last.column().unwrap())
+			}
 		}
+	}
+}
+
+impl<'a> Debug for SourceRangeMeta<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.range.fmt(f)
 	}
 }

@@ -1,4 +1,5 @@
 pub use file::SourceFile;
+pub use chars_len::CharsLen;
 
 pub use pos::SourcePos;
 pub use pos_meta::SourcePosMeta;
@@ -12,6 +13,7 @@ pub use line_meta::LineMeta;
 pub use column::Column;
 
 mod file;
+mod chars_len;
 
 mod pos;
 mod pos_meta;

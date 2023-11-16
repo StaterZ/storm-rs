@@ -1,7 +1,8 @@
+use std::ptr;
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
-use super::{SourcePos, SourceRange};
+use super::{SourcePos, SourceRange, CharsLen, SourcePosMeta};
 
 #[derive(Debug)]
 pub struct SourceFile {
@@ -49,31 +50,48 @@ impl SourceFile {
 		&self.content
 	}
 
-	pub fn get_char_to_byte(&self, pos: SourcePos) -> usize {
-		self.char_to_byte[pos.get_inner()]
-	}
-
-	pub fn get_num_chars(&self) -> usize {
-		self.char_to_byte.len()
-	}
-
 	pub fn get_lines_begin_indices(&self) -> &[SourcePos] {
 		self.lines_begin_indices.as_slice()
 	}
 
-	pub fn get_line_index(&self, pos: SourcePos) -> usize {
-		match self.lines_begin_indices.binary_search(&pos.into()) {
+	pub fn get_char_to_byte(&self, pos: &SourcePosMeta) -> usize {
+		self.assert_safe_pos(pos);
+
+		self.char_to_byte[pos.pos.char_index()]
+	}
+
+	pub fn chars(&self) -> CharsLen {
+		CharsLen::new(self.content.chars(), self.char_to_byte.len())
+	}
+
+	pub fn get_line_index(&self, pos: &SourcePosMeta) -> usize {
+		self.assert_safe_pos(pos);
+
+		match self.lines_begin_indices.binary_search_by_key(pos, |key| key.to_meta(self)) {
 			Ok(line_index) => line_index,
 			Err(binary_search_left) => binary_search_left - 1,
 		}
 	}
 
-	pub fn get_line(&self, pos: SourcePos) -> SourceRange {
+	pub fn get_line(&self, pos: &SourcePosMeta) -> SourceRange {
+		self.assert_safe_pos(pos);
+
 		let line_index = self.get_line_index(pos);
 		SourceRange{
 			begin: self.lines_begin_indices[line_index],
 			end: self.lines_begin_indices[line_index + 1],
 		}
+	}
+
+	pub fn get_eof(&self) -> SourcePosMeta {
+		SourcePosMeta {
+			pos: SourcePos::new(self.chars().len()),
+			file: &self,
+		}
+	}
+
+	fn assert_safe_pos<'a>(&'a self, pos: &SourcePosMeta<'a>) {
+		debug_assert!(ptr::eq(pos.file, self));
 	}
 }
 

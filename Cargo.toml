@@ -20,6 +20,7 @@ enum-as-inner = "0.6.0" # unwarp for enum fields without needing annyong pattern
 strum = { version = "0.24.1", features = ["derive"] } # get names of enum fields as strings
 itertools = "0.11.0" #more iterator utlites
 streaming-iterator = "0.1.9" #streaming iterators
+more-asserts = "0.3.1" #more asserts
 
 #error handling
 thiserror = "1.0.44" # error type generation

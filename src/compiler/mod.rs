@@ -21,7 +21,7 @@ pub fn compile<'a>(src_in: &'a SourceFile) -> CompilerOutput {
 		gen: None,
 	};
 
-	let tokens = lexer::lex(src_in.get_content());
+	let tokens = lexer::lex(src_in);
 	if let Ok(tokens) = &tokens {
 		let ast = ast::ast(&src_in, &tokens);
 		if let Ok(_ast) = &ast {

@@ -1,5 +1,7 @@
+use std::{ptr, fmt::{Display, Debug}};
 use super::{SourceRange, SourceRangeMeta, Line, SourceFile, SourcePos};
 
+#[derive(Clone)]
 pub struct LineMeta<'a> {
 	pub line: Line,
 	pub file: &'a SourceFile,
@@ -14,7 +16,7 @@ impl<'a> LineMeta<'a> {
 		let end = if next_line < lines_begin_indices.len() {
 			lines_begin_indices[next_line]
 		} else {
-			SourcePos::new(self.file.get_num_chars())
+			SourcePos::new(self.file.chars().len())
 		};
 		
 		SourceRange{
@@ -22,11 +24,34 @@ impl<'a> LineMeta<'a> {
 			end,
 		}.to_meta(self.file)
 	}
+
+	fn assert_safe(&self, other: &Self) {
+		debug_assert!(ptr::eq(self.file, other.file));
+	}
+}
+
+impl<'a> Display for LineMeta<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.line)
+    }
+}
+
+impl<'a> Debug for LineMeta<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.line)
+    }
 }
 
 impl<'a> PartialEq for LineMeta<'a> {
-    fn eq(&self, other: &Self) -> bool {
-		debug_assert!(self.file == other.file);
-        self.line == other.line
+	fn eq(&self, other: &Self) -> bool {
+		self.assert_safe(other);
+		self.line.index() == other.line.index()
+	}
+}
+
+impl<'a> PartialOrd for LineMeta<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		self.assert_safe(other);
+        self.line.index().partial_cmp(&other.line.index())
     }
 }

@@ -1,14 +1,16 @@
-use std::{fmt::{Display}, error::Error};
+use std::{fmt::Display, error::Error};
 
 use error_stack::Report;
 use color_print::cformat;
+
+use crate::compiler::source::{LineMeta, Line};
 
 use super::{
 	lexer::{Token, TokenKind},
 	stream::{Stream, StreamExt},
 	source::SourceFile,
 };
-pub use self::node::{
+pub use nodes::{
 	NodeKind,
 	Node,
 	Block,
@@ -20,7 +22,7 @@ pub use self::node::{
 	CmpBinOpKind
 };
 
-mod node;
+mod nodes;
 
 #[derive(Debug)]
 pub enum AstError {
@@ -117,7 +119,7 @@ fn discard_space<'i>(stream: &mut TokStream<
 	)).is_some() { };
 }
 
-pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
+pub fn ast<'a>(file: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
 	let mut stream = tokens.iter().stream(
 		|t| t,
 		|t| t,
@@ -128,23 +130,42 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 		Err(err) => Err(match stream.get_peeker().get_current() {
 			None => err,
 			Some(token) => err.attach_printable({
-				let source_range = token.source.clone().to_meta(source);
+				let source_range = token.source.clone().to_meta(file);
 				let source_range_string = format!("[{}]", source_range);
-				let (line, error_inset, error_length) = if true {
-					let line = source_range.get_line();
-					let line_trunc_length = line
+				
+				let line = {
+					let begin_line = source_range.get_begin().line();
+					
+					let end = source_range.get_end();
+					
+					let last = (end > 0).then(|| end - 1);
+					let last_line = last.map_or(Some(LineMeta {
+						line: Line::new(0),
+						file,
+					}), |last| last.line());
+
+					match (begin_line, last_line) {
+						(Some(begin_line), Some(last_line)) if begin_line == last_line =>
+							Ok(begin_line.range().get_str()),
+						(None, None) => Err("LINE IS EOF"),
+						_ => Err("MUTI-LINE NOT SUPPORTED"),
+					}
+				};
+
+				let (line, error_inset, error_length) = match line {
+					Ok(line) => {
+						let line_trunc_length = line
 							.char_indices()
 							.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
 							.unwrap_or(0);
-					let line = &line[line_trunc_length..];
+						let line = &line[line_trunc_length..];
 
-					let error_inset = source_range.get_begin().column().unwrap().index() - line_trunc_length;
-					let error_length = source_range.range.get_length();
+						let error_inset = source_range.get_begin().column().unwrap().index() - line_trunc_length;
+						let error_length = source_range.get_length();
 
-					(line, error_inset, error_length)
-				} else {
-					let line = "!!! NO LINE !!!";
-					(line, 0, line.len())
+						(line, error_inset, error_length)
+					},
+					Err(msg) => (msg, 0, msg.len()),
 				};
 
 				cformat!(
@@ -155,7 +176,7 @@ pub fn ast<'a>(source: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, R
 					empty = "",
 					source_range_string = source_range_string,
 					source_range_string_len = source_range_string.len(),
-					file_path = source.get_name(),
+					file_path = file.get_name(),
 					line = line,
 					error_inset = error_inset,
 					error_length = error_length,
@@ -174,7 +195,7 @@ fn parse_file<'i>(stream: &mut TokStream<'i,
 	loop {
 		discard_space(stream);
 
-		if expect_eq_err(stream, TokenKind::Eof).is_ok() {
+		if expect_eq(stream, TokenKind::Eof).is_some() {
 			return Ok(Node { kind: NodeKind::Block(block) });
 		}
 		

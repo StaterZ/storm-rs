@@ -13,7 +13,7 @@ impl<'p, I, RF, B> Peeker<'p, I, RF, B> where
 	RF: Fn(&I::Item) -> &B,
 {
 	pub fn get_current_raw(&self) -> Option<&<Peekable<I> as Iterator>::Item> {
-		self.peeked.clone() //TODO: why clone here? don't remember, seems dumb...
+		self.peeked
 	}
 
     #[inline]
