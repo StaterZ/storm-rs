@@ -73,11 +73,32 @@ fn parse_int(stream: &mut CharStream<
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
 >) -> Result<Option<u64>, String> {
-	let mut stream = stream.dup();
+	let radix = parse_radix(stream)?;
+	let mut digits = parse_digits(stream, radix.unwrap_or(10), radix.is_some(), true)?;
 
-	let radix = parse_radix(stream.get())?;
-	let mut is_match = radix.is_some();
-	let radix = radix.unwrap_or(10);
+	if radix.is_none() {
+		if let Some(radix) = digits {
+			if stream.expect_eq(&'r').is_some() {
+				if radix > 36 {
+					return Err("".to_string());
+				}
+				digits = parse_digits(stream, radix, true, false)?;
+				if digits.is_none() {
+					return Err("found radix".to_string());
+				}
+			}
+		}
+	}
+	
+	Ok(digits)
+}
+
+fn parse_digits(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
+>, radix: u64, mut is_match: bool, allow_radix_end: bool) -> Result<Option<u64>, String> {
+	let mut stream = stream.dup();
 
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
@@ -96,6 +117,10 @@ fn parse_int(stream: &mut CharStream<
 					let digit_value = digit_value as u64;
 					
 					if digit_value >= radix {
+						if allow_radix_end && c == 'r' {
+							break;
+						}
+
 						let result = if is_match {
 							Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
 						} else {
@@ -130,11 +155,6 @@ fn parse_int(stream: &mut CharStream<
 		return Err("Trailing underscore, this is not allowed".to_string());
 	}
 
-	if stream.get().check(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '_')) {
-		stream.pop();
-		return Ok(None);
-	}
-	
 	stream.nip();
 	Ok(Some(value))
 }
