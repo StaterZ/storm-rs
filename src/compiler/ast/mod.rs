@@ -158,7 +158,12 @@ pub fn ast<'a>(file: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Rep
 							.char_indices()
 							.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
 							.unwrap_or(0);
-						let line = &line[line_trunc_length..];
+						let line_trunc_end = line
+							.char_indices()
+							.rev()
+							.find_map(|(i, c)| (!matches!(c, '\r' | '\n')).then_some(i))
+							.unwrap_or(line.bytes().len() - 1);
+						let line = &line[line_trunc_length..=line_trunc_end];
 
 						let error_inset = source_range.get_begin().column().unwrap().index() - line_trunc_length;
 						let error_length = source_range.get_length();
