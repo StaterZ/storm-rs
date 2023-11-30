@@ -36,23 +36,14 @@ tag_enum!(
 		Eof,
 
 		Let,
+		If,
+		Else,
+		
 		Ipt,
 		Yield,
 		
 		IntLit(u64),
 		StrLit(String),
 		Identifier(String),
-
-		KeywordGet,
-		KeywordSet,
-		KeywordMov,
-		KeywordAdd,
-		KeywordSub,
-		KeywordMul,
-		KeywordDiv,
-		KeywordLbl,
-		KeywordJmp,
-		KeywordBeqz,
-		KeywordBltz,
 	}
 );

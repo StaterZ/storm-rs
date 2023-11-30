@@ -300,20 +300,11 @@ fn next_token_kind(stream: &mut CharStream<
 		lazy_static!{
 			static ref KEYWORDS: HashMap<&'static str, TokenKindTag> = vec![
 				("let", TokenKindTag::Let),
+				("if", TokenKindTag::If),
+				("else", TokenKindTag::Else),
+
 				("ipt", TokenKindTag::Ipt),
 				("yield", TokenKindTag::Yield),
-
-				("get", TokenKindTag::KeywordGet),
-				("set", TokenKindTag::KeywordSet),
-				("mov", TokenKindTag::KeywordMov),
-				("add", TokenKindTag::KeywordAdd),
-				("sub", TokenKindTag::KeywordSub),
-				("mul", TokenKindTag::KeywordMul),
-				("div", TokenKindTag::KeywordDiv),
-				("lbl", TokenKindTag::KeywordLbl),
-				("jmp", TokenKindTag::KeywordJmp),
-				("beqz", TokenKindTag::KeywordBeqz),
-				("bltz", TokenKindTag::KeywordBltz),
 			].into_iter().collect();
 		}
 
