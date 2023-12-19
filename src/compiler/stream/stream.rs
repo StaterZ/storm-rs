@@ -96,7 +96,21 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 		let mut hypothetical = self.dup();
 
 		let result = f(hypothetical.get());
-		hypothetical.nip_or_pop(result.is_ok());
+		if result.is_ok() {
+			hypothetical.nip();
+		}
+
+		result
+	}
+
+	#[inline(always)]
+	pub fn hypothetically_hs<T, SE, HE>(&mut self, f: impl FnOnce(&mut Self) -> Result<Result<T, SE>, HE>) -> Result<Result<T, SE>, HE> {
+		let mut hypothetical = self.dup();
+
+		let result = f(hypothetical.get());
+		if matches!(result, Ok(Ok(_)) | Err(_)) {
+			hypothetical.nip();
+		}
 
 		result
 	}

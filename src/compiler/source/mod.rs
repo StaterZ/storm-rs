@@ -1,16 +1,18 @@
 pub use file::SourceFile;
 pub use chars_len::CharsLen;
 
-pub use pos::SourcePos;
-pub use pos_meta::SourcePosMeta;
+pub use pos::Pos;
+pub use pos_meta::PosMeta;
 
-pub use range::SourceRange;
-pub use range_meta::SourceRangeMeta;
+pub use range::Range;
+pub use range_meta::RangeMeta;
 
 pub use line::Line;
 pub use line_meta::LineMeta;
 
 pub use column::Column;
+
+pub mod error_gen;
 
 mod file;
 mod chars_len;

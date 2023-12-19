@@ -2,20 +2,20 @@ use std::ptr;
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
-use super::{SourcePos, SourceRange, CharsLen, SourcePosMeta};
+use super::{Pos, PosMeta, Range, CharsLen};
 
 #[derive(Debug)]
 pub struct SourceFile {
 	name: String,
 	content: String,
-	lines_begin_indices: Vec<SourcePos>,
+	lines_begin_indices: Vec<Pos>,
 	char_to_byte: Vec<usize>,
 }
 
 impl SourceFile {
 	pub fn new(name: String, content: String) -> Self {
 		let mut char_to_byte = Vec::<usize>::new();
-		let lines_begin_indices: Vec<SourcePos> = content
+		let lines_begin_indices: Vec<Pos> = content
 			.char_indices()
 			.enumerate()
 			.window_option()
@@ -30,7 +30,7 @@ impl SourceFile {
 					(Some('\n'), _) => true, //Linux + Windows end
 					(None, _) => true,
 					_ => false,
-				}.then_some(SourcePos::new(*ci))
+				}.then_some(Pos::new(*ci))
 			})
 			.collect();
 
@@ -50,11 +50,11 @@ impl SourceFile {
 		&self.content
 	}
 
-	pub fn get_lines_begin_indices(&self) -> &[SourcePos] {
+	pub fn get_lines_begin_indices(&self) -> &[Pos] {
 		self.lines_begin_indices.as_slice()
 	}
 
-	pub fn get_char_to_byte(&self, pos: &SourcePosMeta) -> usize {
+	pub fn get_char_to_byte(&self, pos: &PosMeta) -> usize {
 		self.assert_safe_pos(pos);
 
 		self.char_to_byte[pos.pos.char_index()]
@@ -64,7 +64,7 @@ impl SourceFile {
 		CharsLen::new(self.content.chars(), self.char_to_byte.len())
 	}
 
-	pub fn get_line_index(&self, pos: &SourcePosMeta) -> usize {
+	pub fn get_line_index(&self, pos: &PosMeta) -> usize {
 		self.assert_safe_pos(pos);
 
 		match self.lines_begin_indices.binary_search_by_key(pos, |key| key.to_meta(self)) {
@@ -73,47 +73,71 @@ impl SourceFile {
 		}
 	}
 
-	pub fn get_line(&self, pos: &SourcePosMeta) -> SourceRange {
+	pub fn get_line(&self, pos: &PosMeta) -> Range {
 		self.assert_safe_pos(pos);
 
 		let line_index = self.get_line_index(pos);
-		SourceRange{
+		Range{
 			begin: self.lines_begin_indices[line_index],
 			end: self.lines_begin_indices[line_index + 1],
 		}
 	}
 
-	pub fn get_eof(&self) -> SourcePosMeta {
-		SourcePosMeta {
-			pos: SourcePos::new(self.chars().len()),
-			file: &self,
-		}
+	pub fn get_eof(&self) -> PosMeta {
+		Pos::new(self.chars().len()).to_meta(&self)
 	}
 
-	fn assert_safe_pos<'a>(&'a self, pos: &SourcePosMeta<'a>) {
+	fn assert_safe_pos<'a>(&'a self, pos: &PosMeta<'a>) {
 		debug_assert!(ptr::eq(pos.file, self));
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::SourceFile;
+	use super::{SourceFile, Pos};
 
 	#[test]
 	fn windows_lines() {
-		let src_file = SourceFile::new("windows_lines", "abc\r\nxyz\r\n\r\n123\r\n");
-		assert_eq!(src_file.lines_begin_indices, vec![0, 5, 10, 12]);
+		let src_file = SourceFile::new("windows_lines".to_string(), "abc\r\nxyz\r\n\r\n123\r\n".to_string());
+		assert_eq!(
+			src_file.lines_begin_indices
+				.iter()
+				.map(|p| p.to_meta(&src_file))
+				.collect::<Vec<_>>(),
+			vec![0, 5, 10, 12]
+				.iter()
+				.map(|p| Pos::new(*p).to_meta(&src_file))
+				.collect::<Vec<_>>(),
+		);
 	}
 
 	#[test]
-	fn mac_lines() {
-		let src_file = SourceFile::new("mac_lines", "abc\rxyz\r\r123\r");
-		assert_eq!(src_file.lines_begin_indices, vec![0, 4, 8, 9]);
+		fn mac_lines() {
+		let src_file = SourceFile::new("mac_lines".to_string(), "abc\rxyz\r\r123\r".to_string());
+		assert_eq!(
+			src_file.lines_begin_indices
+				.iter()
+				.map(|p| p.to_meta(&src_file))
+				.collect::<Vec<_>>(),
+			vec![0, 4, 8, 9]
+				.iter()
+				.map(|p| Pos::new(*p).to_meta(&src_file))
+				.collect::<Vec<_>>(),
+		);
 	}
 
 	#[test]
 	fn linux_lines() {
-		let src_file = SourceFile::new("linux_lines", "abc\nxyz\n\n123\n");
-		assert_eq!(src_file.lines_begin_indices, vec![0, 4, 8, 9]);
+		let src_file = SourceFile::new("linux_lines".to_string(), "abc\nxyz\n\n123\n".to_string());
+		assert_eq!(
+			src_file.lines_begin_indices
+				.iter()
+				.map(|p| p.to_meta(&src_file))
+				.collect::<Vec<_>>(),
+			vec![0, 4, 8, 9]
+				.iter()
+				.map(|p| Pos::new(*p).to_meta(&src_file))
+				.collect::<Vec<_>>(),
+		);
 	}
 }

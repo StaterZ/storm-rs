@@ -5,11 +5,9 @@ pub use token_kind::{TokenKind, TokenKindTag};
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
-use crate::compiler::source::SourcePosMeta;
-
 use super::{
 	stream::{Stream, StreamExt},
-	source::{SourcePos, SourceRange, SourceFile},
+	source,
 };
 
 mod token;
@@ -29,61 +27,52 @@ fn parse_radix(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<Option<u64>, String> {
-	let mut stream = stream.dup();
-
-	if stream.get().expect_eq(&'0').is_some() {
-		lazy_static!{
-			static ref RADICES: HashMap<char, u64> = vec![
-				('b', 2),
-				('q', 4),
-				('o', 8),
-				('d', 10),
-				('x', 16),
-			].into_iter().collect();
-		}
-
-		match stream.get().get_peeker().get_current() {
-			Some(c) => match RADICES.get(&c) {
-				Some(&radix) => {
-					stream.get().next();
-					stream.nip();
-					return Ok(Some(radix));
-				},
-				None => match c {
-					'a'..='z' | 'A'..='Z' => {
-						let msg = format!("Invalid radix symbol \'{:?}\'", c);
-						stream.nip();
-						return Err(msg);
-					},
-					_ => stream.pop(),
-				}
-			},
-			None => stream.pop(),
-		};
-	} else {
-		stream.pop();
+>) -> Result<Result<u64, ()>, String> {
+	if stream.expect_eq(&'0').is_none() {
+		return Ok(Err(()));
 	}
 
-	Ok(None)
+	lazy_static!{
+		static ref RADICES: HashMap<char, u64> = vec![
+			('b', 2),
+			('q', 4),
+			('o', 8),
+			('d', 10),
+			('x', 16),
+		].into_iter().collect();
+	}
+
+	if let Some(c) = stream.get_peeker().get_current() {
+		match RADICES.get(&c) {
+			Some(&radix) => {
+				stream.next();
+				return Ok(Ok(radix));
+			},
+			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
+				return Err(format!("Invalid radix symbol \'{}\'", c));
+			}
+		}
+	}
+
+	Ok(Err(()))
 }
 
 fn parse_int(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<Option<u64>, String> {
-	let radix = parse_radix(stream)?;
-	let mut digits = parse_digits(stream, radix.unwrap_or(10), radix.is_some(), true)?;
+>) -> Result<Result<u64, ()>, String> {
+	let radix = stream.hypothetically_hs(parse_radix)?;
+	let mut digits = parse_digits(stream, radix.unwrap_or(10), radix.is_ok(), true)?;
 
-	if radix.is_none() {
-		if let Some(radix) = digits {
+	if radix.is_err() {
+		if let Ok(radix) = digits {
 			if stream.expect_eq(&'r').is_some() {
 				if radix > 36 {
-					return Err("".to_string());
+					return Err(format!("The radix '{}' is larger than 36. The allowed symbols [0-9a-z] can't encode a radix this large", radix));
 				}
 				digits = parse_digits(stream, radix, true, false)?;
-				if digits.is_none() {
+				if digits.is_err() {
 					return Err("found radix".to_string());
 				}
 			}
@@ -97,16 +86,13 @@ fn parse_digits(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->, radix: u64, mut is_match: bool, allow_radix_end: bool) -> Result<Option<u64>, String> {
-	let mut stream = stream.dup();
-
+>, radix: u64, mut is_match: bool, allow_radix_end: bool) -> Result<Result<u64, ()>, String> {
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(&c) = stream.get().get_peeker().get_current() {
+	while let Some(&c) = stream.get_peeker().get_current() {
 		if c == '_' {
 			if i == 0 {
-				stream.pop();
 				return Err("Leading underscore, this is not allowed".to_string());
 			}
 
@@ -122,11 +108,10 @@ fn parse_digits(stream: &mut CharStream<
 						}
 
 						let result = if is_match {
-							Err(format!("Invalid digit \'{}\' for radix {}", c, radix))
+							Err(format!("Invalid digit \'{}\'({}) for radix {}", c, digit_value, radix))
 						} else {
-							Ok(None)
+							Ok(Err(()))
 						};
-						stream.pop();
 
 						return result;
 					}
@@ -141,22 +126,24 @@ fn parse_digits(stream: &mut CharStream<
 			};
 		}
 
-		stream.get().next();
+		stream.next();
 		i += 1;
 	}
-
+	
+	
 	if !is_match {
-		stream.pop();
-		return Ok(None);
+		return Ok(Err(()));
+	}
+	
+	if i == 0 {
+		return Err("Literal needs at least one digit".to_string());
 	}
 
 	if has_trailing_underscore {
-		stream.pop();
 		return Err("Trailing underscore, this is not allowed".to_string());
 	}
 
-	stream.nip();
-	Ok(Some(value))
+	Ok(Ok(value))
 }
 
 fn next_token_kind(stream: &mut CharStream<
@@ -267,7 +254,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Equals);
 	}
 
-	if let Some(value) = parse_int(stream)? {
+	if let Ok(value) = stream.hypothetically_hs(parse_int)? {
 		return Ok(TokenKind::IntLit(value));
 	}
 
@@ -325,28 +312,24 @@ fn next_token_kind(stream: &mut CharStream<
 	}));
 }
 
-pub fn lex(file: &SourceFile) -> Result<Vec<Token>, String> {
+pub fn lex(file: &source::SourceFile) -> Result<Vec<Token>, String> {
 	let mut stream = file.chars().enumerate().stream(
 		|(_, c)| c,
 		|(_, c)| c,
 	);
 	
-	fn get_current_source_pos<'a>(file: &'a SourceFile, stream: &mut Stream<
+	fn get_current_source_pos<'a>(file: &'a source::SourceFile, stream: &mut Stream<
 		impl ExactSizeIterator<Item = (usize, char)>,
 		impl Fn(&(usize, char)) -> &char,
 		impl Fn((usize, char)) -> char,
 		char,
-	>) -> SourcePosMeta<'a> {
-		let pos = stream
+	>) -> source::PosMeta<'a> {
+		stream
 			.get_peeker()
 			.get_current_raw()
-			.map(|&(i, _)| SourcePos::new(i))
-			.unwrap_or_else(|| SourcePos::new(file.chars().len()));
-
-		SourcePosMeta {
-			pos,
-			file,
-		}
+			.map(|&(i, _)| source::Pos::new(i))
+			.unwrap_or_else(|| source::Pos::new(file.chars().len()))
+			.to_meta(file)
 	}
 		
 	let mut tokens = Vec::new();
@@ -359,7 +342,7 @@ pub fn lex(file: &SourceFile) -> Result<Vec<Token>, String> {
 				let end = get_current_source_pos(file, &mut stream);
 				tokens.push(Token{
 					kind: kind,
-					source: SourceRange::new(begin, end),
+					range: source::Range::new(begin, end),
 				});
 
 				if is_eof {
@@ -368,7 +351,7 @@ pub fn lex(file: &SourceFile) -> Result<Vec<Token>, String> {
 
 				begin = end;
 			},
-			Err(err) => return Err(format!("[pos:{}] {}", begin.pos.char_index(), err)),
+			Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(file, &mut stream).to_range()))),
 		}
 	}
 }

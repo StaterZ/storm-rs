@@ -1,5 +1,5 @@
 use std::{ptr, fmt::{Display, Debug}};
-use super::{SourceRange, SourceRangeMeta, Line, SourceFile, SourcePos};
+use super::{SourceFile, Pos, Range, RangeMeta, Line};
 
 #[derive(Clone)]
 pub struct LineMeta<'a> {
@@ -8,7 +8,7 @@ pub struct LineMeta<'a> {
 }
 
 impl<'a> LineMeta<'a> {
-	pub fn range(&self) -> SourceRangeMeta<'a> {
+	pub fn range(&self) -> RangeMeta<'a> {
 		let next_line = self.line.index() + 1;
 
 		let lines_begin_indices = self.file.get_lines_begin_indices();
@@ -16,10 +16,10 @@ impl<'a> LineMeta<'a> {
 		let end = if next_line < lines_begin_indices.len() {
 			lines_begin_indices[next_line]
 		} else {
-			SourcePos::new(self.file.chars().len())
+			Pos::new(self.file.chars().len())
 		};
 		
-		SourceRange{
+		Range{
 			begin,
 			end,
 		}.to_meta(self.file)
@@ -32,13 +32,13 @@ impl<'a> LineMeta<'a> {
 
 impl<'a> Display for LineMeta<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.line)
+        Display::fmt(&self.line, f)
     }
 }
 
 impl<'a> Debug for LineMeta<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.line)
+        Debug::fmt(&self.line, f)
     }
 }
 

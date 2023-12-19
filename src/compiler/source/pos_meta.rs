@@ -2,37 +2,39 @@ use std::{fmt::{Display, Debug}, ops::{Add, Sub}, ptr};
 
 use more_asserts::debug_assert_le;
 
-use super::{SourcePos, SourceFile, Line, Column, LineMeta};
+use super::{Pos, SourceFile, Line, Column, LineMeta, RangeMeta};
 
 #[derive(Clone, Copy)]
-pub struct SourcePosMeta<'a> {
-	pub pos: SourcePos,
+pub struct PosMeta<'a> {
+	pub pos: Pos,
 	pub file: &'a SourceFile,
 }
 
-impl<'a> SourcePosMeta<'a> {
-	fn new(&self, pos: SourcePos) -> Self {
-		Self {
-			pos,
-			file: self.file,
-		}
+impl<'a> PosMeta<'a> {
+	pub fn line(&self) -> Option<LineMeta<'a>> {
+		(!self.is_eof()).then(|| self.line_raw())
 	}
 
-	pub fn line(&self) -> Option<LineMeta<'a>> {
-		(!self.is_eof()).then_some(LineMeta{
-			line: Line::new(self.file.get_line_index(self)),
-			file: self.file},
-		)
+	pub fn line_raw(&self) -> LineMeta<'a> {
+		Line::new(self.file.get_line_index(self)).to_meta(self.file)
 	}
 
 	pub fn column(&self) -> Option<Column> {
-		(!self.is_eof()).then_some(Column::new(*self - self.line().unwrap().range().get_begin()))
+		(!self.is_eof()).then(|| self.column_raw())
+	}
+
+	pub fn column_raw(&self) -> Column {
+		Column::new(*self - self.line_raw().range().get_begin())
 	}
 
 	pub fn is_eof(&self) -> bool {
 		let eof = self.file.get_eof();
 		debug_assert_le!(*self, eof);
 		*self == eof
+	}
+
+	pub fn to_range(&self) -> RangeMeta {
+		self.pos.to_range().to_meta(self.file)
 	}
 
 	pub fn byte_index(&self) -> usize {
@@ -44,7 +46,7 @@ impl<'a> SourcePosMeta<'a> {
 	}
 }
 
-impl<'a> Display for SourcePosMeta<'a> {
+impl<'a> Display for PosMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if self.is_eof() {
 			write!(f, "EOF")
@@ -54,56 +56,56 @@ impl<'a> Display for SourcePosMeta<'a> {
 	}
 }
 
-impl<'a> Debug for SourcePosMeta<'a> {
+impl<'a> Debug for PosMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		self.pos.fmt(f)
 	}
 }
 
-impl<'a> PartialEq for SourcePosMeta<'a> {
+impl<'a> PartialEq for PosMeta<'a> {
     fn eq(&self, other: &Self) -> bool {
 		self.assert_safe(other);
         self.pos.char_index() == other.pos.char_index()
     }
 }
 
-impl<'a> Eq for SourcePosMeta<'a> { }
+impl<'a> Eq for PosMeta<'a> { }
 
-impl<'a> PartialEq<usize> for SourcePosMeta<'a> {
+impl<'a> PartialEq<usize> for PosMeta<'a> {
     fn eq(&self, other: &usize) -> bool {
-        self.pos.char_index() == *other
+        self.pos == *other
     }
 }
 
-impl<'a> PartialOrd for SourcePosMeta<'a> {
+impl<'a> PartialOrd for PosMeta<'a> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		self.assert_safe(other);
 		self.pos.char_index().partial_cmp(&other.pos.char_index())
     }
 }
 
-impl<'a> Ord for SourcePosMeta<'a> {
+impl<'a> PartialOrd<usize> for PosMeta<'a> {
+    fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
+        self.pos.partial_cmp(other)
+    }
+}
+
+impl<'a> Ord for PosMeta<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.assert_safe(other);
         self.pos.char_index().cmp(&other.pos.char_index())
     }
 }
 
-impl<'a> PartialOrd<usize> for SourcePosMeta<'a> {
-    fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
-        self.pos.char_index().partial_cmp(other)
-    }
-}
-
-impl<'a> Add<usize> for SourcePosMeta<'a> {
+impl<'a> Add<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
-		self.new(SourcePos::new(self.pos.char_index() + rhs))
+		(self.pos + rhs).to_meta(self.file)
 	}
 }
 
-impl<'a> Sub for SourcePosMeta<'a> {
+impl<'a> Sub for PosMeta<'a> {
 	type Output = usize;
 
 	fn sub(self, rhs: Self) -> Self::Output {
@@ -112,10 +114,10 @@ impl<'a> Sub for SourcePosMeta<'a> {
 	}
 }
 
-impl<'a> Sub<usize> for SourcePosMeta<'a> {
+impl<'a> Sub<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {
-		self.new(SourcePos::new(self.pos.char_index() - rhs))
+		(self.pos - rhs).to_meta(self.file)
 	}
 }

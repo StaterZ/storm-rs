@@ -1,19 +1,19 @@
 use std::fmt::{Display, Debug};
 
-use super::{SourceRange, SourceFile, SourcePosMeta};
+use super::{SourceFile, Range, PosMeta};
 
 #[derive(Clone, Copy)]
-pub struct SourceRangeMeta<'a> {
-	pub range: SourceRange,
+pub struct RangeMeta<'a> {
+	pub range: Range,
 	pub file: &'a SourceFile,
 }
 
-impl<'a> SourceRangeMeta<'a> {
-	pub fn get_begin(&self) -> SourcePosMeta<'a> {
+impl<'a> RangeMeta<'a> {
+	pub fn get_begin(&self) -> PosMeta<'a> {
 		self.range.begin.to_meta(self.file)
 	}
 
-	pub fn get_end(&self) -> SourcePosMeta<'a> {
+	pub fn get_end(&self) -> PosMeta<'a> {
 		self.range.end.to_meta(self.file)
 	}
 
@@ -26,7 +26,7 @@ impl<'a> SourceRangeMeta<'a> {
 	}
 }
 
-impl<'a> Display for SourceRangeMeta<'a> {
+impl<'a> Display for RangeMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let begin = self.get_begin();
 		let end = self.get_end();
@@ -47,7 +47,7 @@ impl<'a> Display for SourceRangeMeta<'a> {
 	}
 }
 
-impl<'a> Debug for SourceRangeMeta<'a> {
+impl<'a> Debug for RangeMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		self.range.fmt(f)
 	}

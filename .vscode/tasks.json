@@ -12,7 +12,7 @@
 				"$rustc"
 			],
 			"env": {
-				"RUST_BACKTRACE": "1"
+				//"RUST_BACKTRACE": "1"
 			},
 			"group": "build",
 			"label": "rust: cargo run",

@@ -5,7 +5,7 @@ pub struct StreamHypothetical<'a, I, RF, MF, B> where
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
-	hypothetical: Option<Stream<I, RF, MF, B>>,
+	hypothetical: Stream<I, RF, MF, B>,
 	original: &'a mut Stream<I, RF, MF, B>,
 }
 
@@ -19,38 +19,16 @@ impl<'a, I, RF, MF, B> StreamHypothetical<'a, I, RF, MF, B> where
 {
 	pub fn new(stream: &'a mut Stream<I, RF, MF, B>) -> Self {
 		Self {
-			hypothetical: Some(stream.clone()),
+			hypothetical: stream.clone(),
 			original: stream,
 		}
 	}
 
 	pub fn get(&mut self) -> &mut Stream<I, RF, MF, B> {
-		self.hypothetical.as_mut().unwrap()
+		self.hypothetical.by_ref()
 	}
 
-	pub fn nip(mut self) {
-		*self.original = self.hypothetical.take().unwrap();
-	}
-	
-	pub fn pop(mut self) {
-		self.hypothetical = None;
-	}
-
-	pub fn nip_or_pop(self, cond: bool) {
-		if cond {
-			self.nip();
-		} else {
-			self.pop();
-		}
-	}
-}
-
-impl<'a, I, RF, MF, B> Drop for StreamHypothetical<'a, I, RF, MF, B> where
-	I: Iterator,
-	RF: Fn(&I::Item) -> &B,
-	MF: Fn(I::Item) -> B,
-{
-	fn drop(&mut self) {
-		//debug_assert!(self.hypothetical.is_none(), "stream hypothetical not collapsed");
+	pub fn nip(self) {
+		*self.original = self.hypothetical;
 	}
 }
