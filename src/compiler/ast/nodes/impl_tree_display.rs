@@ -1,7 +1,8 @@
-use crate::tree_printer::TreeDisplay;
+use std::fmt::Display;
 use color_print::cformat;
+use crate::tree_printer::TreeDisplay;
 
-impl<T: std::fmt::Display> TreeDisplay for T {
+impl<T: Display> TreeDisplay for T {
 	fn get_text_line(&self) -> String {
 		cformat!("<cyan>{}</>", self)
 	}

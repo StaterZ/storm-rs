@@ -55,9 +55,9 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 		"<cyan>{empty:>range_str_len$}--></><green>{file_path}</>\n\
 		 <cyan>{empty:>range_str_len$} | </>\n\
 		 <cyan>{range_str            } | </>{line}\n\
-		 <cyan>{empty:>range_str_len$} | </><red>{empty:>error_inset$}{error_str}here</>",
+		 <cyan>{empty:>range_str_len$} | </><red>{empty:>error_inset$}{error_str}here</>\n\
+		 <cyan>{empty:>range_str_len$} | </>",
 		empty = "",
-		range_str = range_str,
 		range_str_len = range_str.len(),
 		file_path = range.file.get_name(),
 	)

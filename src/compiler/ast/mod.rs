@@ -34,12 +34,12 @@ impl Error for AstError {
 }
 
 impl Display for AstError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AstError::Hard(err) => write!(f, "{}", cformat!("<red>[Hard]</> {err}")),
-            AstError::Soft(err) => write!(f, "{}", cformat!("<yellow>[Soft]</> {err}")),
-        }
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			AstError::Hard(err) => write!(f, "{}", cformat!("<red>[Hard]</> {err}")),
+			AstError::Soft(err) => write!(f, "{}", cformat!("<yellow>[Soft]</> {err}")),
+		}
+	}
 }
 
 macro_rules! try_hard {

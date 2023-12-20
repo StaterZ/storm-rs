@@ -1,4 +1,8 @@
-use std::{fmt::{Display, Debug}, ops::{Add, Sub}, ptr};
+use std::{
+	fmt::{Display, Debug},
+	ops::{Add, Sub},
+	ptr,
+};
 
 use more_asserts::debug_assert_le;
 
