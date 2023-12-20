@@ -169,7 +169,7 @@ fn parse_stmt<'i>(stream: &mut TokStream<'i,
 	if let Ok(stmt) = try_hard!(rule("assign", stream, parse_assignment)) {
 		return Ok(stmt);
 	}
-	if let Ok(stmt) = try_hard!(rule("block", stream, parse_block)) {
+	if let Ok(stmt) = try_hard!(rule("expr", stream, expr)) {
 		return Ok(stmt);
 	}
 
@@ -257,6 +257,21 @@ fn parse_block<'i>(stream: &mut TokStream<'i,
 }
 
 fn expr<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> Result<Node, Report<AstError>> {
+	if let Ok(expr) = try_hard!(rule("block", stream, parse_block)) {
+		return Ok(expr);
+	}
+	if let Ok(expr) = try_hard!(rule("expr_bin", stream, expr_bin)) {
+		return Ok(expr);
+	}
+
+	return Err(Report::new(AstError::Soft("Failed to parse expr".to_string())));
+}
+
+fn expr_bin<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
