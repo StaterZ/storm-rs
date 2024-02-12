@@ -1,5 +1,13 @@
-use std::{iter::{Peekable, FusedIterator}, fmt::Display};
-use super::{Peeker, StreamHypothetical};
+use std::{
+	fmt::Display,
+	iter::{FusedIterator, Peekable}
+};
+use super::{
+	Peeker,
+	StreamErrorExpectErr,
+	StreamErrorExpectErrEq,
+	StreamHypothetical,
+};
 
 pub struct Stream<I, RF, MF, B> where
 	I: Iterator,
@@ -41,7 +49,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	pub fn expect(&mut self, pred: impl FnOnce(&B) -> bool) -> Option<B> {
 		self
 			.check(pred)
-			.then(|| self.next().unwrap())
+			.then(|| self.next().unwrap()) //unwrap is safe here since 'check' returned true, meaning we managed to peek something
 	}
 	
 	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
@@ -49,14 +57,28 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 			.get_peeker()
 			.get_current()
 			.and_then(pred)
-			.map(|value| (self.next().unwrap(), value))
+			.map(|value| (self.next().unwrap(), value)) //unwrap is safe here since we managed to peek something
 	}
 
-	pub fn expect_err(&mut self, pred: impl FnOnce(&B) -> Result<(), String>) -> Result<B, String> {
+	pub fn expect_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, StreamErrorExpectErr<E>> {
 		match self.get_peeker().get_current() {
-			Some(c) => pred(c).map(|_| self.next().unwrap()),
-			None => Err("Iterator is exhausted".to_string()),
+			Some(item) => match pred(item) {
+				Ok(_) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
+				Err(err) => Err(StreamErrorExpectErr::PredicateError(err)),
+			},
+			None => Err(StreamErrorExpectErr::StreamExhausted),
 		}
+	}
+}
+
+impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+	I: Iterator,
+	RF: Fn(&I::Item) -> &B,
+	MF: Fn(I::Item) -> B,
+	B: PartialEq,
+{
+	pub fn expect_eq(&mut self, expected: &B) -> Option<B> {
+		self.expect(|item| item == expected)
 	}
 }
 
@@ -66,16 +88,15 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	MF: Fn(I::Item) -> B,
 	B: Display + PartialEq,
 {
-	pub fn expect_eq(&mut self, expected: &B) -> Option<B> {
-		self.expect(|c| c == expected)
-	}
-
-	pub fn expect_eq_err(&mut self, expected: &B) -> Result<B, String> {
-		self.expect_err(|c| if c == expected {
+	pub fn expect_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
+		self.expect_err(|item| if item == expected {
 			Ok(())
 		} else {
-			Err(format!("found '{}'", c))
-		}).map_err(|err| format!("Expected '{}' but {}", expected, err))
+			Err(item)
+		}).map_err(|err| match err {
+			StreamErrorExpectErr::StreamExhausted => StreamErrorExpectErrEq::StreamExhausted,
+			StreamErrorExpectErr::PredicateError(found) => StreamErrorExpectErrEq::ExpectedItem { expected, found },
+		})
 	}
 }
 
@@ -91,11 +112,10 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 		StreamHypothetical::new(self)
 	}
 	
-	#[inline(always)]
-	pub fn hypothetically<T, E>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
+	pub fn try_rule<T, E>(&mut self, rule: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
 		let mut hypothetical = self.dup();
 
-		let result = f(hypothetical.get());
+		let result = rule(hypothetical.get());
 		if result.is_ok() {
 			hypothetical.nip();
 		}
@@ -103,16 +123,15 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 		result
 	}
 
-	#[inline(always)]
-	pub fn hypothetically_hs<T, SE, HE>(&mut self, f: impl FnOnce(&mut Self) -> Result<Result<T, SE>, HE>) -> Result<Result<T, SE>, HE> {
+	pub fn try_rule_hs<T, SE, HE>(&mut self, rule: impl FnOnce(&mut Self) -> Result<Result<T, SE>, HE>) -> Result<Result<T, SE>, HE> {
 		let mut hypothetical = self.dup();
 
-		let result = f(hypothetical.get());
-		if matches!(result, Ok(Ok(_)) | Err(_)) {
+		let result = rule(hypothetical.get())?;
+		if result.is_ok() {
 			hypothetical.nip();
 		}
 
-		result
+		Ok(result)
 	}
 }
 

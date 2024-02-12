@@ -17,7 +17,7 @@ impl<'a, I, RF, MF, B> StreamHypothetical<'a, I, RF, MF, B> where
 	MF: Fn(I::Item) -> B,
 	MF: Clone
 {
-	pub fn new(stream: &'a mut Stream<I, RF, MF, B>) -> Self {
+	pub(super) fn new(stream: &'a mut Stream<I, RF, MF, B>) -> Self {
 		Self {
 			hypothetical: stream.clone(),
 			original: stream,

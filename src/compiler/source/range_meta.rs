@@ -1,20 +1,20 @@
 use std::fmt::{Display, Debug};
 
-use super::{SourceFile, Range, PosMeta};
+use super::{Document, Range, PosMeta};
 
 #[derive(Clone, Copy)]
 pub struct RangeMeta<'a> {
 	pub range: Range,
-	pub file: &'a SourceFile,
+	pub document: &'a Document,
 }
 
 impl<'a> RangeMeta<'a> {
 	pub fn get_begin(&self) -> PosMeta<'a> {
-		self.range.begin.to_meta(self.file)
+		self.range.begin.to_meta(self.document)
 	}
 
 	pub fn get_end(&self) -> PosMeta<'a> {
-		self.range.end.to_meta(self.file)
+		self.range.end.to_meta(self.document)
 	}
 
 	pub fn get_length(&self) -> usize {
@@ -22,7 +22,7 @@ impl<'a> RangeMeta<'a> {
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.file.get_content()[self.range.begin.char_index() .. self.range.end.char_index()]
+		&self.document.get_content()[self.range.begin.char_index() .. self.range.end.char_index()]
 	}
 }
 

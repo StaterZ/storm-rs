@@ -5,7 +5,7 @@ use clap::Parser;
 use color_print::cprintln;
 use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
-use compiler::source::SourceFile;
+use compiler::source;
 
 mod compiler;
 mod tree_printer;
@@ -38,7 +38,7 @@ fn compile() {
 	};
 	
 	if let Ok(src_in) = std::fs::read_to_string(path.as_path()) {
-		let src_file = SourceFile::new(
+		let src_doc = source::Document::new(
 			path
 				.into_os_string()
 				.to_string_lossy()
@@ -46,9 +46,9 @@ fn compile() {
 			src_in
 		);
 		println!("=== Source ===");
-		println!("{:?}", src_file.get_content());
+		println!("{:?}", src_doc.get_content());
 		
-		let result = compiler::compile(&src_file);
+		let result = compiler::compile(&src_doc);
 		
 		println!();
 		match result.lex.unwrap() {
@@ -59,7 +59,7 @@ fn compile() {
 			Ok(tokens) => {
 				println!("=== Tokens ===");
 				for token in tokens.iter() {
-					println!("{}", token.with_meta(&src_file));
+					println!("{}", token.with_meta(&src_doc));
 				}
 			}
 		}

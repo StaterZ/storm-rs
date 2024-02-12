@@ -6,11 +6,12 @@ use szu::ternary;
 
 use crate::tree_printer::TreeDisplay;
 
-use super::{Block, Let, BinOp};
+use super::{Block, Give, Let, BinOp};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum NodeKind {
 	Block(Block),
+	Give(Give),
 	Let(Let),
 	BinOp(BinOp),
 	IntLit(u64),
@@ -28,6 +29,7 @@ impl TreeDisplay for Node {
 	fn get_text_line(&self) -> String {
 		let text = match &self.kind {
 			NodeKind::Block(_) => "".to_string(),
+			NodeKind::Give(_) => "".to_string(),
 			NodeKind::Let(_) => "".to_string(),
 			NodeKind::BinOp(value) => format!("{}", value.op),
 			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
@@ -41,11 +43,14 @@ impl TreeDisplay for Node {
 		match &self.kind {
 			NodeKind::Block(value) => Some(
 				value.stmts
-					.iter()
-					.enumerate()
-					.map(|(i, stmt)| (format!("[{}]", i), stmt as &dyn TreeDisplay))
-					.collect()
+				.iter()
+				.enumerate()
+				.map(|(i, stmt)| (format!("[{}]", i), stmt as &dyn TreeDisplay))
+				.collect()
 			),
+			NodeKind::Give(value) => Some(vec![
+				("expr".to_string(), value.expr.deref()),
+			]),
 			NodeKind::Let(value) => Some(vec![
 				("lhs".to_string(), value.lhs.deref()),
 				("rhs".to_string(), value.rhs.as_ref().map_or(&"none", |rhs| rhs.deref())),

@@ -9,10 +9,10 @@ pub struct Token {
 }
 
 impl Token {
-	pub fn with_meta<'a>(&'a self, file: &'a source::SourceFile) -> TokenMeta<'a> {
+	pub fn with_meta<'a>(&'a self, document: &'a source::Document) -> TokenMeta<'a> {
 		TokenMeta {
 			token: self,
-			file,
+			document,
 		}
 	}
 }

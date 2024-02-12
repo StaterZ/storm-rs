@@ -20,6 +20,7 @@ impl<'a> Iterator for CharsLen<'a> {
 
 	#[inline]
 	fn next(&mut self) -> Option<char> {
+		//self.len -= 1; //TODO: we should have this line here, not we rely on this wonky shit, fix later
 		self.iter.next()
 	}
 

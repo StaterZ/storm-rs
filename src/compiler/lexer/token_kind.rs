@@ -1,9 +1,11 @@
-use szu::{tag_enum_helper, tag_enum, replace_macro_arg};
+use std::fmt::Display;
+
+use szu::tag_enum;
 
 tag_enum!(
 	pub enum (
 		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr)] TokenKind,
-		#[derive(Debug, PartialEq, Eq, Clone, Copy)] TokenKindTag,
+		#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::AsRefStr)] TokenKindTag,
 	) {
 		Space,
 		NewLine,
@@ -38,7 +40,9 @@ tag_enum!(
 		Let,
 		If,
 		Else,
-		
+		Give,
+		Return,
+
 		Ipt,
 		Yield,
 		
@@ -47,3 +51,9 @@ tag_enum!(
 		Identifier(String),
 	}
 );
+
+impl Display for TokenKindTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_ref())
+    }
+}

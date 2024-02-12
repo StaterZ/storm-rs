@@ -12,12 +12,12 @@ impl<'p, I, RF, B> Peeker<'p, I, RF, B> where
 	I: Iterator,
 	RF: Fn(&I::Item) -> &B,
 {
-	pub fn get_current_raw(&self) -> Option<&<Peekable<I> as Iterator>::Item> {
+	pub fn get_current_raw(&self) -> Option<&'p <Peekable<I> as Iterator>::Item> {
 		self.peeked
 	}
 
-    #[inline]
-	pub fn get_current(&self) -> Option<&B> {
+	#[inline]
+	pub fn get_current(&self) -> Option<&'p B> {
 		self
 			.get_current_raw()
 			.map(|item| (self.rf)(item))

@@ -6,12 +6,12 @@ use std::{
 
 use more_asserts::debug_assert_le;
 
-use super::{Pos, SourceFile, Line, Column, LineMeta, RangeMeta};
+use super::{Pos, Document, Line, Column, LineMeta, RangeMeta};
 
 #[derive(Clone, Copy)]
 pub struct PosMeta<'a> {
 	pub pos: Pos,
-	pub file: &'a SourceFile,
+	pub document: &'a Document,
 }
 
 impl<'a> PosMeta<'a> {
@@ -20,7 +20,7 @@ impl<'a> PosMeta<'a> {
 	}
 
 	pub fn line_raw(&self) -> LineMeta<'a> {
-		Line::new(self.file.get_line_index(self)).to_meta(self.file)
+		Line::new(self.document.get_line_index(self)).to_meta(self.document)
 	}
 
 	pub fn column(&self) -> Option<Column> {
@@ -32,21 +32,21 @@ impl<'a> PosMeta<'a> {
 	}
 
 	pub fn is_eof(&self) -> bool {
-		let eof = self.file.get_eof();
+		let eof = self.document.get_eof();
 		debug_assert_le!(*self, eof);
 		*self == eof
 	}
 
 	pub fn to_range(&self) -> RangeMeta {
-		self.pos.to_range().to_meta(self.file)
+		self.pos.to_range().to_meta(self.document)
 	}
 
 	pub fn byte_index(&self) -> usize {
-		self.file.get_char_to_byte(self)
+		self.document.get_char_to_byte(self)
 	}
 
 	fn assert_safe(self, other: &Self) {
-		debug_assert!(ptr::eq(self.file, other.file));
+		debug_assert!(ptr::eq(self.document, other.document));
 	}
 }
 
@@ -105,7 +105,7 @@ impl<'a> Add<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
-		(self.pos + rhs).to_meta(self.file)
+		(self.pos + rhs).to_meta(self.document)
 	}
 }
 
@@ -122,6 +122,6 @@ impl<'a> Sub<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {
-		(self.pos - rhs).to_meta(self.file)
+		(self.pos - rhs).to_meta(self.document)
 	}
 }

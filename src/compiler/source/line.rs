@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{SourceFile, LineMeta};
+use super::{Document, LineMeta};
 
 #[derive(Debug, Clone)]
 pub struct Line(usize);
@@ -14,10 +14,10 @@ impl Line {
 		self.0
 	}
 
-	pub fn to_meta(self, file: &SourceFile) -> LineMeta {
+	pub fn to_meta(self, document: &Document) -> LineMeta {
 		LineMeta {
 			line: self,
-			file,
+			document,
 		}
 	}
 }

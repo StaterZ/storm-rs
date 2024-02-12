@@ -5,14 +5,14 @@ use szu::iter::WindowOptionExt;
 use super::{Pos, PosMeta, Range, CharsLen};
 
 #[derive(Debug)]
-pub struct SourceFile {
+pub struct Document {
 	name: String,
 	content: String,
 	lines_begin_indices: Vec<Pos>,
 	char_to_byte: Vec<usize>,
 }
 
-impl SourceFile {
+impl Document {
 	pub fn new(name: String, content: String) -> Self {
 		let mut char_to_byte = Vec::<usize>::new();
 		let lines_begin_indices: Vec<Pos> = content
@@ -88,17 +88,17 @@ impl SourceFile {
 	}
 
 	fn assert_safe_pos<'a>(&'a self, pos: &PosMeta<'a>) {
-		debug_assert!(ptr::eq(pos.file, self));
+		debug_assert!(ptr::eq(pos.document, self));
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{SourceFile, Pos};
+	use super::{Document, Pos};
 
 	#[test]
 	fn windows_lines() {
-		let src_file = SourceFile::new("windows_lines".to_string(), "abc\r\nxyz\r\n\r\n123\r\n".to_string());
+		let src_file = Document::new("windows_lines".to_string(), "abc\r\nxyz\r\n\r\n123\r\n".to_string());
 		assert_eq!(
 			src_file.lines_begin_indices
 				.iter()
@@ -113,7 +113,7 @@ mod tests {
 
 	#[test]
 		fn mac_lines() {
-		let src_file = SourceFile::new("mac_lines".to_string(), "abc\rxyz\r\r123\r".to_string());
+		let src_file = Document::new("mac_lines".to_string(), "abc\rxyz\r\r123\r".to_string());
 		assert_eq!(
 			src_file.lines_begin_indices
 				.iter()
@@ -128,7 +128,7 @@ mod tests {
 
 	#[test]
 	fn linux_lines() {
-		let src_file = SourceFile::new("linux_lines".to_string(), "abc\nxyz\n\n123\n".to_string());
+		let src_file = Document::new("linux_lines".to_string(), "abc\nxyz\n\n123\n".to_string());
 		assert_eq!(
 			src_file.lines_begin_indices
 				.iter()

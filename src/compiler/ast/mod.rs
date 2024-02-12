@@ -1,19 +1,9 @@
-use std::{fmt::Display, error::Error};
-
-use error_stack::Report;
-use color_print::cformat;
-
-use crate::compiler::source;
-
-use super::{
-	lexer::{Token, TokenKind},
-	stream::{Stream, StreamExt},
-	source::SourceFile,
-};
+pub use rule_error::RuleError;
 pub use nodes::{
 	NodeKind,
 	Node,
 	Block,
+	Give,
 	Let,
 	BinOp,
 	MathBinOpKind,
@@ -22,45 +12,24 @@ pub use nodes::{
 	CmpBinOpKind
 };
 
+use super::{
+	lexer::{Token, TokenKind},
+	stream::{Stream, StreamErrorExpectErr, StreamExt}
+};
+
+use crate::shed_errors;
+use rule_error::RuleResult;
+
 mod nodes;
-
-#[derive(Debug)]
-pub enum AstError {
-	Hard(String),
-	Soft(String),
-}
-
-impl Error for AstError {
-}
-
-impl Display for AstError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			AstError::Hard(err) => write!(f, "{}", cformat!("<red>[Hard]</> {err}")),
-			AstError::Soft(err) => write!(f, "{}", cformat!("<yellow>[Soft]</> {err}")),
-		}
-	}
-}
-
-macro_rules! try_hard {
-	($expr:expr) => {
-		match $expr {
-			Ok(ok) => Ok(ok),
-			Err(err) => match err.current_context() {
-				AstError::Hard(_) => return Err(err),
-				AstError::Soft(_) => Err(err),
-			}
-		}
-	};
-}
+mod rule_error;
 
 trait TokStreamIter<'i> = Iterator<Item = &'i Token>;
 trait TokStreamRF<'i> = for<'a> Fn(&'a &'i Token) -> &'a &'i Token;
 trait TokStreamMF<'i> = Fn(&'i Token) -> &'i Token;
 type TokStream<'i,
-	I/*: TokStreamIter<'i>*/,
-	RF/*: TokStreamRF<'i>*/,
-	MF/*: TokStreamMF<'i>*/,
+	I: /*TokStreamIter<'i>*/,
+	RF: /*TokStreamRF<'i>*/,
+	MF: /*TokStreamMF<'i>*/,
 > = Stream<I, RF, MF, &'i Token>;
 
 fn expect_eq<'i>(stream: &mut TokStream<'i,
@@ -75,33 +44,32 @@ fn expect_eq_err<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i>,
 	impl TokStreamRF<'i>,
 	impl TokStreamMF<'i>,
->, expected: TokenKind) -> Result<&'i Token, String> {
+>, expected: TokenKind) -> Result<&'i Token, RuleError> {
 	stream.expect_err(|t| if t.kind == expected {
 		Ok(())
 	} else {
-		Err(format!("found '{}'", t.kind.as_ref()))
-	}).map_err(|err| format!("Expected '{}' but {}", expected.as_ref(), err))
+		Err((&t.kind).into())
+	}).map_err(|err| match err {
+		StreamErrorExpectErr::StreamExhausted => RuleError::StreamExhausted,
+		StreamErrorExpectErr::PredicateError(found) => RuleError::ExpectedToken {
+			expected: (&expected).into(),
+			found,
+		},
+	})
 }
 
-fn rule<'i, I, RF, MF>(
+fn try_rule<'i, I, RF, MF>(
 	rule_name: &'static str,
 	stream: &mut TokStream<'i, I, RF, MF>,
-	f: fn(&mut TokStream<'i, I, RF, MF>) -> Result<Node, Report<AstError>>
-) -> Result<Node, Report<AstError>>
+	rule: fn(&mut TokStream<'i, I, RF, MF>) -> RuleResult
+) -> RuleResult
 where
 	I: TokStreamIter<'i> + Clone,
 	RF: TokStreamRF<'i> + Clone,
 	MF: TokStreamMF<'i> + Clone,
 {
-	f(stream).map_err(|err| {
-			let msg = format!("Rule '{rule_name}'");
-			let ctx = match err.current_context() {
-				AstError::Hard(_) => AstError::Hard(msg),
-				AstError::Soft(_) => AstError::Soft(msg),
-			};
-			err.change_context(ctx)
-		}
-	)
+	println!("Rule '{}'", rule_name);
+	stream.try_rule_hs(rule)
 }
 
 fn discard_space<'i>(stream: &mut TokStream<
@@ -118,18 +86,15 @@ fn discard_space<'i>(stream: &mut TokStream<
 	)).is_some() { };
 }
 
-pub fn ast<'a>(file: &'a SourceFile, tokens: &'a Vec<Token>) -> Result<Node, Report<AstError>> {
+pub fn ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
 	let mut stream = tokens.iter().stream(
 		|t| t,
 		|t| t,
 	);
 
-	match rule("file", &mut stream, parse_file) {
-		Ok(t) => Ok(t),
-		Err(err) => Err(match stream.get_peeker().get_current() {
-			None => err,
-			Some(token) => err.attach_printable(source::error_gen::generate_error_line(token.range.to_meta(file))),
-		}),
+	match try_rule("file", &mut stream, parse_file) {
+		Ok(Ok(file)) => Ok(file),
+		Ok(Err(err)) | Err(err) => Err(err),
 	}
 }
 
@@ -137,23 +102,23 @@ fn parse_file<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
+>) -> RuleResult {
 	let mut block = Block::new();
 	loop {
 		discard_space(stream);
 
 		if expect_eq(stream, TokenKind::Eof).is_some() {
-			return Ok(Node { kind: NodeKind::Block(block) });
+			return Ok(Ok(Node { kind: NodeKind::Block(block) }));
 		}
 		
-		if let Ok(stmt) = try_hard!(rule("statement", stream, parse_stmt)) {
+		if let Ok(stmt) = try_rule("stmt", stream, parse_stmt)? {
 			block.stmts.push(stmt);
 			continue;
 		}
 
-		return Err(Report::new(match stream.get_peeker().get_current() {
-			Some(token) => AstError::Soft(format!("Failed to parse file. token: '{}'", token.kind.as_ref())),
-			None => AstError::Soft("Stream is exhausted".to_string()),
+		return Ok(Err(match stream.get_peeker().get_current() {
+			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
+			None => RuleError::StreamExhausted,
 		}));
 	};
 }
@@ -162,121 +127,138 @@ fn parse_stmt<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	if let Ok(stmt) = try_hard!(rule("let", stream, parse_let)) {
-		return Ok(stmt);
+>) -> RuleResult {
+	if let Some(stmt) =
+	       if let Ok(stmt) = try_rule("let", stream, parse_let)? {
+		Some(stmt)
+	} else if let Ok(stmt) = try_rule("assign", stream, parse_assignment)? {
+		Some(stmt)
+	} else if let Ok(stmt) = try_rule("expr", stream, parse_expr)? {
+		Some(stmt)
+	} else if let Ok(stmt) = try_rule("give", stream, parse_give)? {
+		Some(stmt)
+	} else {
+		None
+	} {
+		discard_space(stream);
+		expect_eq_err(stream, TokenKind::Semicolon)?;
+		Ok(Ok(stmt))
+	} else {
+		Ok(Err(match stream.get_peeker().get_current() {
+			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
+			None => RuleError::StreamExhausted,
+		}))
 	}
-	if let Ok(stmt) = try_hard!(rule("assign", stream, parse_assignment)) {
-		return Ok(stmt);
-	}
-	if let Ok(stmt) = try_hard!(rule("expr", stream, expr)) {
-		return Ok(stmt);
-	}
-
-	return Err(Report::new(AstError::Soft("Failed to parse stmt".to_string())));
 }
 
 fn parse_let<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
+>) -> RuleResult {
 	if let Err(err) = expect_eq_err(stream, TokenKind::Let) {
-		return Err(Report::new(AstError::Soft(err)));
+		return Ok(Err(err));
 	}
 	
 	discard_space(stream);
-	let lhs = Box::new(expr(stream)?);
+	let lhs = Box::new(try_rule("LHS expr", stream, parse_expr)??);
 	
 	discard_space(stream);
-	let rhs = if stream.expect(|c| c.kind == TokenKind::Equals).is_some() {
+	let rhs = if expect_eq(stream, TokenKind::Equals).is_some() {
 		discard_space(stream);
-		Some(Box::new(expr(stream)?))
+		Some(Box::new(try_rule("RHS expr", stream, parse_expr)??))
 	} else {
 		None
 	};
 	
-	discard_space(stream);
-	expect_eq_err(stream, TokenKind::Semicolon)
-		.map_err(|err| Report::new(AstError::Hard(err)))?;
-	
-	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
+	Ok(Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) }))
 }
 
 fn parse_assignment<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	let lhs = match try_hard!(expr(stream)) {
-		Ok(lhs) => Box::new(lhs),
-		Err(err) => return Err(err.change_context(AstError::Soft("Failed to parse LHS".to_string()))),
-	};
+>) -> RuleResult {
+	let lhs = Box::new(shed_errors!(try_rule("LHS expr", stream, parse_expr)));
 	
 	discard_space(stream);
-	let rhs = if stream.expect(|c| c.kind == TokenKind::Equals).is_some() {
+	let rhs = if expect_eq(stream, TokenKind::Equals).is_some() {
 		discard_space(stream);
-		Some(Box::new(expr(stream)?))
+		Some(Box::new(try_rule("RHS expr", stream, parse_expr)??))
 	} else {
 		None
 	};
 	
-	discard_space(stream);
-	expect_eq_err(stream, TokenKind::Semicolon)
-		.map_err(|err| Report::new(AstError::Hard(err)))?;
-	
-	Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })
+	Ok(Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) })) //TODO
 }
 
 fn parse_block<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	expect_eq_err(stream, TokenKind::LBrace)
-		.map_err(|err| Report::new(AstError::Soft(err)))?;
+>) -> RuleResult {
+	if let Err(err) = expect_eq_err(stream, TokenKind::LBrace) {
+		return Ok(Err(err));
+	}
 	
 	let mut block = Block::new();
 	loop {
 		discard_space(stream);
 
-		if stream.expect(|&t| t.kind == TokenKind::RBrace).is_some() {
-			return Ok(Node { kind: NodeKind::Block(block) });
+		if expect_eq(stream, TokenKind::RBrace).is_some() {
+			return Ok(Ok(Node { kind: NodeKind::Block(block) }));
 		}
 		
-		if let Ok(stmt) = try_hard!(rule("stmt", stream, parse_stmt)) {
+		if let Ok(stmt) = try_rule("stmt", stream, parse_stmt)? {
 			block.stmts.push(stmt);
 			continue;
 		}
 
-		return Err(Report::new(match stream.get_peeker().get_current() {
-			Some(token) => AstError::Soft(format!("Failed to parse block. token: '{}'", token.kind.as_ref())),
-			None => AstError::Soft("Stream is exhausted".to_string()),
+		return Ok(Err(match stream.get_peeker().get_current() {
+			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
+			None => RuleError::StreamExhausted,
 		}));
 	};
 }
 
-fn expr<'i>(stream: &mut TokStream<'i,
+fn parse_give<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	if let Ok(expr) = try_hard!(rule("block", stream, parse_block)) {
-		return Ok(expr);
+>) -> RuleResult {
+	if let Err(err) = expect_eq_err(stream, TokenKind::Give) {
+		return Ok(Err(err));
 	}
-	if let Ok(expr) = try_hard!(rule("expr_bin", stream, expr_bin)) {
-		return Ok(expr);
-	}
-
-	return Err(Report::new(AstError::Soft("Failed to parse expr".to_string())));
+	
+	discard_space(stream);
+	let expr =  try_rule("expr", stream, parse_expr)??;
+	return Ok(Ok(Node { kind: NodeKind::Give(Give { expr: Box::new(expr) }) }));
 }
 
-fn expr_bin<'i>(stream: &mut TokStream<'i,
+fn parse_expr<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	let lhs = rule("atom", stream, expr_atom)?;
+>) -> RuleResult {
+	if let Ok(expr) = try_rule("block", stream, parse_block)? {
+		return Ok(Ok(expr));
+	}
+	if let Ok(expr) = try_rule("expr_bin", stream, parse_expr_bin)? {
+		return Ok(Ok(expr));
+	}
+
+	Ok(Err(match stream.get_peeker().get_current() {
+		Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
+		None => RuleError::StreamExhausted,
+	}))
+}
+
+fn parse_expr_bin<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>) -> RuleResult {
+	let lhs = shed_errors!(try_rule("atom", stream, parse_expr_atom));
 	
 	let mut stream = stream.dup();
 	discard_space(stream.get());
@@ -293,11 +275,11 @@ fn expr_bin<'i>(stream: &mut TokStream<'i,
 		_ => None,
 	});
 
-	Ok(match op {
+	Ok(Ok(match op {
 		None => lhs,
 		Some((_, op)) => {
 			discard_space(stream.get());
-			let mut rhs = expr(stream.get())?;
+			let mut rhs = parse_expr(stream.get())??;
 			stream.nip();
 
 			if let NodeKind::BinOp(rhs_bin_op) = &rhs.kind {
@@ -332,21 +314,21 @@ fn expr_bin<'i>(stream: &mut TokStream<'i,
 				)}
 			}
 		},
-	})
+	}))
 }
 
-fn expr_atom<'i>(stream: &mut TokStream<'i,
+fn parse_expr_atom<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
->) -> Result<Node, Report<AstError>> {
-	stream.hypothetically(|stream| match stream.next() {
+>) -> RuleResult {
+	stream.try_rule_hs(|stream| match stream.next() {
 		Some(token) => match &token.kind {
-			TokenKind::IntLit(value) => Ok(Node { kind: NodeKind::IntLit(*value) }),
-			TokenKind::StrLit(value) => Ok(Node { kind: NodeKind::StrLit(value.clone()) }),
-			TokenKind::Identifier(value) => Ok(Node { kind: NodeKind::Identifier(value.clone()) }),
-			_ => Err(Report::new(AstError::Soft(format!("Unexpected '{}'", token.kind.as_ref())))),
+			TokenKind::IntLit(value) => Ok(Ok(Node { kind: NodeKind::IntLit(*value) })),
+			TokenKind::StrLit(value) => Ok(Ok(Node { kind: NodeKind::StrLit(value.clone()) })),
+			TokenKind::Identifier(value) => Ok(Ok(Node { kind: NodeKind::Identifier(value.clone()) })),
+			_ => Ok(Err(RuleError::UnexpectedToken((&token.kind).into()))),
 		},
-		None => Err(Report::new(AstError::Soft("Stream is exhausted".to_string()))),
+		None => Ok(Err(RuleError::StreamExhausted)),
 	})
 }

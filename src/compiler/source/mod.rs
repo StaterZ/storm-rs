@@ -1,4 +1,4 @@
-pub use file::SourceFile;
+pub use document::Document;
 pub use chars_len::CharsLen;
 
 pub use pos::Pos;
@@ -14,7 +14,7 @@ pub use column::Column;
 
 pub mod error_gen;
 
-mod file;
+mod document;
 mod chars_len;
 
 mod pos;

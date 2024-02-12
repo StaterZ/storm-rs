@@ -62,7 +62,7 @@ fn parse_int(stream: &mut CharStream<
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
 >) -> Result<Result<u64, ()>, String> {
-	let radix = stream.hypothetically_hs(parse_radix)?;
+	let radix = stream.try_rule_hs(parse_radix)?;
 	let mut digits = parse_digits(stream, radix.unwrap_or(10), radix.is_ok(), true)?;
 
 	if radix.is_err() {
@@ -254,7 +254,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Equals);
 	}
 
-	if let Ok(value) = stream.hypothetically_hs(parse_int)? {
+	if let Ok(value) = stream.try_rule_hs(parse_int)? {
 		return Ok(TokenKind::IntLit(value));
 	}
 
@@ -296,7 +296,7 @@ fn next_token_kind(stream: &mut CharStream<
 		}
 
 		if let Some(&keyword) = KEYWORDS.get(value.as_str()) {
-			return Ok(keyword.into());
+			return Ok(keyword.try_into().unwrap()); //unwrap here is safe since the KEYWORDS list will never list a type with a value
 		}
 		
 		return Ok(TokenKind::Identifier(value));
@@ -312,13 +312,13 @@ fn next_token_kind(stream: &mut CharStream<
 	}));
 }
 
-pub fn lex(file: &source::SourceFile) -> Result<Vec<Token>, String> {
-	let mut stream = file.chars().enumerate().stream(
+pub fn lex(document: &source::Document) -> Result<Vec<Token>, String> {
+	let mut stream = document.chars().enumerate().stream(
 		|(_, c)| c,
 		|(_, c)| c,
 	);
 	
-	fn get_current_source_pos<'a>(file: &'a source::SourceFile, stream: &mut Stream<
+	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut Stream<
 		impl ExactSizeIterator<Item = (usize, char)>,
 		impl Fn(&(usize, char)) -> &char,
 		impl Fn((usize, char)) -> char,
@@ -328,18 +328,18 @@ pub fn lex(file: &source::SourceFile) -> Result<Vec<Token>, String> {
 			.get_peeker()
 			.get_current_raw()
 			.map(|&(i, _)| source::Pos::new(i))
-			.unwrap_or_else(|| source::Pos::new(file.chars().len()))
-			.to_meta(file)
+			.unwrap_or_else(|| source::Pos::new(document.chars().len()))
+			.to_meta(document)
 	}
 		
 	let mut tokens = Vec::new();
-	let mut begin = get_current_source_pos(file, &mut stream);
+	let mut begin = get_current_source_pos(document, &mut stream);
 	loop {
 		match next_token_kind(&mut stream) {
 			Ok(kind) => {
 				let is_eof = kind == TokenKind::Eof;
 
-				let end = get_current_source_pos(file, &mut stream);
+				let end = get_current_source_pos(document, &mut stream);
 				tokens.push(Token{
 					kind: kind,
 					range: source::Range::new(begin, end),
@@ -351,7 +351,7 @@ pub fn lex(file: &source::SourceFile) -> Result<Vec<Token>, String> {
 
 				begin = end;
 			},
-			Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(file, &mut stream).to_range()))),
+			Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(document, &mut stream).to_range()))),
 		}
 	}
 }

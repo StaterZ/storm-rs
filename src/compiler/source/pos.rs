@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use super::{SourceFile, PosMeta, Range};
+use super::{Document, PosMeta, Range};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Pos(usize);
@@ -10,10 +10,10 @@ impl Pos {
 		Self(inner)
 	}
 
-	pub fn to_meta(self, file: &SourceFile) -> PosMeta {
+	pub fn to_meta(self, document: &Document) -> PosMeta {
 		PosMeta {
 			pos: self,
-			file,
+			document,
 		}
 	}
 
