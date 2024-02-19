@@ -1,36 +1,69 @@
 use std::{error::Error, fmt::Display};
 
-use crate::compiler::lexer::TokenKindTag;
-
-use super::Node;
+use super::{
+	Node,
+	ResultSH,
+	super::lexer::TokenKindTag,
+	super::source,
+};
 
 #[derive(Debug)]
-pub enum RuleError {
+pub enum RuleErrorKind {
 	StreamExhausted,
 	UnexpectedToken(TokenKindTag),
 	ExpectedToken {
 		expected: TokenKindTag,
 		found: TokenKindTag,
 	},
-	Temp(String),
 }
 
-impl Display for RuleError {
+#[derive(Debug)]
+pub struct RuleError {
+	pub(super) kind: RuleErrorKind,
+	pub(super) source_range: Option<source::Range>,
+}
+
+#[derive(Debug)]
+pub struct RuleErrorMeta<'a> {
+	error: RuleError,
+	document: &'a source::Document,
+}
+
+impl Display for RuleErrorKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			RuleError::StreamExhausted => write!(f, "Stream was exhauted"),
-			RuleError::UnexpectedToken(token_tag) => write!(f, "Unexpected token '{}'", token_tag),
-			RuleError::ExpectedToken { expected, found } => write!(f, "Expected token '{}', found '{}'", expected, found),
-			RuleError::Temp(msg) => write!(f, "TempError: '{}'", msg),
+			RuleErrorKind::StreamExhausted => write!(f, "Stream was exhausted"),
+			RuleErrorKind::UnexpectedToken(token_tag) => write!(f, "Unexpected token '{}'", token_tag),
+			RuleErrorKind::ExpectedToken { expected, found } => write!(f, "Expected token '{}', found '{}'", expected, found),
 		}
 	}
 }
 
-impl Error for RuleError {
-	
+impl RuleError {
+	pub fn to_meta(self, document: &source::Document) -> RuleErrorMeta {
+		RuleErrorMeta {
+			error: self,
+			document,
+		}
+	}
 }
 
-pub type RuleResult = Result<Result<Node, RuleError>, RuleError>;
+impl<'a> Display for RuleErrorMeta<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		writeln!(f, "{}", self.error.kind)?;
+		if let Some(source_range) = self.error.source_range {
+			write!(f, "{}", source::error_gen::generate_error_line(source_range.to_meta(&self.document)))?;
+		} else {
+			write!(f, "No source location >:/")?;
+		}
+		Ok(())
+	}
+}
+
+impl Error for RuleErrorKind { }
+impl<'a> Error for RuleErrorMeta<'a> { }
+
+pub type RuleResult = ResultSH<Node, RuleErrorKind>;
 
 #[macro_export]
 macro_rules! shed_errors {

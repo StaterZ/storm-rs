@@ -1,12 +1,10 @@
-use std::{
-	fmt::Display,
-	iter::{FusedIterator, Peekable}
-};
+use std::iter::{FusedIterator, Peekable};
 use super::{
 	Peeker,
 	StreamErrorExpectErr,
-	StreamErrorExpectErrEq,
+	//StreamErrorExpectErrEq,
 	StreamHypothetical,
+	super::ResultSH,
 };
 
 pub struct Stream<I, RF, MF, B> where
@@ -42,7 +40,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	pub fn check(&mut self, pred: impl FnOnce(&B) -> bool) -> bool {
 		self
 			.get_peeker()
-			.get_current()
+			.get()
 			.map_or(false, pred)
 	}
 	
@@ -55,13 +53,13 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
 		self
 			.get_peeker()
-			.get_current()
+			.get()
 			.and_then(pred)
 			.map(|value| (self.next().unwrap(), value)) //unwrap is safe here since we managed to peek something
 	}
 
 	pub fn expect_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, StreamErrorExpectErr<E>> {
-		match self.get_peeker().get_current() {
+		match self.get_peeker().get() {
 			Some(item) => match pred(item) {
 				Ok(_) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
 				Err(err) => Err(StreamErrorExpectErr::PredicateError(err)),
@@ -82,23 +80,23 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	}
 }
 
-impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-	I: Iterator,
-	RF: Fn(&I::Item) -> &B,
-	MF: Fn(I::Item) -> B,
-	B: Display + PartialEq,
-{
-	pub fn expect_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
-		self.expect_err(|item| if item == expected {
-			Ok(())
-		} else {
-			Err(item)
-		}).map_err(|err| match err {
-			StreamErrorExpectErr::StreamExhausted => StreamErrorExpectErrEq::StreamExhausted,
-			StreamErrorExpectErr::PredicateError(found) => StreamErrorExpectErrEq::ExpectedItem { expected, found },
-		})
-	}
-}
+// impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+// 	I: Iterator,
+// 	RF: Fn(&I::Item) -> &B,
+// 	MF: Fn(I::Item) -> B,
+// 	B: Display + PartialEq,
+// {
+// 	pub fn expect_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
+// 		self.expect_err(|item| if item == expected {
+// 			Ok(())
+// 		} else {
+// 			Err(item)
+// 		}).map_err(|err| match err {
+// 			StreamErrorExpectErr::StreamExhausted => StreamErrorExpectErrEq::StreamExhausted,
+// 			StreamErrorExpectErr::PredicateError(found) => StreamErrorExpectErrEq::ExpectedItem { expected, found },
+// 		})
+// 	}
+// }
 
 impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	I: Iterator + Clone,
@@ -123,15 +121,15 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 		result
 	}
 
-	pub fn try_rule_hs<T, SE, HE>(&mut self, rule: impl FnOnce(&mut Self) -> Result<Result<T, SE>, HE>) -> Result<Result<T, SE>, HE> {
+	pub fn try_rule_sh<T, E>(&mut self, rule: impl FnOnce(&mut Self) -> ResultSH<T, E>) -> ResultSH<T, E> {
 		let mut hypothetical = self.dup();
 
-		let result = rule(hypothetical.get())?;
-		if result.is_ok() {
+		let result = rule(hypothetical.get());
+		if matches!(result, Ok(Ok(_)) | Err(_)) {
 			hypothetical.nip();
 		}
 
-		Ok(result)
+		result
 	}
 }
 

@@ -9,7 +9,7 @@ pub struct Token {
 }
 
 impl Token {
-	pub fn with_meta<'a>(&'a self, document: &'a source::Document) -> TokenMeta<'a> {
+	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::Document) -> TokenMeta<'a, 'b> {
 		TokenMeta {
 			token: self,
 			document,

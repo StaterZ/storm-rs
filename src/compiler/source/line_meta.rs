@@ -1,5 +1,5 @@
 use std::{ptr, fmt::{Display, Debug}};
-use super::{Document, Pos, Range, RangeMeta, Line};
+use super::{Document, Range, RangeMeta, Line};
 
 #[derive(Clone)]
 pub struct LineMeta<'a> {
@@ -16,7 +16,7 @@ impl<'a> LineMeta<'a> {
 		let end = if next_line < lines_begin_indices.len() {
 			lines_begin_indices[next_line]
 		} else {
-			Pos::new(self.document.chars().len())
+			self.document.get_eof().pos
 		};
 		
 		Range{

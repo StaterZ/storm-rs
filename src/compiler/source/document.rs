@@ -2,7 +2,7 @@ use std::ptr;
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
-use super::{Pos, PosMeta, Range, CharsLen};
+use super::{Pos, PosMeta, Range};
 
 #[derive(Debug)]
 pub struct Document {
@@ -60,8 +60,8 @@ impl Document {
 		self.char_to_byte[pos.pos.char_index()]
 	}
 
-	pub fn chars(&self) -> CharsLen {
-		CharsLen::new(self.content.chars(), self.char_to_byte.len())
+	pub fn chars_len(&self) -> usize {
+		self.char_to_byte.len()
 	}
 
 	pub fn get_line_index(&self, pos: &PosMeta) -> usize {
@@ -84,7 +84,7 @@ impl Document {
 	}
 
 	pub fn get_eof(&self) -> PosMeta {
-		Pos::new(self.chars().len()).to_meta(&self)
+		Pos::new(self.chars_len()).to_meta(&self)
 	}
 
 	fn assert_safe_pos<'a>(&'a self, pos: &PosMeta<'a>) {

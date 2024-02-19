@@ -40,8 +40,8 @@ tag_enum!(
 		Let,
 		If,
 		Else,
-		Give,
 		Return,
+		Give,
 
 		Ipt,
 		Yield,

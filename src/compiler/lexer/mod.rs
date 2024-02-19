@@ -1,13 +1,15 @@
 pub use token::Token;
 pub use token_meta::TokenMeta;
 pub use token_kind::{TokenKind, TokenKindTag};
-
-use std::collections::HashMap;
+use unicode_width::UnicodeWidthStr;
+use std::{collections::HashMap, fmt::Display};
 use lazy_static::lazy_static;
+use color_print::cformat;
 
 use super::{
 	stream::{Stream, StreamExt},
 	source,
+	ResultSH,
 };
 
 mod token;
@@ -23,13 +25,118 @@ type CharStream<
 	MF/*: CharStreamMF*/,
 > = Stream<I, RF, MF, char>;
 
-fn parse_radix(stream: &mut CharStream<
+pub enum LexerErrorKind {
+	StreamExhausted,
+
+	RadixSymbolExpectedLeadingZero,
+	InvalidRadixSymbol(char),
+
+	DigitsHaveLeadingUnderscore,
+	InvalidDigitForRadix {
+		digit_symbol: char,
+		digit_value: u64,
+		radix: u64,
+	},
+	IntHasNoDigits,
+	IntHasTrailingUnderscore,
+	IntHasNoMatch,
+
+	IntRadixTooLarge(u64),
+	IntFoundRadixInDigits,
+
+	MultilineCommentDelimiterNotClosed,
+	StringDelimiterNotClosed,
+
+	NoTokenMatchingStream,
+}
+
+pub struct LexerError {
+	kind: LexerErrorKind,
+	next_chars_window: Vec<char>,
+	did_next_chars_window_exhaust_stream: bool,
+	tokens: Vec<Token>,
+}
+
+impl LexerError {
+	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::Document) -> LexerErrorMeta<'a, 'b> {
+		LexerErrorMeta {
+			error: self,
+			document,
+		}
+	}
+}
+
+pub struct LexerErrorMeta<'a, 'b> {
+	error: &'a LexerError,
+	document: &'b source::Document,
+}
+
+impl Display for LexerErrorKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			LexerErrorKind::StreamExhausted => write!(f, "Stream was exhausted"),
+			
+			LexerErrorKind::RadixSymbolExpectedLeadingZero => write!(f, "Radix expected a leading zero"),
+			LexerErrorKind::InvalidRadixSymbol(c) => write!(f, "Invalid radix symbol '{}'", c),
+			
+			LexerErrorKind::DigitsHaveLeadingUnderscore => write!(f, "Int literal has leading underscore, this is not allowed"),
+			LexerErrorKind::InvalidDigitForRadix { digit_symbol, digit_value, radix } => write!(f, "Invalid digit \'{}\'({}) for radix {}", digit_symbol, digit_value, radix),
+			LexerErrorKind::IntHasNoDigits => write!(f, "Int literal needs at least one digit"),
+			LexerErrorKind::IntHasTrailingUnderscore => write!(f, "Trailing underscore, this is not allowed"),
+			LexerErrorKind::IntHasNoMatch => write!(f, "Int has no match"),
+			
+			LexerErrorKind::IntRadixTooLarge(radix) => write!(f, "The radix '{}' is larger than 36. The allowed symbols [0-9a-z] can't encode a radix this large", radix),
+			LexerErrorKind::IntFoundRadixInDigits => write!(f, "Found unexpected radix in digits"),
+			
+			LexerErrorKind::MultilineCommentDelimiterNotClosed => write!(f, "Multi-line comment not closed"),
+			LexerErrorKind::StringDelimiterNotClosed => write!(f, "String literal not closed"),
+			
+			LexerErrorKind::NoTokenMatchingStream => write!(f, "No token matching stream"),
+		}
+	}
+}
+
+impl<'a, 'b> Display for LexerErrorMeta<'a, 'b> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}\n", self.error.kind)?;
+
+		let align_inset = |nums: &mut String, chars: &String| {
+			let inset = chars.width();
+			*nums = format!("{:<inset$}", nums);
+		};
+
+		let mut chars = String::new();
+		let mut nums = String::new();
+		for (i, c) in self.error.next_chars_window.iter().enumerate() {
+			align_inset(&mut nums, &chars);
+			chars.push_str(format!("{:?} ", c).as_str());
+			nums.push_str(format!(" {}", i).as_str());
+		}
+		if self.error.did_next_chars_window_exhaust_stream {
+			chars.push_str(cformat!(" <red>EOF</>").as_str());
+		}
+		write!(f, "{}", cformat!(
+		"<yellow>next chars:</> {}\n\
+		 <yellow>           </> <cyan>{}</>\n\
+		 <yellow>tokens so far:</>\n", chars, nums))?;
+		for token in self.error.tokens.iter() {
+			writeln!(f, "{}", token.with_meta(self.document))?;
+		}
+
+		Ok(())
+	}
+}
+
+type LexerResult<T> = ResultSH<T, LexerErrorKind>;
+
+
+fn parse_radix_symbol(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<Result<u64, ()>, String> {
+>) -> LexerResult<u64> {
 	if stream.expect_eq(&'0').is_none() {
-		return Ok(Err(()));
+		return Ok(Err(LexerErrorKind::RadixSymbolExpectedLeadingZero));
 	}
 
 	lazy_static!{
@@ -42,38 +149,48 @@ fn parse_radix(stream: &mut CharStream<
 		].into_iter().collect();
 	}
 
-	if let Some(c) = stream.get_peeker().get_current() {
-		match RADICES.get(&c) {
+	match stream.get_peeker().get() {
+		Some(c) => match RADICES.get(&c) {
 			Some(&radix) => {
 				stream.next();
-				return Ok(Ok(radix));
+				Ok(Ok(radix))
 			},
 			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
-				return Err(format!("Invalid radix symbol \'{}\'", c));
+				Err(LexerErrorKind::InvalidRadixSymbol(*c))
+			} else {
+				todo!();
+				//Ok(Err(LexerErrorKind::???))
 			}
-		}
+		},
+		None => Ok(Err(LexerErrorKind::StreamExhausted)),
 	}
 
-	Ok(Err(()))
 }
 
 fn parse_int(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<Result<u64, ()>, String> {
-	let radix = stream.try_rule_hs(parse_radix)?;
-	let mut digits = parse_digits(stream, radix.unwrap_or(10), radix.is_ok(), true)?;
+>) -> LexerResult<u64> {
+	let radix = stream.try_rule_sh(parse_radix_symbol)?;
+	let has_radix_symbol = radix.is_ok();
+	let mut digits = parse_digits(
+		stream,
+		radix.unwrap_or(10),
+		has_radix_symbol,
+		true
+	)?;
 
-	if radix.is_err() {
+	if !has_radix_symbol {
 		if let Ok(radix) = digits {
 			if stream.expect_eq(&'r').is_some() {
 				if radix > 36 {
-					return Err(format!("The radix '{}' is larger than 36. The allowed symbols [0-9a-z] can't encode a radix this large", radix));
+					return Err(LexerErrorKind::IntRadixTooLarge(radix));
 				}
+
 				digits = parse_digits(stream, radix, true, false)?;
 				if digits.is_err() {
-					return Err("found radix".to_string());
+					return Err(LexerErrorKind::IntFoundRadixInDigits);
 				}
 			}
 		}
@@ -82,18 +199,23 @@ fn parse_int(stream: &mut CharStream<
 	Ok(digits)
 }
 
-fn parse_digits(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->, radix: u64, mut is_match: bool, allow_radix_end: bool) -> Result<Result<u64, ()>, String> {
+fn parse_digits(
+	stream: &mut CharStream<
+		impl CharStreamIter + Clone,
+		impl CharStreamRF + Clone,
+		impl CharStreamMF + Clone,
+	>,
+	radix: u64,
+	mut is_match: bool,
+	allow_radix_end: bool,
+) -> LexerResult<u64> {
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(&c) = stream.get_peeker().get_current() {
+	while let Some(&c) = stream.get_peeker().get() {
 		if c == '_' {
 			if i == 0 {
-				return Err("Leading underscore, this is not allowed".to_string());
+				return Err(LexerErrorKind::DigitsHaveLeadingUnderscore);
 			}
 
 			has_trailing_underscore = true;
@@ -107,13 +229,17 @@ fn parse_digits(stream: &mut CharStream<
 							break;
 						}
 
-						let result = if is_match {
-							Err(format!("Invalid digit \'{}\'({}) for radix {}", c, digit_value, radix))
-						} else {
-							Ok(Err(()))
+						let error = LexerErrorKind::InvalidDigitForRadix {
+							digit_symbol: c,
+							digit_value,
+							radix
 						};
 
-						return result;
+						return if is_match {
+							Err(error)
+						} else {
+							Ok(Err(error))
+						};
 					}
 		
 					value *= radix;
@@ -132,15 +258,15 @@ fn parse_digits(stream: &mut CharStream<
 	
 	
 	if !is_match {
-		return Ok(Err(()));
+		return Ok(Err(LexerErrorKind::IntHasNoMatch));
 	}
 	
 	if i == 0 {
-		return Err("Literal needs at least one digit".to_string());
+		return Err(LexerErrorKind::IntHasNoDigits);
 	}
 
 	if has_trailing_underscore {
-		return Err("Trailing underscore, this is not allowed".to_string());
+		return Err(LexerErrorKind::IntHasTrailingUnderscore);
 	}
 
 	Ok(Ok(value))
@@ -150,7 +276,7 @@ fn next_token_kind(stream: &mut CharStream<
 	impl CharStreamIter + Clone,
 	impl CharStreamRF + Clone,
 	impl CharStreamMF + Clone,
->) -> Result<TokenKind, String> {
+>) -> Result<TokenKind, LexerErrorKind> {
 	{
 		fn is_space(c: &char) -> bool { matches!(*c, ' ' | '\t') }
 		if stream.expect(is_space).is_some() {
@@ -219,7 +345,7 @@ fn next_token_kind(stream: &mut CharStream<
 						'*' if stream.expect_eq(&'/').is_some() => indent -= 1,
 						_ => {},
 					},
-					None => return Err("Multi-line comment not closed".to_string()),
+					None => return Err(LexerErrorKind::MultilineCommentDelimiterNotClosed),
 				}
 			}
 			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
@@ -254,7 +380,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Equals);
 	}
 
-	if let Ok(value) = stream.try_rule_hs(parse_int)? {
+	if let Ok(value) = stream.try_rule_sh(parse_int)? {
 		return Ok(TokenKind::IntLit(value));
 	}
 
@@ -266,7 +392,7 @@ fn next_token_kind(stream: &mut CharStream<
 				stream.expect_eq(&'\\');
 				match stream.next() {
 					Some(c) => value.push(c),
-					None => return Err("String literal not closed".to_string()),
+					None => return Err(LexerErrorKind::StringDelimiterNotClosed),
 				}
 			}
 
@@ -290,6 +416,9 @@ fn next_token_kind(stream: &mut CharStream<
 				("if", TokenKindTag::If),
 				("else", TokenKindTag::Else),
 
+				("ret", TokenKindTag::Return),
+				("give", TokenKindTag::Give),
+
 				("ipt", TokenKindTag::Ipt),
 				("yield", TokenKindTag::Yield),
 			].into_iter().collect();
@@ -302,34 +431,36 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Identifier(value));
 	}
 
-	if stream.get_peeker().get_current().is_none() {
+	if stream.get_peeker().get().is_none() {
 		return Ok(TokenKind::Eof);
 	}
 
-	return Err(format!("No token factory matching stream '{}'", match stream.get_peeker().get_current() {
-		Some(c) => c.to_string(),
-		None => "EOF".to_string(),
-	}));
+	return Err(LexerErrorKind::NoTokenMatchingStream);
 }
 
-pub fn lex(document: &source::Document) -> Result<Vec<Token>, String> {
-	let mut stream = document.chars().enumerate().stream(
-		|(_, c)| c,
-		|(_, c)| c,
-	);
+pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
+	let mut stream = document
+		.get_content()
+		.chars()
+		.enumerate()
+		.stream(
+			|(_, c)| c,
+			|(_, c)| c,
+		);
 	
 	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut Stream<
-		impl ExactSizeIterator<Item = (usize, char)>,
+		impl Iterator<Item = (usize, char)>,
 		impl Fn(&(usize, char)) -> &char,
 		impl Fn((usize, char)) -> char,
 		char,
 	>) -> source::PosMeta<'a> {
 		stream
 			.get_peeker()
-			.get_current_raw()
+			.get_raw()
 			.map(|&(i, _)| source::Pos::new(i))
-			.unwrap_or_else(|| source::Pos::new(document.chars().len()))
-			.to_meta(document)
+			.map_or_else(
+				|| document.get_eof(),
+				|p| p.to_meta(document))
 	}
 		
 	let mut tokens = Vec::new();
@@ -341,7 +472,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, String> {
 
 				let end = get_current_source_pos(document, &mut stream);
 				tokens.push(Token{
-					kind: kind,
+					kind,
 					range: source::Range::new(begin, end),
 				});
 
@@ -351,7 +482,17 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, String> {
 
 				begin = end;
 			},
-			Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(document, &mut stream).to_range()))),
+			Err(err) => {
+				let char_window_size = 10;
+
+				return Err(LexerError {
+					kind: err,
+					next_chars_window: stream.by_ref().take(char_window_size).collect(),
+					did_next_chars_window_exhaust_stream: stream.get_peeker().get().is_none(),
+					tokens,
+				})
+			},
+			//Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(document, &mut stream).to_range()))),
 		}
 	}
 }

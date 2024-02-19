@@ -10,12 +10,12 @@ enum Symbol {
 
 impl Display for Symbol {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", match self {
-			Symbol::Fork => "├→",
-			Symbol::Line => "│ ",
-			Symbol::Turn => "╰→",
-			Symbol::None => "· ",
-		})
+		match self {
+			Symbol::Fork => write!(f, "├→"),
+			Symbol::Line => write!(f, "│ "),
+			Symbol::Turn => write!(f, "╰→"),
+			Symbol::None => write!(f, "· "),
+		}
 	}
 }
 

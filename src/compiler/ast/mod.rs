@@ -1,4 +1,7 @@
-pub use rule_error::RuleError;
+mod nodes;
+mod rule_error;
+
+use color_print::cprintln;
 pub use nodes::{
 	NodeKind,
 	Node,
@@ -9,19 +12,17 @@ pub use nodes::{
 	MathBinOpKind,
 	MathBinOpVariant,
 	BinOpKind,
-	CmpBinOpKind
+	CmpBinOpKind,
 };
+
+pub use rule_error::{RuleErrorKind, RuleError, RuleResult};
+use crate::shed_errors;
 
 use super::{
 	lexer::{Token, TokenKind},
-	stream::{Stream, StreamErrorExpectErr, StreamExt}
+	stream::{Stream, StreamErrorExpectErr, StreamExt},
+	ResultSH,
 };
-
-use crate::shed_errors;
-use rule_error::RuleResult;
-
-mod nodes;
-mod rule_error;
 
 trait TokStreamIter<'i> = Iterator<Item = &'i Token>;
 trait TokStreamRF<'i> = for<'a> Fn(&'a &'i Token) -> &'a &'i Token;
@@ -44,20 +45,32 @@ fn expect_eq_err<'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i>,
 	impl TokStreamRF<'i>,
 	impl TokStreamMF<'i>,
->, expected: TokenKind) -> Result<&'i Token, RuleError> {
+>, expected: TokenKind) -> Result<&'i Token, RuleErrorKind> {
 	stream.expect_err(|t| if t.kind == expected {
 		Ok(())
 	} else {
 		Err((&t.kind).into())
 	}).map_err(|err| match err {
-		StreamErrorExpectErr::StreamExhausted => RuleError::StreamExhausted,
-		StreamErrorExpectErr::PredicateError(found) => RuleError::ExpectedToken {
+		StreamErrorExpectErr::StreamExhausted => RuleErrorKind::StreamExhausted,
+		StreamErrorExpectErr::PredicateError(found) => RuleErrorKind::ExpectedToken {
 			expected: (&expected).into(),
 			found,
 		},
 	})
 }
 
+fn error<'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i>,
+	impl TokStreamRF<'i>,
+	impl TokStreamMF<'i>,
+>) -> RuleErrorKind {
+	match stream.get_peeker().get() {
+		Some(token) => RuleErrorKind::UnexpectedToken((&token.kind).into()),
+		None => RuleErrorKind::StreamExhausted,
+	}
+}
+
+static mut G_RULE_INDENT: usize = 0;
 fn try_rule<'i, I, RF, MF>(
 	rule_name: &'static str,
 	stream: &mut TokStream<'i, I, RF, MF>,
@@ -68,8 +81,20 @@ where
 	RF: TokStreamRF<'i> + Clone,
 	MF: TokStreamMF<'i> + Clone,
 {
-	println!("Rule '{}'", rule_name);
-	stream.try_rule_hs(rule)
+	unsafe {
+		let x = stream.get_peeker().get();
+		println!("{}Rule >>>'{}'   {:?}", "| ".repeat(G_RULE_INDENT), rule_name, x);
+		G_RULE_INDENT += 1;
+		let result = stream.try_rule_sh(rule);
+		G_RULE_INDENT -= 1;
+		match result {
+			Ok(Ok(_)) => cprintln!("<green>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
+			Ok(Err(_)) => cprintln!("<yellow>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
+			Err(_) => cprintln!("<red>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
+		};
+		
+		result
+	}
 }
 
 fn discard_space<'i>(stream: &mut TokStream<
@@ -86,7 +111,7 @@ fn discard_space<'i>(stream: &mut TokStream<
 	)).is_some() { };
 }
 
-pub fn ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
+pub fn parse_ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
 	let mut stream = tokens.iter().stream(
 		|t| t,
 		|t| t,
@@ -94,7 +119,13 @@ pub fn ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
 
 	match try_rule("file", &mut stream, parse_file) {
 		Ok(Ok(file)) => Ok(file),
-		Ok(Err(err)) | Err(err) => Err(err),
+		Ok(Err(err)) | Err(err) => Err(RuleError {
+			kind: err,
+			source_range: stream
+				.get_peeker()
+				.get()
+				.map(|t| t.range),
+		}),
 	}
 }
 
@@ -116,10 +147,7 @@ fn parse_file<'i>(stream: &mut TokStream<'i,
 			continue;
 		}
 
-		return Ok(Err(match stream.get_peeker().get_current() {
-			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
-			None => RuleError::StreamExhausted,
-		}));
+		return Ok(Err(error(stream)));
 	};
 }
 
@@ -128,8 +156,7 @@ fn parse_stmt<'i>(stream: &mut TokStream<'i,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
 >) -> RuleResult {
-	if let Some(stmt) =
-	       if let Ok(stmt) = try_rule("let", stream, parse_let)? {
+	let stmt = if let Ok(stmt) = try_rule("let", stream, parse_let)? {
 		Some(stmt)
 	} else if let Ok(stmt) = try_rule("assign", stream, parse_assignment)? {
 		Some(stmt)
@@ -139,15 +166,14 @@ fn parse_stmt<'i>(stream: &mut TokStream<'i,
 		Some(stmt)
 	} else {
 		None
-	} {
+	};
+
+	if let Some(stmt) = stmt {
 		discard_space(stream);
 		expect_eq_err(stream, TokenKind::Semicolon)?;
 		Ok(Ok(stmt))
 	} else {
-		Ok(Err(match stream.get_peeker().get_current() {
-			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
-			None => RuleError::StreamExhausted,
-		}))
+		Ok(Err(error(stream)))
 	}
 }
 
@@ -214,10 +240,7 @@ fn parse_block<'i>(stream: &mut TokStream<'i,
 			continue;
 		}
 
-		return Ok(Err(match stream.get_peeker().get_current() {
-			Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
-			None => RuleError::StreamExhausted,
-		}));
+		return Ok(Err(error(stream)));
 	};
 }
 
@@ -247,9 +270,9 @@ fn parse_expr<'i>(stream: &mut TokStream<'i,
 		return Ok(Ok(expr));
 	}
 
-	Ok(Err(match stream.get_peeker().get_current() {
-		Some(token) => RuleError::UnexpectedToken((&token.kind).into()),
-		None => RuleError::StreamExhausted,
+	Ok(Err(match stream.get_peeker().get() {
+		Some(token) => RuleErrorKind::UnexpectedToken((&token.kind).into()),
+		None => RuleErrorKind::StreamExhausted,
 	}))
 }
 
@@ -322,13 +345,13 @@ fn parse_expr_atom<'i>(stream: &mut TokStream<'i,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
 >) -> RuleResult {
-	stream.try_rule_hs(|stream| match stream.next() {
+	stream.try_rule_sh(|stream| match stream.next() {
 		Some(token) => match &token.kind {
 			TokenKind::IntLit(value) => Ok(Ok(Node { kind: NodeKind::IntLit(*value) })),
 			TokenKind::StrLit(value) => Ok(Ok(Node { kind: NodeKind::StrLit(value.clone()) })),
 			TokenKind::Identifier(value) => Ok(Ok(Node { kind: NodeKind::Identifier(value.clone()) })),
-			_ => Ok(Err(RuleError::UnexpectedToken((&token.kind).into()))),
+			_ => Ok(Err(RuleErrorKind::UnexpectedToken((&token.kind).into()))),
 		},
-		None => Ok(Err(RuleError::StreamExhausted)),
+		None => Ok(Err(RuleErrorKind::StreamExhausted)),
 	})
 }

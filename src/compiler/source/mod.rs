@@ -1,5 +1,4 @@
 pub use document::Document;
-pub use chars_len::CharsLen;
 
 pub use pos::Pos;
 pub use pos_meta::PosMeta;
@@ -15,7 +14,6 @@ pub use column::Column;
 pub mod error_gen;
 
 mod document;
-mod chars_len;
 
 mod pos;
 mod pos_meta;

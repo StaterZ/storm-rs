@@ -53,7 +53,8 @@ fn compile() {
 		println!();
 		match result.lex.unwrap() {
 			Err(err) => {
-				cprintln!("<red>Lexer Failed:</>\n{}", err);
+				let err_meta = err.with_meta(&src_doc);
+				cprintln!("<red>Lexer Failed:</>\n{}", err_meta);
 				return;
 			},
 			Ok(tokens) => {
@@ -67,7 +68,8 @@ fn compile() {
 		println!();
 		match result.ast.unwrap() {
 			Err(err) => {
-				cprintln!("<red>AST Failed:</>\n{:?}", err);
+				let err_meta = err.to_meta(&src_doc);
+				cprintln!("<red>AST Failed:</>\n{}", err_meta);
 				return;
 			},
 			Ok(root) => {
