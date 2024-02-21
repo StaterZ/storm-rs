@@ -1,5 +1,11 @@
 use std::{ptr, fmt::{Display, Debug}};
-use super::{Document, Range, RangeMeta, Line};
+
+use super::{
+	Document,
+	Range,
+	RangeMeta,
+	Line,
+};
 
 #[derive(Clone)]
 pub struct LineMeta<'a> {

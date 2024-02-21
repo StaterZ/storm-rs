@@ -1,6 +1,10 @@
 use std::ops::{Add, Sub};
 
-use super::{Document, PosMeta, Range};
+use super::{
+	Document,
+	PosMeta,
+	Range,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Pos(usize);

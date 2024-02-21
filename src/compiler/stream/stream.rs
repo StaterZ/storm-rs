@@ -1,4 +1,5 @@
 use std::iter::{FusedIterator, Peekable};
+
 use super::{
 	Peeker,
 	StreamErrorExpectErr,

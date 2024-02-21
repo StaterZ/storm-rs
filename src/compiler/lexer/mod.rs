@@ -1,10 +1,16 @@
+mod token;
+mod token_meta;
+mod token_kind;
+
+use std::{collections::HashMap, fmt::Display};
+
+use lazy_static::lazy_static;
+use color_print::cformat;
+use unicode_width::UnicodeWidthStr;
+
 pub use token::Token;
 pub use token_meta::TokenMeta;
 pub use token_kind::{TokenKind, TokenKindTag};
-use unicode_width::UnicodeWidthStr;
-use std::{collections::HashMap, fmt::Display};
-use lazy_static::lazy_static;
-use color_print::cformat;
 
 use super::{
 	stream::{Stream, StreamExt},
@@ -12,9 +18,6 @@ use super::{
 	ResultSH,
 };
 
-mod token;
-mod token_meta;
-mod token_kind;
 
 trait CharStreamIter = Iterator<Item = (usize, char)>;
 trait CharStreamRF = for<'a> Fn(&'a (usize, char)) -> &'a char;
@@ -463,7 +466,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 				|p| p.to_meta(document))
 	}
 		
-	let mut tokens = Vec::new();
+	let mut tokens = vec![];
 	let mut begin = get_current_source_pos(document, &mut stream);
 	loop {
 		match next_token_kind(&mut stream) {

@@ -1,5 +1,10 @@
 use std::fmt::Display;
 
+use super::{
+	ColumnMeta,
+	Document,
+};
+
 #[derive(Debug, Clone)]
 pub struct Column(usize);
 
@@ -10,6 +15,13 @@ impl Column {
 
 	pub fn index(&self) -> usize {
 		self.0
+	}
+
+	pub fn to_meta(self, document: &Document) -> ColumnMeta {
+		ColumnMeta {
+			column: self,
+			document,
+		}
 	}
 }
 

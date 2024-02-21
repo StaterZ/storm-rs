@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::compiler::source;
+use super::super::source;
 
 use super::Token;
 

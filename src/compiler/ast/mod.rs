@@ -1,7 +1,7 @@
 mod nodes;
 mod rule_error;
+mod debug;
 
-use color_print::cprintln;
 pub use nodes::{
 	NodeKind,
 	Node,
@@ -16,7 +16,7 @@ pub use nodes::{
 };
 
 pub use rule_error::{RuleErrorKind, RuleError, RuleResult};
-use crate::shed_errors;
+use crate::{shed_errors, tree_printer};
 
 use super::{
 	lexer::{Token, TokenKind},
@@ -70,7 +70,7 @@ fn error<'i>(stream: &mut TokStream<'i,
 	}
 }
 
-static mut G_RULE_INDENT: usize = 0;
+static mut G_RULE_TREE: Vec<debug::RuleTree> = vec![];
 fn try_rule<'i, I, RF, MF>(
 	rule_name: &'static str,
 	stream: &mut TokStream<'i, I, RF, MF>,
@@ -81,20 +81,23 @@ where
 	RF: TokStreamRF<'i> + Clone,
 	MF: TokStreamMF<'i> + Clone,
 {
-	unsafe {
-		let x = stream.get_peeker().get();
-		println!("{}Rule >>>'{}'   {:?}", "| ".repeat(G_RULE_INDENT), rule_name, x);
-		G_RULE_INDENT += 1;
-		let result = stream.try_rule_sh(rule);
-		G_RULE_INDENT -= 1;
-		match result {
-			Ok(Ok(_)) => cprintln!("<green>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
-			Ok(Err(_)) => cprintln!("<yellow>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
-			Err(_) => cprintln!("<red>{}Rule <<<<<<'{}'", "| ".repeat(G_RULE_INDENT), rule_name),
-		};
-		
-		result
-	}
+	use self::debug::RuleTree;
+	
+	//let stream_state = stream.get_peeker().get();
+
+	let rule_tree_parent_children = std::mem::replace(unsafe { &mut G_RULE_TREE }, vec![]);
+	let result = stream.try_rule_sh(rule);
+	let children = std::mem::replace(unsafe { &mut G_RULE_TREE }, rule_tree_parent_children);
+
+	let rule_tree = RuleTree {
+		rule_name,
+		result_kind: (&result).into(),
+		children,
+	};
+	
+	unsafe { G_RULE_TREE.push(rule_tree) };
+
+	result
 }
 
 fn discard_space<'i>(stream: &mut TokStream<
@@ -117,7 +120,7 @@ pub fn parse_ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
 		|t| t,
 	);
 
-	match try_rule("file", &mut stream, parse_file) {
+	let result = match try_rule("file", &mut stream, parse_file) {
 		Ok(Ok(file)) => Ok(file),
 		Ok(Err(err)) | Err(err) => Err(RuleError {
 			kind: err,
@@ -126,7 +129,10 @@ pub fn parse_ast(tokens: &Vec<Token>) -> Result<Node, RuleError> {
 				.get()
 				.map(|t| t.range),
 		}),
-	}
+	};
+
+	tree_printer::print_tree("", unsafe { &G_RULE_TREE[0] });
+	result
 }
 
 fn parse_file<'i>(stream: &mut TokStream<'i,
@@ -158,11 +164,11 @@ fn parse_stmt<'i>(stream: &mut TokStream<'i,
 >) -> RuleResult {
 	let stmt = if let Ok(stmt) = try_rule("let", stream, parse_let)? {
 		Some(stmt)
+	} else if let Ok(stmt) = try_rule("give", stream, parse_give)? {
+		Some(stmt)
 	} else if let Ok(stmt) = try_rule("assign", stream, parse_assignment)? {
 		Some(stmt)
 	} else if let Ok(stmt) = try_rule("expr", stream, parse_expr)? {
-		Some(stmt)
-	} else if let Ok(stmt) = try_rule("give", stream, parse_give)? {
 		Some(stmt)
 	} else {
 		None

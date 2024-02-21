@@ -4,9 +4,13 @@ use strum::AsRefStr;
 use color_print::cformat;
 use szu::ternary;
 
-use crate::tree_printer::TreeDisplay;
-
-use super::{Block, Give, Let, BinOp};
+use super::{
+	super::tree_printer::TreeDisplay,
+	Block,
+	Give,
+	Let,
+	BinOp,
+};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum NodeKind {

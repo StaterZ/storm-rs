@@ -3,10 +3,10 @@ pub enum StreamErrorExpectErr<T> {
 	PredicateError(T),
 }
 
-pub enum StreamErrorExpectErrEq<T> {
+/*pub enum StreamErrorExpectErrEq<T> {
 	StreamExhausted,
 	ExpectedItem {
 		expected: T,
 		found: T,
 	},
-}
+}*/

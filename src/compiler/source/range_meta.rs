@@ -1,6 +1,10 @@
 use std::fmt::{Display, Debug};
 
-use super::{Document, Range, PosMeta};
+use super::{
+	Document,
+	Range,
+	PosMeta,
+};
 
 #[derive(Clone, Copy)]
 pub struct RangeMeta<'a> {

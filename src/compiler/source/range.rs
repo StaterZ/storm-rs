@@ -2,7 +2,12 @@ use std::ptr;
 
 use more_asserts::debug_assert_le;
 
-use super::{Document, Pos, PosMeta, RangeMeta};
+use super::{
+	Document,
+	Pos,
+	PosMeta,
+	RangeMeta,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Range {

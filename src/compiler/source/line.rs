@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use super::{Document, LineMeta};
+use super::{
+	Document,
+	LineMeta,
+};
 
 #[derive(Debug, Clone)]
 pub struct Line(usize);

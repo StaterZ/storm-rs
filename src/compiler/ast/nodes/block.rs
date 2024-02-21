@@ -7,6 +7,6 @@ pub struct Block {
 
 impl Block {
 	pub fn new() -> Self {
-		Self { stmts: vec!() }
+		Self { stmts: vec![] }
 	}
 }

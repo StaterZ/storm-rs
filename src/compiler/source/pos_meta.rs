@@ -6,7 +6,14 @@ use std::{
 
 use more_asserts::debug_assert_le;
 
-use super::{Pos, Document, Line, Column, LineMeta, RangeMeta};
+use super::{
+	Pos,
+	Document,
+	Line,
+	Column,
+	LineMeta,
+	RangeMeta,
+};
 
 #[derive(Clone, Copy)]
 pub struct PosMeta<'a> {

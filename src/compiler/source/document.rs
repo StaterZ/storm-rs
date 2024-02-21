@@ -1,8 +1,13 @@
 use std::ptr;
+
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
-use super::{Pos, PosMeta, Range};
+use super::{
+	Pos,
+	PosMeta,
+	Range,
+};
 
 #[derive(Debug)]
 pub struct Document {

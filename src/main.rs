@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 #![feature(trait_alias)]
 
-use clap::Parser;
-use color_print::cprintln;
-use owo_colors::OwoColorize;
-use std::path::{Path, PathBuf};
-use compiler::source;
-
 mod compiler;
 mod tree_printer;
+
+use std::path::{Path, PathBuf};
+
+use clap::Parser;
+
+use compiler::source;
 
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
@@ -37,69 +37,26 @@ fn compile() {
 		return
 	};
 	
-	if let Ok(src_in) = std::fs::read_to_string(path.as_path()) {
-		let src_doc = source::Document::new(
-			path
-				.into_os_string()
-				.to_string_lossy()
-				.to_string(),
-			src_in
-		);
-		println!("=== Source ===");
-		println!("{:?}", src_doc.get_content());
-		
-		let result = compiler::compile(&src_doc);
-		
-		println!();
-		match result.lex.unwrap() {
-			Err(err) => {
-				let err_meta = err.with_meta(&src_doc);
-				cprintln!("<red>Lexer Failed:</>\n{}", err_meta);
-				return;
-			},
-			Ok(tokens) => {
-				println!("=== Tokens ===");
-				for token in tokens.iter() {
-					println!("{}", token.with_meta(&src_doc));
-				}
-			}
-		}
-		
-		println!();
-		match result.ast.unwrap() {
-			Err(err) => {
-				let err_meta = err.to_meta(&src_doc);
-				cprintln!("<red>AST Failed:</>\n{}", err_meta);
-				return;
-			},
-			Ok(root) => {
-				println!("=== AST ===");
-				tree_printer::print_tree("Root", &root);
-			}
-		}
-		
-		println!();
-		match result.sat.unwrap() {
-			Err(err) => {
-				cprintln!("<red>SAT Failed:</>\n{:?}", err);
-				return;
-			},
-			Ok(root) => {
-				println!("=== SAT ===");
-				println!("\t{}", root);
-			}
-		}
-		
-		println!();
-		match result.gen.unwrap() {
-			Err(err) => {
-				cprintln!("<red>GEN Failed:</>\n{}", err.on_red());
-				return;
-			},
-			Ok(output) => {
-				println!("=== GEN ===");
-				println!("\t{}", output);
-			}
-		}
-	}
+	let Ok(src_in) = std::fs::read_to_string(&path) else {
+		return;
+	};
+
+	let src_doc = source::Document::new(
+		path
+			.into_os_string()
+			.to_string_lossy()
+			.to_string(),
+		src_in
+	);
+
+	let x = false;
+	let flags = compiler::Flags {
+		show_source: x,
+		show_tokens: x,
+		show_ast: x,
+		show_sat: x,
+		show_output: x,
+	};
+
+	let _ = compiler::compile(&src_doc, flags);
 }

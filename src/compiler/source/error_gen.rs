@@ -1,6 +1,9 @@
 use color_print::cformat;
 
-use super::{RangeMeta, Line};
+use super::{
+	RangeMeta,
+	Line,
+};
 
 pub fn generate_error_line(range: RangeMeta) -> String {
 	let range_str = format!("[{}]", range);
