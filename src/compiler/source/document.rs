@@ -4,9 +4,7 @@ use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
 use super::{
-	Pos,
-	PosMeta,
-	Range,
+	Line, LineMeta, Pos, PosMeta
 };
 
 #[derive(Debug)]
@@ -55,45 +53,53 @@ impl Document {
 		&self.content
 	}
 
-	pub fn get_lines_begin_indices(&self) -> &[Pos] {
-		self.lines_begin_indices.as_slice()
+	pub fn get_num_lines(&self) -> usize {
+		self.lines_begin_indices.len()
 	}
 
-	pub fn get_char_to_byte(&self, pos: &PosMeta) -> usize {
+	pub(super) fn get_line_begin(&self, line: &LineMeta) -> PosMeta {
+		self.assert_safe_line(line);
+
+		self.lines_begin_indices[line.line.index()].to_meta(&self)
+	}
+
+	pub(super) fn get_char_to_byte(&self, pos: &PosMeta) -> usize {
 		self.assert_safe_pos(pos);
 
-		self.char_to_byte[pos.pos.char_index()]
+		let char_index = pos.pos.char_index();
+
+		if char_index == self.char_to_byte.len() { //am i the EOF char?
+			self.char_to_byte[char_index - 1] + 1 //find the EOF byte
+		} else {
+			self.char_to_byte[char_index]
+		}
 	}
 
-	pub fn chars_len(&self) -> usize {
+	pub fn get_num_chars(&self) -> usize {
 		self.char_to_byte.len()
 	}
 
-	pub fn get_line_index(&self, pos: &PosMeta) -> usize {
+	pub(super) fn get_line(&self, pos: &PosMeta) -> LineMeta {
 		self.assert_safe_pos(pos);
 
-		match self.lines_begin_indices.binary_search_by_key(pos, |key| key.to_meta(self)) {
+		let line_index = match self.lines_begin_indices.binary_search_by_key(pos, |key| key.to_meta(self)) {
 			Ok(line_index) => line_index,
-			Err(binary_search_left) => binary_search_left - 1,
-		}
-	}
+			Err(next_line_index) => next_line_index - 1,
+		};
 
-	pub fn get_line(&self, pos: &PosMeta) -> Range {
-		self.assert_safe_pos(pos);
-
-		let line_index = self.get_line_index(pos);
-		Range{
-			begin: self.lines_begin_indices[line_index],
-			end: self.lines_begin_indices[line_index + 1],
-		}
+		Line::new(line_index).to_meta(&self)
 	}
 
 	pub fn get_eof(&self) -> PosMeta {
-		Pos::new(self.chars_len()).to_meta(&self)
+		Pos::new(self.get_num_chars()).to_meta(&self)
 	}
 
 	fn assert_safe_pos<'a>(&'a self, pos: &PosMeta<'a>) {
 		debug_assert!(ptr::eq(pos.document, self));
+	}
+
+	fn assert_safe_line<'a>(&'a self, line: &LineMeta<'a>) {
+		debug_assert!(ptr::eq(line.document, self));
 	}
 }
 

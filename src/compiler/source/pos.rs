@@ -49,7 +49,7 @@ impl Add<usize> for Pos {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
-		Pos::new(self.char_index() + rhs)
+		Self::new(self.char_index() + rhs)
 	}
 }
 
@@ -57,6 +57,6 @@ impl Sub<usize> for Pos {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {
-		Pos::new(self.char_index() - rhs)
+		Self::new(self.char_index() - rhs)
 	}
 }

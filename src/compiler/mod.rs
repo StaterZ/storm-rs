@@ -19,6 +19,7 @@ pub struct Flags {
 	pub show_source: bool,
 	pub show_tokens: bool,
 	pub show_ast: bool,
+	pub show_ast_rule_path: bool,
 	pub show_sat: bool,
 	pub show_output: bool,
 }

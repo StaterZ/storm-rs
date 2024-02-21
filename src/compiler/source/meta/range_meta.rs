@@ -1,8 +1,13 @@
-use std::fmt::{Display, Debug};
+use std::{
+	fmt::{Display, Debug},
+	ptr,
+};
 
 use super::{
-	Document,
-	Range,
+	super::{
+		Document,
+		Range,
+	},
 	PosMeta,
 };
 
@@ -13,6 +18,11 @@ pub struct RangeMeta<'a> {
 }
 
 impl<'a> RangeMeta<'a> {
+	pub fn new(begin: PosMeta<'a>, end: PosMeta<'a>) -> Self {
+		let document = begin.document; //begin.document == end.document is asserted in Range::new, any of them will do
+		Range::new(begin, end).to_meta(&document)
+	}
+
 	pub fn get_begin(&self) -> PosMeta<'a> {
 		self.range.begin.to_meta(self.document)
 	}
@@ -26,7 +36,11 @@ impl<'a> RangeMeta<'a> {
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.document.get_content()[self.range.begin.char_index() .. self.range.end.char_index()]
+		&self.document.get_content()[self.get_begin().byte_index() .. self.get_end().byte_index()]
+	}
+
+	fn assert_safe(&self, other: &Self) {
+		debug_assert!(ptr::eq(self.document, other.document));
 	}
 }
 
@@ -53,6 +67,6 @@ impl<'a> Display for RangeMeta<'a> {
 
 impl<'a> Debug for RangeMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.range.fmt(f)
+		write!(f, "{:?}", self.range)
 	}
 }

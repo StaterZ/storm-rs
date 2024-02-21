@@ -7,10 +7,11 @@ use std::{
 use more_asserts::debug_assert_le;
 
 use super::{
-	Pos,
-	Document,
-	Line,
-	Column,
+	super::{
+		Pos,
+		Document,
+		Column,
+	},
 	LineMeta,
 	RangeMeta,
 };
@@ -27,7 +28,7 @@ impl<'a> PosMeta<'a> {
 	}
 
 	pub fn line_raw(&self) -> LineMeta<'a> {
-		Line::new(self.document.get_line_index(self)).to_meta(self.document)
+		self.document.get_line(self)
 	}
 
 	pub fn column(&self) -> Option<Column> {
@@ -62,50 +63,50 @@ impl<'a> Display for PosMeta<'a> {
 		if self.is_eof() {
 			write!(f, "EOF")
 		} else {
-			write!(f, "{}:{}", self.line().unwrap(), self.column().unwrap())
+			write!(f, "{}:{}", self.line_raw(), self.column_raw())
 		}
 	}
 }
 
 impl<'a> Debug for PosMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.pos.fmt(f)
+		write!(f, "{:?}", self.pos)
 	}
-}
-
-impl<'a> PartialEq for PosMeta<'a> {
-    fn eq(&self, other: &Self) -> bool {
-		self.assert_safe(other);
-        self.pos.char_index() == other.pos.char_index()
-    }
 }
 
 impl<'a> Eq for PosMeta<'a> { }
 
+impl<'a> PartialEq for PosMeta<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		self.assert_safe(other);
+		self.pos.char_index() == other.pos.char_index()
+	}
+}
+
 impl<'a> PartialEq<usize> for PosMeta<'a> {
-    fn eq(&self, other: &usize) -> bool {
-        self.pos == *other
-    }
+	fn eq(&self, other: &usize) -> bool {
+		self.pos.eq(other)
+	}
 }
 
 impl<'a> PartialOrd for PosMeta<'a> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		self.assert_safe(other);
 		self.pos.char_index().partial_cmp(&other.pos.char_index())
-    }
+	}
 }
 
 impl<'a> PartialOrd<usize> for PosMeta<'a> {
-    fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
-        self.pos.partial_cmp(other)
-    }
+	fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
+		self.pos.partial_cmp(other)
+	}
 }
 
 impl<'a> Ord for PosMeta<'a> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.assert_safe(other);
-        self.pos.char_index().cmp(&other.pos.char_index())
-    }
+		self.pos.char_index().cmp(&other.pos.char_index())
+	}
 }
 
 impl<'a> Add<usize> for PosMeta<'a> {

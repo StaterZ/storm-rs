@@ -1,6 +1,8 @@
 use std::fmt::Display;
+
 use color_print::cformat;
-use crate::tree_printer::TreeDisplay;
+
+use super::super::super::tree_printer::TreeDisplay;
 
 impl<T: Display> TreeDisplay for T {
 	fn get_text_line(&self) -> String {
@@ -12,7 +14,8 @@ impl<T: Display> TreeDisplay for T {
 	}
 }
 
-/*impl<T: TreeDisplay> TreeDisplay for Option<T> {
+/*
+impl<T: TreeDisplay> TreeDisplay for Option<T> {
 	fn get_text_line(&self) -> String {
 		self.map_or("none".magenta(), |some| some.get_text_line())
 	}
@@ -30,4 +33,5 @@ impl<T: TreeDisplay> TreeDisplay for Box<T> {
 	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
 		self.deref().get_children()
 	}
-}*/
+}
+*/

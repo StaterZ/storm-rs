@@ -54,6 +54,7 @@ fn compile() {
 		show_source: x,
 		show_tokens: x,
 		show_ast: x,
+		show_ast_rule_path: x,
 		show_sat: x,
 		show_output: x,
 	};

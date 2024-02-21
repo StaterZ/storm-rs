@@ -8,4 +8,3 @@ pub trait TreeDisplay {
 		DynColors::Ansi(AnsiColors::Default)
 	}
 }
- 

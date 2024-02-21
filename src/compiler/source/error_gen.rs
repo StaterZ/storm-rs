@@ -1,9 +1,8 @@
 use color_print::cformat;
+use szu::iter::FindLastMapExt;
+use unicode_width::{self, UnicodeWidthStr};
 
-use super::{
-	RangeMeta,
-	Line,
-};
+use super::RangeMeta;
 
 pub fn generate_error_line(range: RangeMeta) -> String {
 	let range_str = format!("[{}]", range);
@@ -19,29 +18,33 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 
 		match (begin_line, last_line) {
 			(Some(begin_line), Some(last_line)) if begin_line == last_line =>
-				Ok(begin_line.range().get_str()),
-			(None, None) => Ok(Line::new(range.document.get_lines_begin_indices().len() - 1).to_meta(range.document).range().get_str()), //If it's eof, we give the last line
+				Ok(begin_line),
+			(None, None) => Ok(range.document.get_line(&range.document.get_eof())), //If it's eof, we give the last line
 			_ => Err("MUTI-LINE NOT SUPPORTED"),
 		}
 	};
 
-	let (line, mut error_inset, error_length) = match line {
+	let (line_str, mut error_inset, error_length) = match line {
 		Ok(line) => {
-			let line_trunc_length = line
+			let line_str = line.range().get_str();
+			let line_trunc_begin_byte = line_str
 				.char_indices()
 				.find_map(|(i, c)| (!matches!(c, '\t' | ' ')).then_some(i))
 				.unwrap_or(0);
-			let line_trunc_end = line
+			let line_trunc_end_byte = line_str
 				.char_indices()
 				.rev()
-				.find_map(|(i, c)| (!matches!(c, '\r' | '\n')).then_some(i))
-				.unwrap_or(line.bytes().len() - 1);
-			let line = &line[line_trunc_length..=line_trunc_end];
-
-			let error_inset = range.get_begin().column_raw().index() - line_trunc_length;
-			let error_length = range.get_length();
-
-			(line, error_inset, error_length)
+				.find_last_map(|(i, c)| matches!(c, '\r' | '\n').then_some(i))
+				.unwrap_or(line_str.bytes().len());
+			
+			let error_inset = RangeMeta::new(
+				line.range().get_begin() + line_trunc_begin_byte,
+				range.get_begin()
+			).get_str().width();
+			let error_length = range.get_str().width();
+			let line_trunc_str = &line_str[line_trunc_begin_byte..line_trunc_end_byte];
+			
+			(line_trunc_str, error_inset, error_length)
 		},
 		Err(msg) => (msg, 0, msg.len()),
 	};
@@ -57,7 +60,7 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 	cformat!(
 		"<cyan>{empty:>range_str_len$}--></><green>{file_path}</>\n\
 		 <cyan>{empty:>range_str_len$} | </>\n\
-		 <cyan>{range_str            } | </>{line}\n\
+		 <cyan>{range_str            } | </>{line_str}\n\
 		 <cyan>{empty:>range_str_len$} | </><red>{empty:>error_inset$}{error_str}here</>\n\
 		 <cyan>{empty:>range_str_len$} | </>",
 		empty = "",

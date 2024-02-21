@@ -16,7 +16,7 @@ pub struct Range {
 }
 
 impl Range {
-	pub fn new(begin: PosMeta, end: PosMeta) -> Self {
+	pub fn new<'a>(begin: PosMeta<'a>, end: PosMeta<'a>) -> Self {
 		debug_assert!(ptr::eq(begin.document, end.document));
 		debug_assert_le!(begin, end);
 		Self {
