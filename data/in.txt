@@ -9,4 +9,4 @@ let haha;
 	/*let @"ba\"r" = 0x42 + 5 * 2 - 0b1001;
 	//weeeeee*/
 	let x = "❤️n! ░▒▓█";
-}
+};
