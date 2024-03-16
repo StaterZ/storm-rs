@@ -1,15 +1,17 @@
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
 use lazy_static::__Deref;
 use strum::AsRefStr;
 use color_print::cformat;
 use szu::ternary;
 
 use super::{
-	super::tree_printer::TreeDisplay,
+	super::tree_printer::{TreeDisplay, TreeDisplayChild},
 	Block,
 	Give,
 	Let,
 	BinOp,
+	Paren,
 };
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
@@ -17,6 +19,7 @@ pub enum NodeKind {
 	Block(Block),
 	Give(Give),
 	Let(Let),
+	Paren(Paren),
 	BinOp(BinOp),
 	IntLit(u64),
 	StrLit(String),
@@ -35,6 +38,7 @@ impl TreeDisplay for Node {
 			NodeKind::Block(_) => "".to_string(),
 			NodeKind::Give(_) => "".to_string(),
 			NodeKind::Let(_) => "".to_string(),
+			NodeKind::Paren(_) => "".to_string(),
 			NodeKind::BinOp(value) => format!("{}", value.op),
 			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
 			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value),
@@ -43,21 +47,24 @@ impl TreeDisplay for Node {
 		format!("{}{}({})", text, ternary!(text.len() > 0 => " ", ""), self.kind.as_ref())
 	}
 
-	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
+	fn get_children<'s>(&'s self) -> Option<Vec<(String, TreeDisplayChild<'s>)>> {
 		match &self.kind {
 			NodeKind::Block(value) => Some(
 				value.stmts
-				.iter()
-				.enumerate()
-				.map(|(i, stmt)| (format!("[{}]", i), stmt as &dyn TreeDisplay))
-				.collect()
+					.iter()
+					.enumerate()
+					.map(|(i, stmt)| (format!("[{}]", i), TreeDisplayChild::Ref(stmt as &dyn TreeDisplay)))
+					.collect_vec()
 			),
 			NodeKind::Give(value) => Some(vec![
-				("expr".to_string(), value.expr.deref()),
+				("expr".to_string(), TreeDisplayChild::Ref(value.expr.deref() as &dyn TreeDisplay)),
 			]),
 			NodeKind::Let(value) => Some(vec![
-				("lhs".to_string(), value.lhs.deref()),
-				("rhs".to_string(), value.rhs.as_ref().map_or(&"none", |rhs| rhs.deref())),
+				("lhs".to_string(), TreeDisplayChild::Ref(value.lhs.deref() as &dyn TreeDisplay)),
+				("rhs".to_string(), TreeDisplayChild::Ref(value.rhs.as_ref().map_or(&"none" as &dyn TreeDisplay, |rhs| rhs.deref() as &dyn TreeDisplay))),
+			]),
+			NodeKind::Paren(value) => Some(vec![
+				("expr".to_string(), TreeDisplayChild::Ref(value.expr.deref() as &dyn TreeDisplay))
 			]),
 			NodeKind::BinOp(value) => Some(vec![
 				//("kind".to_string(), &value.op.kind.as_ref()),
@@ -65,8 +72,8 @@ impl TreeDisplay for Node {
 					BinOpKind::Math(math) => ternary!(math.allow_wrap => "true", "false"),
 					BinOpKind::Cmp(cmp) => cmp,
 				}),*/
-				("lhs".to_string(), value.lhs.deref()),
-				("rhs".to_string(), value.rhs.deref()),
+				("lhs".to_string(), TreeDisplayChild::Ref(value.lhs.deref() as &dyn TreeDisplay)),
+				("rhs".to_string(), TreeDisplayChild::Ref(value.rhs.deref() as &dyn TreeDisplay)),
 			]),
 			NodeKind::IntLit(_) => None,
 			NodeKind::StrLit(_) => None,

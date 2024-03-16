@@ -1,6 +1,6 @@
 use color_print::cformat;
 use szu::iter::FindLastMapExt;
-use unicode_width::{self, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
 
 use super::RangeMeta;
 

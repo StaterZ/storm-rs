@@ -4,7 +4,11 @@ use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
 use super::{
-	Line, LineMeta, Pos, PosMeta
+	Lines,
+	Line,
+	LineMeta,
+	Pos,
+	PosMeta,
 };
 
 #[derive(Debug)]
@@ -57,6 +61,10 @@ impl Document {
 		self.lines_begin_indices.len()
 	}
 
+	pub fn lines(&self) -> Lines {
+		Lines::new(self)
+	}
+
 	pub(super) fn get_line_begin(&self, line: &LineMeta) -> PosMeta {
 		self.assert_safe_line(line);
 
@@ -105,6 +113,8 @@ impl Document {
 
 #[cfg(test)]
 mod tests {
+	use itertools::Itertools;
+	
 	use super::{Document, Pos};
 
 	#[test]
@@ -114,26 +124,26 @@ mod tests {
 			src_file.lines_begin_indices
 				.iter()
 				.map(|p| p.to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 			vec![0, 5, 10, 12]
 				.iter()
 				.map(|p| Pos::new(*p).to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 		);
 	}
 
 	#[test]
-		fn mac_lines() {
+	fn mac_lines() {
 		let src_file = Document::new("mac_lines".to_string(), "abc\rxyz\r\r123\r".to_string());
 		assert_eq!(
 			src_file.lines_begin_indices
 				.iter()
 				.map(|p| p.to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 			vec![0, 4, 8, 9]
 				.iter()
 				.map(|p| Pos::new(*p).to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 		);
 	}
 
@@ -144,11 +154,11 @@ mod tests {
 			src_file.lines_begin_indices
 				.iter()
 				.map(|p| p.to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 			vec![0, 4, 8, 9]
 				.iter()
 				.map(|p| Pos::new(*p).to_meta(&src_file))
-				.collect::<Vec<_>>(),
+				.collect_vec(),
 		);
 	}
 }

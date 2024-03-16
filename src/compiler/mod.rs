@@ -1,6 +1,7 @@
 use std::{error::Error, fmt::Display};
 
 use color_print::cprintln;
+use szu::math::ilog10ceil;
 
 use crate::tree_printer;
 
@@ -42,8 +43,11 @@ impl Error for CompilerError { }
 
 pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, CompilerError> {
 	if flags.show_source {
+		let width = ilog10ceil(src_doc.get_num_lines());
 		println!("=== Source ===");
-		println!("{:?}", src_doc.get_content());
+		for line in src_doc.lines() {
+			cprintln!("<cyan>{:>width$} |</> {:?}", line.line.index(), line.range().get_str());
+		}
 		println!();
 	}
 
@@ -64,15 +68,31 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!();
 	}
 	
-	let ast_root = match ast::parse_ast(&tokens) {
+	let (ast_root, rule_tree) = match flags.show_ast_rule_path {
+		true => {
+			let mut observer = ast::debug::rule_observers::DebugTreeObserver::new();
+			(ast::parse_ast(&tokens, &mut observer), Some(observer.conclude()))
+		},
+		false => (ast::parse_ast(&tokens, &mut ast::debug::rule_observers::DummyObserver { }), None),
+	};
+	let ast_root = match ast_root {
 		Ok(root) => root,
 		Err(err) => {
 			let err_meta = err.to_meta(&src_doc);
 			cprintln!("<red>AST Failed:</>\n{}", err_meta);
+	
+			if let Some(rule_tree) = &rule_tree {
+				tree_printer::print_tree("", &rule_tree.with_meta(&src_doc))
+			}
+			
 			return Err(CompilerError::AstParserFailed);
 		},
 	};
 	
+	if let Some(rule_tree) = &rule_tree {
+		tree_printer::print_tree("", &rule_tree.with_meta(&src_doc))
+	}
+
 	if flags.show_ast {
 		println!("=== AST ===");
 		tree_printer::print_tree("Root", &ast_root);

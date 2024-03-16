@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use strum::AsRefStr;
-use szu::ternary;
 
 use super::Node;
 
@@ -54,7 +53,11 @@ impl PartialOrd for MathBinOpVariant {
 
 impl Display for MathBinOpVariant {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}{}", ternary!(self.allow_wrap => "%", ""), self.kind.as_ref())
+		if self.allow_wrap {
+			write!(f, "%")?;
+		}
+		write!(f, "{}", self.kind.as_ref())?;
+		Ok(())
 	}
 }
 

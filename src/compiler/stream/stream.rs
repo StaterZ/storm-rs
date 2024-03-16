@@ -123,9 +123,13 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	}
 
 	pub fn try_rule_sh<T, E>(&mut self, rule: impl FnOnce(&mut Self) -> ResultSH<T, E>) -> ResultSH<T, E> {
+		self.try_rule_arg_sh(|stream, ()| rule(stream), ())
+	}
+
+	pub fn try_rule_arg_sh<A, T, E>(&mut self, rule: impl FnOnce(&mut Self, A) -> ResultSH<T, E>, a: A) -> ResultSH<T, E> {
 		let mut hypothetical = self.dup();
 
-		let result = rule(hypothetical.get());
+		let result = rule(hypothetical.get(), a);
 		if matches!(result, Ok(Ok(_)) | Err(_)) {
 			hypothetical.nip();
 		}

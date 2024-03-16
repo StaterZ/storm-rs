@@ -49,7 +49,7 @@ fn compile() {
 		src_in
 	);
 
-	let x = false;
+	let x = true;
 	let flags = compiler::Flags {
 		show_source: x,
 		show_tokens: x,

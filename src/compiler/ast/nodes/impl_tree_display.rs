@@ -2,14 +2,17 @@ use std::fmt::Display;
 
 use color_print::cformat;
 
-use super::super::super::tree_printer::TreeDisplay;
+use super::super::super::tree_printer::{
+	TreeDisplay,
+	TreeDisplayChild,
+};
 
 impl<T: Display> TreeDisplay for T {
 	fn get_text_line(&self) -> String {
 		cformat!("<cyan>{}</>", self)
 	}
 
-	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
+	fn get_children<'s>(&'s self) -> Option<Vec<(String, TreeDisplayChild<'s>)>> {
 		None
 	}
 }

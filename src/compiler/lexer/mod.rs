@@ -310,7 +310,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::LParen);
 	}
 	if stream.expect_eq(&')').is_some() {
-		return Ok(TokenKind::RBrace);
+		return Ok(TokenKind::RParen);
 	}
 	if stream.expect_eq(&'[').is_some() {
 		return Ok(TokenKind::LBracket);

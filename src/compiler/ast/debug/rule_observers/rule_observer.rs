@@ -1,0 +1,19 @@
+use super::super::super::{
+	RuleResult,
+	TokStream,
+	TokStreamIter,
+	TokStreamMF,
+	TokStreamRF
+};
+
+pub trait RuleObserver<'i> {
+	type Signal;
+
+	fn pre_rule<'s>(&'s mut self, stream: &'s mut TokStream<'i,
+		impl TokStreamIter<'i>,
+		impl TokStreamRF<'i>,
+		impl TokStreamMF<'i>,
+	>) -> Self::Signal;
+	
+	fn post_rule(&mut self, rule_name: &'static str, signal: Self::Signal, result: &RuleResult);
+}

@@ -1,34 +1,24 @@
-use crate::tree_printer::TreeDisplay;
-use owo_colors::{AnsiColors, DynColors, OwoColorize};
+use super::{
+	super::{
+		super::source,
+		rule_error::ResultSHKind,
+		Token,
+	},
+	RuleTreeMeta,
+};
 
-use super::super::rule_error::ResultSHKind;
-
-pub struct RuleTree {
-	pub rule_name: &'static str,
+pub struct RuleTree<'a> {
+	pub name: &'static str,
+	pub stream_state: Option<&'a Token>,
 	pub result_kind: ResultSHKind,
-	pub children: Vec<RuleTree>,
+	pub children: Vec<RuleTree<'a>>,
 }
 
-impl TreeDisplay for RuleTree {
-	fn get_text_line(&self) -> String {
-		format!("Rule '{}'", self.rule_name)
-			.color(self.get_scope_color())
-			.to_string()
-	}
-
-	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
-		(self.children.len() > 0)
-			.then(|| self.children
-				.iter()
-				.map(|child| ("".to_string(), child as &dyn TreeDisplay)) //TODO
-				.collect::<Vec<_>>()) //TODO
-	}
-
-	fn get_scope_color(&self) -> DynColors {
-		DynColors::Ansi(match self.result_kind {
-			ResultSHKind::Success => AnsiColors::Green,
-			ResultSHKind::SoftErr => AnsiColors::Yellow,
-			ResultSHKind::HardErr => AnsiColors::Red,
-		})
+impl<'a> RuleTree<'a> {
+	pub fn with_meta<'b, 'c>(&'b self, document: &'c source::Document) -> RuleTreeMeta<'a, 'b, 'c> {
+		RuleTreeMeta {
+			tree: self,
+			document,
+		}
 	}
 }
