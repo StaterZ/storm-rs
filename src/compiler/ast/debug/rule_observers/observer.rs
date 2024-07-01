@@ -6,7 +6,7 @@ use super::super::super::{
 	TokStreamRF
 };
 
-pub trait RuleObserver<'i> {
+pub trait Observer<'i> {
 	type Signal;
 
 	fn pre_rule<'s>(&'s mut self, stream: &'s mut TokStream<'i,

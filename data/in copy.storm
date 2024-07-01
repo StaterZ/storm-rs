@@ -1,3 +1,4 @@
+/*
 let a = 1 + {
 	give 0o3 * 5 + 0xff;
 };
@@ -9,4 +10,19 @@ let haha;
 	/*let @"ba\"r" = 0x42 + 5 * 2 - 0b1001;
 	//weeeeee*/
 	let x = "❤️n! ░▒▓█";
-};
+}
+*/
+
+loop {
+	if (3 + 2) * 4 <= 3 {
+		break;
+	}
+	continue;
+
+	let x = 3 + 56;
+
+	break break continue;
+	give 3;
+}
+
+unreachable;

@@ -20,11 +20,11 @@ impl<T: Display> TreeDisplay for T {
 /*
 impl<T: TreeDisplay> TreeDisplay for Option<T> {
 	fn get_text_line(&self) -> String {
-		self.map_or("none".magenta(), |some| some.get_text_line())
+		self.map_or(cformat!("<magenta>none</>"), |some| some.get_text_line())
 	}
 
-	fn get_children(&self) -> Option<Vec<(String, &dyn TreeDisplay)>> {
-		self.map(|some| some.get_children())
+	fn get_children<'s>(&'s self) -> Option<Vec<(String, TreeDisplayChild<'s>)>> {
+		self.and_then(|some| some.get_children())
 	}
 }
 

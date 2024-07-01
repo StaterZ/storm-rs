@@ -70,7 +70,7 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 	
 	let (ast_root, rule_tree) = match flags.show_ast_rule_path {
 		true => {
-			let mut observer = ast::debug::rule_observers::DebugTreeObserver::new();
+			let mut observer = ast::debug::rule_observers::DebugObserver::new();
 			(ast::parse_ast(&tokens, &mut observer), Some(observer.conclude()))
 		},
 		false => (ast::parse_ast(&tokens, &mut ast::debug::rule_observers::DummyObserver { }), None),

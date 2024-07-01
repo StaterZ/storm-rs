@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![feature(trait_alias)]
+#![feature(map_try_insert)]
 
 mod compiler;
 mod tree_printer;
@@ -29,7 +30,7 @@ fn compile() {
 	let args = Args::parse();
 
 	let path = if args.is_debug {
-		Path::new("data/in.txt").to_path_buf()
+		Path::new("data/in.storm").to_path_buf()
 	} else if let Some(in_path) = args.in_path {
 		in_path
 	} else {

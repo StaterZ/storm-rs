@@ -1,0 +1,6 @@
+let i = 0;
+loop {
+	print("hello " + i);
+	i = i + 1;
+	yld;
+}

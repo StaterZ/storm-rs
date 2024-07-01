@@ -161,8 +161,7 @@ fn parse_radix_symbol(stream: &mut CharStream<
 			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
 				Err(LexerErrorKind::InvalidRadixSymbol(*c))
 			} else {
-				todo!();
-				//Ok(Err(LexerErrorKind::???))
+				Ok(Err(LexerErrorKind::InvalidRadixSymbol(*c)))
 			}
 		},
 		None => Ok(Err(LexerErrorKind::StreamExhausted)),
@@ -302,6 +301,9 @@ fn next_token_kind(stream: &mut CharStream<
 	if stream.expect_eq(&',').is_some() {
 		return Ok(TokenKind::Comma);
 	}
+	if stream.expect_eq(&':').is_some() {
+		return Ok(TokenKind::Colon);
+	}
 	if stream.expect_eq(&';').is_some() {
 		return Ok(TokenKind::Semicolon);
 	}
@@ -340,7 +342,7 @@ fn next_token_kind(stream: &mut CharStream<
 			return Ok(TokenKind::Comment);
 		}
 		if stream.expect_eq(&'*').is_some() {
-			let mut indent = 0usize;
+			let mut indent = 1usize;
 			while indent > 0 {
 				match stream.next() {
 					Some(c) => match c {
@@ -364,6 +366,9 @@ fn next_token_kind(stream: &mut CharStream<
 		if stream.expect_eq(&'<').is_some() {
 			return Ok(TokenKind::LShift);
 		}
+		if stream.expect_eq(&'=').is_some() {
+			return Ok(TokenKind::LessThanOrEqual);
+		}
 
 		return Ok(TokenKind::LessThan);
 	}
@@ -371,16 +376,27 @@ fn next_token_kind(stream: &mut CharStream<
 		if stream.expect_eq(&'>').is_some() {
 			return Ok(TokenKind::RShift);
 		}
+		if stream.expect_eq(&'=').is_some() {
+			return Ok(TokenKind::GreaterThanOrEqual);
+		}
 
 		return Ok(TokenKind::GreaterThan);
 	}
 
 	if stream.expect_eq(&'=').is_some() {
 		if stream.expect_eq(&'=').is_some() {
-			return Ok(TokenKind::Equality);
+			return Ok(TokenKind::Equal);
 		}
 
 		return Ok(TokenKind::Equals);
+	}
+
+	if stream.expect_eq(&'!').is_some() {
+		if stream.expect_eq(&'=').is_some() {
+			return Ok(TokenKind::NotEqual);
+		}
+
+		return Ok(TokenKind::Bang);
 	}
 
 	if let Ok(value) = stream.try_rule_sh(parse_int)? {
@@ -416,11 +432,19 @@ fn next_token_kind(stream: &mut CharStream<
 		lazy_static!{
 			static ref KEYWORDS: HashMap<&'static str, TokenKindTag> = vec![
 				("let", TokenKindTag::Let),
+				
 				("if", TokenKindTag::If),
 				("else", TokenKindTag::Else),
 
+				("loop", TokenKindTag::Loop),
+				("while", TokenKindTag::While),
+				("for", TokenKindTag::For),
+
 				("ret", TokenKindTag::Return),
 				("give", TokenKindTag::Give),
+				("break", TokenKindTag::Break),
+				("continue", TokenKindTag::Continue),
+				("unreachable", TokenKindTag::Unreachable),
 
 				("ipt", TokenKindTag::Ipt),
 				("yield", TokenKindTag::Yield),

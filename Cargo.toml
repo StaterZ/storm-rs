@@ -7,25 +7,28 @@ edition = "2021"
 
 [dependencies]
 #terminal stuff
-clap = { version = "4.2.7", features= ["derive"] } # command line parser
+clap = { version = "4.5.4", features= ["derive"] } # command line parser
 owo-colors = "4.0.0" # ansi color formatter
 color-print = "0.3.5" # ansi color formatter
-prettytable-rs = "^0.10"
-unicode-width = "0.1.10"
+prettytable-rs = "0.10.0"
+unicode-width = "0.1.11"
+
+#error handling
+thiserror = "1.0.59" # error type generation
+error-stack = "0.4.1" # good error handling
+anyhow = { version = "1.0.82", features = ["backtrace"] } # simple error handling
 
 #misc
 lazy_static = "1.4.0" # generate LUTs and other data at comptime
 string-builder = "0.2.0" # basic string builder utility
 enum-as-inner = "0.6.0" # unwarp for enum fields without needing annyong pattern mathing
-strum = { version = "0.26.1", features = ["derive"] } # get names of enum fields as strings
+strum = { version = "0.26.2", features = ["derive"] } # get names of enum fields as strings
 itertools = "0.12.1" #more iterator utlites
 streaming-iterator = "0.1.9" #streaming iterators
 more-asserts = "0.3.1" #more asserts
 
-#error handling
-thiserror = "1.0.44" # error type generation
-error-stack = "0.4.1" # good error handling
-anyhow = { version = "1.0.72", features = ["backtrace"] } # simple error handling
+#LLVM
+#inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm18-0"] }
 
 #custom
 szu = { version = "0.2.1", path = "../szu" } # custom utils lib

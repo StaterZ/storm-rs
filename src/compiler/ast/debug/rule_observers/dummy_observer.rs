@@ -6,14 +6,14 @@ use super::{
 		TokStreamMF,
 		TokStreamRF,
 	},
-	RuleObserver,
+	Observer,
 };
 
 
 pub struct DummyObserver {
 }
 
-impl<'i> RuleObserver<'i> for DummyObserver {
+impl<'i> Observer<'i> for DummyObserver {
 	type Signal = ();
 
 	fn pre_rule(&mut self, _stream: &mut TokStream<'i,

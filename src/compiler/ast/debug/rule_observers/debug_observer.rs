@@ -13,16 +13,16 @@ use super::super::{
 	RuleTree,
 };
 
-pub struct DebugTreeSignal<'i> {
+pub struct DebugSignal<'i> {
 	stream_state: Option<&'i Token>,
 	rule_tree_parent_children: Vec<RuleTree<'i>>,
 }
 
-pub struct DebugTreeObserver<'i> {
+pub struct DebugObserver<'i> {
 	tree: Vec<RuleTree<'i>>,
 }
 
-impl<'i> DebugTreeObserver<'i> {
+impl<'i> DebugObserver<'i> {
 	pub fn new() -> Self {
 		Self {
 			tree: Vec::<RuleTree<'i>>::new(),
@@ -35,8 +35,8 @@ impl<'i> DebugTreeObserver<'i> {
 	}
 }
 
-impl<'i> RuleObserver<'i> for DebugTreeObserver<'i> {
-	type Signal = DebugTreeSignal<'i>;
+impl<'i> RuleObserver<'i> for DebugObserver<'i> {
+	type Signal = DebugSignal<'i>;
 
 	fn pre_rule<'s>(&'s mut self, stream: &'s mut TokStream<'i,
 		impl TokStreamIter<'i>,

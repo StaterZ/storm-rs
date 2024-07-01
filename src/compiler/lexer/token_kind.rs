@@ -11,10 +11,12 @@ tag_enum!(
 		NewLine,
 		Comment,
 		MultilineComment,
-
+		
 		Dot,
 		Comma,
+		Colon,
 		Semicolon,
+		Eof,
 
 		LParen,
 		RParen,
@@ -22,7 +24,7 @@ tag_enum!(
 		RBracket,
 		LBrace,
 		RBrace,
-
+		
 		Plus,
 		Dash,
 		Star,
@@ -33,16 +35,28 @@ tag_enum!(
 		
 		Equals,
 		LessThan,
+		LessThanOrEqual,
 		GreaterThan,
-		Equality,
-		Eof,
+		GreaterThanOrEqual,
+		Equal,
+		NotEqual,
+		Bang,
 
 		Let,
 		If,
 		Else,
+
+		Loop,
+		While,
+		For,
+		In,
+
 		Return,
 		Give,
-
+		Break,
+		Continue,
+		Unreachable,
+		
 		Ipt,
 		Yield,
 		

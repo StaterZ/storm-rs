@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lazy_static::__Deref;
@@ -6,24 +8,31 @@ use color_print::cformat;
 use szu::ternary;
 
 use super::{
-	super::tree_printer::{TreeDisplay, TreeDisplayChild},
-	Block,
-	Give,
-	Let,
-	BinOp,
-	Paren,
+	super::{
+		tree_printer::{TreeDisplay, TreeDisplayChild},
+		Var,
+	},
+	*
 };
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum NodeKind {
 	Block(Block),
-	Give(Give),
+	Statement(Statement),
 	Let(Let),
-	Paren(Paren),
+	Assign(Assign),
+	Give(Give),
+	Break(Break),
+	Continue,
+	Unreachable,
+	IfElse(IfElse),
+	Loop(Loop),
+	While(While),
+	For(For),
 	BinOp(BinOp),
 	IntLit(u64),
 	StrLit(String),
-	Identifier(String),
+	Identifier(Rc<Var>),
 }
 
 #[derive(Debug)]
@@ -36,9 +45,17 @@ impl TreeDisplay for Node {
 	fn get_text_line(&self) -> String {
 		let text = match &self.kind {
 			NodeKind::Block(_) => "".to_string(),
-			NodeKind::Give(_) => "".to_string(),
+			NodeKind::Statement(_) => "".to_string(),
 			NodeKind::Let(_) => "".to_string(),
-			NodeKind::Paren(_) => "".to_string(),
+			NodeKind::Assign(_) => "".to_string(),
+			NodeKind::Give(_) => "".to_string(),
+			NodeKind::Break(_) => "".to_string(),
+			NodeKind::Continue => "".to_string(),
+			NodeKind::Unreachable => "".to_string(),
+			NodeKind::IfElse(_) => "".to_string(),
+			NodeKind::Loop(_) => "".to_string(),
+			NodeKind::While(_) => "".to_string(),
+			NodeKind::For(_) => "".to_string(),
 			NodeKind::BinOp(value) => format!("{}", value.op),
 			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
 			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value),
@@ -56,15 +73,41 @@ impl TreeDisplay for Node {
 					.map(|(i, stmt)| (format!("[{}]", i), TreeDisplayChild::Ref(stmt as &dyn TreeDisplay)))
 					.collect_vec()
 			),
-			NodeKind::Give(value) => Some(vec![
+			NodeKind::Statement(value) => Some(vec![
 				("expr".to_string(), TreeDisplayChild::Ref(value.expr.deref() as &dyn TreeDisplay)),
 			]),
 			NodeKind::Let(value) => Some(vec![
 				("lhs".to_string(), TreeDisplayChild::Ref(value.lhs.deref() as &dyn TreeDisplay)),
 				("rhs".to_string(), TreeDisplayChild::Ref(value.rhs.as_ref().map_or(&"none" as &dyn TreeDisplay, |rhs| rhs.deref() as &dyn TreeDisplay))),
 			]),
-			NodeKind::Paren(value) => Some(vec![
-				("expr".to_string(), TreeDisplayChild::Ref(value.expr.deref() as &dyn TreeDisplay))
+			NodeKind::Assign(value) => Some(vec![
+				("lhs".to_string(), TreeDisplayChild::Ref(value.lhs.deref() as &dyn TreeDisplay)),
+				("rhs".to_string(), TreeDisplayChild::Ref(value.rhs.deref() as &dyn TreeDisplay)),
+			]),
+			NodeKind::Give(value) => Some(vec![
+				("expr".to_string(), TreeDisplayChild::Ref(value.expr.deref() as &dyn TreeDisplay)),
+			]),
+			NodeKind::Break(value) => Some(vec![
+				("expr".to_string(), TreeDisplayChild::Ref(value.expr.as_ref().map_or(&"none" as &dyn TreeDisplay, |expr| expr.deref() as &dyn TreeDisplay))),
+			]),
+			NodeKind::Continue => None,
+			NodeKind::Unreachable => None,
+			NodeKind::IfElse(value) => Some(vec![
+				("cond".to_string(), TreeDisplayChild::Ref(value.cond.deref() as &dyn TreeDisplay)),
+				("if".to_string(), TreeDisplayChild::Ref(value.body_true.deref() as &dyn TreeDisplay)),
+				("else".to_string(), TreeDisplayChild::Ref(value.body_false.as_ref().map_or(&"none" as &dyn TreeDisplay, |body_false| body_false.deref() as &dyn TreeDisplay))),
+			]),
+			NodeKind::Loop(value) => Some(vec![
+				("body".to_string(), TreeDisplayChild::Ref(value.body.deref() as &dyn TreeDisplay)),
+			]),
+			NodeKind::While(value) => Some(vec![
+				("cond".to_string(), TreeDisplayChild::Ref(value.cond.deref() as &dyn TreeDisplay)),
+				("body".to_string(), TreeDisplayChild::Ref(value.body.deref() as &dyn TreeDisplay)),
+			]),
+			NodeKind::For(value) => Some(vec![
+				("up_value".to_string(), TreeDisplayChild::Ref(value.up_value.deref() as &dyn TreeDisplay)),
+				("iter".to_string(), TreeDisplayChild::Ref(value.iter.deref() as &dyn TreeDisplay)),
+				("body".to_string(), TreeDisplayChild::Ref(value.body.deref() as &dyn TreeDisplay)),
 			]),
 			NodeKind::BinOp(value) => Some(vec![
 				//("kind".to_string(), &value.op.kind.as_ref()),
