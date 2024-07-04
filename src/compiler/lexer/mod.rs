@@ -133,145 +133,62 @@ impl<'a, 'b> Display for LexerErrorMeta<'a, 'b> {
 type LexerResult<T> = ResultSH<T, LexerErrorKind>;
 
 
-fn parse_radix_symbol(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> LexerResult<u64> {
-	if stream.expect_eq(&'0').is_none() {
-		return Ok(Err(LexerErrorKind::RadixSymbolExpectedLeadingZero));
+pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
+	let mut stream = document
+		.get_content()
+		.chars()
+		.enumerate()
+		.stream(
+			|(_, c)| c,
+			|(_, c)| c,
+		);
+	
+	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut Stream<
+		impl Iterator<Item = (usize, char)>,
+		impl Fn(&(usize, char)) -> &char,
+		impl Fn((usize, char)) -> char,
+		char,
+	>) -> source::PosMeta<'a> {
+		stream
+			.get_peeker()
+			.get_raw()
+			.map(|&(i, _)| source::Pos::new(i))
+			.map_or_else(
+				|| document.get_eof(),
+				|p| p.to_meta(document))
 	}
+		
+	let mut tokens = vec![];
+	let mut begin = get_current_source_pos(document, &mut stream);
+	loop {
+		match next_token_kind(&mut stream) {
+			Ok(kind) => {
+				let is_eof = kind == TokenKind::Eof;
 
-	lazy_static!{
-		static ref RADICES: HashMap<char, u64> = vec![
-			('b', 2),
-			('q', 4),
-			('o', 8),
-			('d', 10),
-			('x', 16),
-		].into_iter().collect();
-	}
+				let end = get_current_source_pos(document, &mut stream);
+				tokens.push(Token{
+					kind,
+					range: source::Range::new(begin, end),
+				});
 
-	match stream.get_peeker().get() {
-		Some(c) => match RADICES.get(&c) {
-			Some(&radix) => {
-				stream.next();
-				Ok(Ok(radix))
+				if is_eof {
+					return Ok(tokens);
+				}
+
+				begin = end;
 			},
-			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
-				Err(LexerErrorKind::InvalidRadixSymbol(*c))
-			} else {
-				Ok(Err(LexerErrorKind::InvalidRadixSymbol(*c)))
-			}
-		},
-		None => Ok(Err(LexerErrorKind::StreamExhausted)),
-	}
+			Err(err) => {
+				let char_window_size = 10;
 
-}
-
-fn parse_int(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> LexerResult<u64> {
-	let radix = stream.try_rule_sh(parse_radix_symbol)?;
-	let has_radix_symbol = radix.is_ok();
-	let mut digits = parse_digits(
-		stream,
-		radix.unwrap_or(10),
-		has_radix_symbol,
-		true
-	)?;
-
-	if !has_radix_symbol {
-		if let Ok(radix) = digits {
-			if stream.expect_eq(&'r').is_some() {
-				if radix > 36 {
-					return Err(LexerErrorKind::IntRadixTooLarge(radix));
-				}
-
-				digits = parse_digits(stream, radix, true, false)?;
-				if digits.is_err() {
-					return Err(LexerErrorKind::IntFoundRadixInDigits);
-				}
-			}
+				return Err(LexerError {
+					kind: err,
+					next_chars_window: stream.by_ref().take(char_window_size).collect(),
+					did_next_chars_window_exhaust_stream: stream.get_peeker().get().is_none(),
+					tokens,
+				})
+			},
 		}
 	}
-	
-	Ok(digits)
-}
-
-fn parse_digits(
-	stream: &mut CharStream<
-		impl CharStreamIter + Clone,
-		impl CharStreamRF + Clone,
-		impl CharStreamMF + Clone,
-	>,
-	radix: u64,
-	mut is_match: bool,
-	allow_radix_end: bool,
-) -> LexerResult<u64> {
-	let mut has_trailing_underscore = false;
-	let mut value = 0u64;
-	let mut i = 0usize;
-	while let Some(&c) = stream.get_peeker().get() {
-		if c == '_' {
-			if i == 0 {
-				return Err(LexerErrorKind::DigitsHaveLeadingUnderscore);
-			}
-
-			has_trailing_underscore = true;
-		} else {
-			match c.to_digit(36) {
-				Some(digit_value) => {
-					let digit_value = digit_value as u64;
-					
-					if digit_value >= radix {
-						if allow_radix_end && c == 'r' {
-							break;
-						}
-
-						let error = LexerErrorKind::InvalidDigitForRadix {
-							digit_symbol: c,
-							digit_value,
-							radix
-						};
-
-						return if is_match {
-							Err(error)
-						} else {
-							Ok(Err(error))
-						};
-					}
-		
-					value *= radix;
-					value += digit_value;
-		
-					is_match = true;
-					has_trailing_underscore = false;
-				},
-				None => break,
-			};
-		}
-
-		stream.next();
-		i += 1;
-	}
-	
-	
-	if !is_match {
-		return Ok(Err(LexerErrorKind::IntHasNoMatch));
-	}
-	
-	if i == 0 {
-		return Err(LexerErrorKind::IntHasNoDigits);
-	}
-
-	if has_trailing_underscore {
-		return Err(LexerErrorKind::IntHasTrailingUnderscore);
-	}
-
-	Ok(Ok(value))
 }
 
 fn next_token_kind(stream: &mut CharStream<
@@ -465,61 +382,143 @@ fn next_token_kind(stream: &mut CharStream<
 	return Err(LexerErrorKind::NoTokenMatchingStream);
 }
 
-pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
-	let mut stream = document
-		.get_content()
-		.chars()
-		.enumerate()
-		.stream(
-			|(_, c)| c,
-			|(_, c)| c,
-		);
-	
-	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut Stream<
-		impl Iterator<Item = (usize, char)>,
-		impl Fn(&(usize, char)) -> &char,
-		impl Fn((usize, char)) -> char,
-		char,
-	>) -> source::PosMeta<'a> {
-		stream
-			.get_peeker()
-			.get_raw()
-			.map(|&(i, _)| source::Pos::new(i))
-			.map_or_else(
-				|| document.get_eof(),
-				|p| p.to_meta(document))
-	}
-		
-	let mut tokens = vec![];
-	let mut begin = get_current_source_pos(document, &mut stream);
-	loop {
-		match next_token_kind(&mut stream) {
-			Ok(kind) => {
-				let is_eof = kind == TokenKind::Eof;
+fn parse_int(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
+>) -> LexerResult<u64> {
+	let radix = stream.try_rule_sh(parse_radix_symbol)?;
+	let has_radix_symbol = radix.is_ok();
+	let mut digits = parse_digits(
+		stream,
+		radix.unwrap_or(10),
+		has_radix_symbol,
+		true
+	)?;
 
-				let end = get_current_source_pos(document, &mut stream);
-				tokens.push(Token{
-					kind,
-					range: source::Range::new(begin, end),
-				});
-
-				if is_eof {
-					return Ok(tokens);
+	if !has_radix_symbol {
+		if let Ok(radix) = digits {
+			if stream.expect_eq(&'r').is_some() {
+				if radix > 36 {
+					return Err(LexerErrorKind::IntRadixTooLarge(radix));
 				}
 
-				begin = end;
-			},
-			Err(err) => {
-				let char_window_size = 10;
-
-				return Err(LexerError {
-					kind: err,
-					next_chars_window: stream.by_ref().take(char_window_size).collect(),
-					did_next_chars_window_exhaust_stream: stream.get_peeker().get().is_none(),
-					tokens,
-				})
-			},
-			//Err(err) => return Err(format!("{}\n{}", err, source::error_gen::generate_error_line(get_current_source_pos(document, &mut stream).to_range()))),
+				digits = parse_digits(stream, radix, true, false)?;
+				if digits.is_err() {
+					return Err(LexerErrorKind::IntFoundRadixInDigits);
+				}
+			}
 		}
 	}
+	
+	Ok(digits)
+}
+
+fn parse_radix_symbol(stream: &mut CharStream<
+	impl CharStreamIter + Clone,
+	impl CharStreamRF + Clone,
+	impl CharStreamMF + Clone,
+>) -> LexerResult<u64> {
+	if stream.expect_eq(&'0').is_none() {
+		return Ok(Err(LexerErrorKind::RadixSymbolExpectedLeadingZero));
+	}
+
+	lazy_static!{
+		static ref RADICES: HashMap<char, u64> = vec![
+			('b', 2),
+			('q', 4),
+			('o', 8),
+			('d', 10),
+			('x', 16),
+		].into_iter().collect();
+	}
+
+	match stream.get_peeker().get() {
+		Some(c) => match RADICES.get(&c) {
+			Some(&radix) => {
+				stream.next();
+				Ok(Ok(radix))
+			},
+			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
+				Err(LexerErrorKind::InvalidRadixSymbol(*c))
+			} else {
+				Ok(Err(LexerErrorKind::InvalidRadixSymbol(*c)))
+			}
+		},
+		None => Ok(Err(LexerErrorKind::StreamExhausted)),
+	}
+
+}
+
+fn parse_digits(
+	stream: &mut CharStream<
+		impl CharStreamIter + Clone,
+		impl CharStreamRF + Clone,
+		impl CharStreamMF + Clone,
+	>,
+	radix: u64,
+	mut is_match: bool,
+	allow_radix_end: bool,
+) -> LexerResult<u64> {
+	let mut has_trailing_underscore = false;
+	let mut value = 0u64;
+	let mut i = 0usize;
+	while let Some(&c) = stream.get_peeker().get() {
+		if c == '_' {
+			if i == 0 {
+				return Err(LexerErrorKind::DigitsHaveLeadingUnderscore);
+			}
+
+			has_trailing_underscore = true;
+		} else {
+			match c.to_digit(36) {
+				Some(digit_value) => {
+					let digit_value = digit_value as u64;
+					
+					if digit_value >= radix {
+						if allow_radix_end && c == 'r' {
+							break;
+						}
+
+						let error = LexerErrorKind::InvalidDigitForRadix {
+							digit_symbol: c,
+							digit_value,
+							radix
+						};
+
+						return if is_match {
+							Err(error)
+						} else {
+							Ok(Err(error))
+						};
+					}
+		
+					value *= radix;
+					value += digit_value;
+		
+					is_match = true;
+					has_trailing_underscore = false;
+				},
+				None => break,
+			};
+		}
+
+		stream.next();
+		i += 1;
+	}
+	
+	
+	if !is_match {
+		return Ok(Err(LexerErrorKind::IntHasNoMatch));
+	}
+	
+	if i == 0 {
+		return Err(LexerErrorKind::IntHasNoDigits);
+	}
+
+	if has_trailing_underscore {
+		return Err(LexerErrorKind::IntHasTrailingUnderscore);
+	}
+
+	Ok(Ok(value))
 }
