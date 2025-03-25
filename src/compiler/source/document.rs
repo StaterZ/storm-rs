@@ -1,5 +1,6 @@
 use std::ptr;
 
+use itertools::Itertools;
 use streaming_iterator::StreamingIterator;
 use szu::iter::WindowOptionExt;
 
@@ -22,7 +23,7 @@ pub struct Document {
 impl Document {
 	pub fn new(name: String, content: String) -> Self {
 		let mut char_to_byte = Vec::<usize>::new();
-		let lines_begin_indices: Vec<Pos> = content
+		let lines_begin_indices = content
 			.char_indices()
 			.enumerate()
 			.window_option()
@@ -39,7 +40,7 @@ impl Document {
 					_ => false,
 				}.then_some(Pos::new(*ci))
 			})
-			.collect();
+			.collect_vec();
 
 		Self {
 			name,

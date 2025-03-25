@@ -2,9 +2,9 @@ mod token;
 mod token_meta;
 mod token_kind;
 
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
-use lazy_static::lazy_static;
+use phf::phf_map;
 use color_print::cformat;
 use unicode_width::UnicodeWidthStr;
 
@@ -53,27 +53,6 @@ pub enum LexerErrorKind {
 	NoTokenMatchingStream,
 }
 
-pub struct LexerError {
-	kind: LexerErrorKind,
-	next_chars_window: Vec<char>,
-	did_next_chars_window_exhaust_stream: bool,
-	tokens: Vec<Token>,
-}
-
-impl LexerError {
-	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::Document) -> LexerErrorMeta<'a, 'b> {
-		LexerErrorMeta {
-			error: self,
-			document,
-		}
-	}
-}
-
-pub struct LexerErrorMeta<'a, 'b> {
-	error: &'a LexerError,
-	document: &'b source::Document,
-}
-
 impl Display for LexerErrorKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -97,6 +76,27 @@ impl Display for LexerErrorKind {
 			LexerErrorKind::NoTokenMatchingStream => write!(f, "No token matching stream"),
 		}
 	}
+}
+
+pub struct LexerError {
+	kind: LexerErrorKind,
+	next_chars_window: Vec<char>,
+	did_next_chars_window_exhaust_stream: bool,
+	tokens: Vec<Token>,
+}
+
+impl LexerError {
+	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::Document) -> LexerErrorMeta<'a, 'b> {
+		LexerErrorMeta {
+			error: self,
+			document,
+		}
+	}
+}
+
+pub struct LexerErrorMeta<'a, 'b> {
+	error: &'a LexerError,
+	document: &'b source::Document,
 }
 
 impl<'a, 'b> Display for LexerErrorMeta<'a, 'b> {
@@ -346,28 +346,27 @@ fn next_token_kind(stream: &mut CharStream<
 			value.push(ident);
 		}
 
-		lazy_static!{
-			static ref KEYWORDS: HashMap<&'static str, TokenKindTag> = vec![
-				("let", TokenKindTag::Let),
-				
-				("if", TokenKindTag::If),
-				("else", TokenKindTag::Else),
+		static KEYWORDS: phf::Map<&'static str, TokenKindTag> = phf_map! {
+			"let" => TokenKindTag::Let,
+			
+			"if" => TokenKindTag::If,
+			"else" => TokenKindTag::Else,
 
-				("loop", TokenKindTag::Loop),
-				("while", TokenKindTag::While),
-				("for", TokenKindTag::For),
+			"loop" => TokenKindTag::Loop,
+			"while" => TokenKindTag::While,
+			"for" => TokenKindTag::For,
+			"in" => TokenKindTag::In,
 
-				("ret", TokenKindTag::Return),
-				("give", TokenKindTag::Give),
-				("break", TokenKindTag::Break),
-				("continue", TokenKindTag::Continue),
-				("unreachable", TokenKindTag::Unreachable),
+			"ret" => TokenKindTag::Return,
+			"give" => TokenKindTag::Give,
+			"break" => TokenKindTag::Break,
+			"continue" => TokenKindTag::Continue,
+			"unreachable" => TokenKindTag::Unreachable,
 
-				("ipt", TokenKindTag::Ipt),
-				("yield", TokenKindTag::Yield),
-			].into_iter().collect();
-		}
-
+			"ipt" => TokenKindTag::Ipt,
+			"yield" => TokenKindTag::Yield,
+		};
+		
 		if let Some(&keyword) = KEYWORDS.get(value.as_str()) {
 			return Ok(keyword.try_into().unwrap()); //unwrap here is safe since the KEYWORDS list will never list a type with a value
 		}
@@ -423,15 +422,13 @@ fn parse_radix_symbol(stream: &mut CharStream<
 		return Ok(Err(LexerErrorKind::RadixSymbolExpectedLeadingZero));
 	}
 
-	lazy_static!{
-		static ref RADICES: HashMap<char, u64> = vec![
-			('b', 2),
-			('q', 4),
-			('o', 8),
-			('d', 10),
-			('x', 16),
-		].into_iter().collect();
-	}
+	static RADICES: phf::Map<char, u64> = phf_map! {
+		'b' => 2,
+		'q' => 4,
+		'o' => 8,
+		'd' => 10,
+		'x' => 16,
+	};
 
 	match stream.get_peeker().get() {
 		Some(c) => match RADICES.get(&c) {
@@ -492,7 +489,6 @@ fn parse_digits(
 							Ok(Err(error))
 						};
 					}
-		
 					value *= radix;
 					value += digit_value;
 		

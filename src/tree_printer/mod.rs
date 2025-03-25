@@ -8,12 +8,12 @@ use color_print::cprintln;
 pub use tree_display::{TreeDisplay, TreeDisplayChild};
 use indent::Indent;
 
-pub fn print_tree(label: &str, node: &impl TreeDisplay) {
-	print_tree_node(label, node, &mut Indent::new());
+pub fn print_tree(label: &str, node: &impl TreeDisplay, line_formatter: impl Fn(&str, &str) -> String) {
+	print_tree_node(label, node, &line_formatter, &mut Indent::new());
 }
 
-fn print_tree_node(label: &str, node: &dyn TreeDisplay, indent: &mut Indent) {
-	cprintln!("{}<green>{}</>: {}", indent.to_string(), label, node.get_text_line());
+fn print_tree_node(label: &str, node: &dyn TreeDisplay, line_formatter: &impl Fn(&str, &str) -> String, indent: &mut Indent) {
+	cprintln!("{}{}", indent, line_formatter(label, &node.get_text_line()));
 	
 	if let Some(children) = node.get_children() {
 		indent.extend();
@@ -23,7 +23,7 @@ fn print_tree_node(label: &str, node: &dyn TreeDisplay, indent: &mut Indent) {
 			let color = node.get_scope_color();
 			for (i, (label, child)) in children.into_iter().enumerate() {
 				indent.push(color, i + 1 >= children_len);
-				print_tree_node(label.as_str(), child.deref(), indent);
+				print_tree_node(label.deref(), child.deref(), line_formatter, indent);
 				indent.pop();
 			}
 		} else {

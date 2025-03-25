@@ -1,6 +1,32 @@
 let i = 0;
 loop {
-	print("hello " + i);
+	//print("hello " + i);
 	i = i + 1;
-	yld;
+	//yld;
+}
+
+//void, nothing
+//'void' can be passed and cascade returned, 'nothing' fails to compile if cascade returned
+{
+	let a;
+	let a = b;
+
+	if a { b } else c;
+	if a: b else c;
+	if a { ret; }
+	if a: ret;
+
+	loop a;
+
+	while a { b; }
+	while a: b;
+
+	for a in b { c; }
+	for a in b: c;
+
+	let a = (1); //paren
+	let a = (); //tuple unit
+	let a = (1,); //tuple one
+	let a = (1, 2, 3); //tuple many
+	let a = (1, 2, 3,); //tuple many trail
 }

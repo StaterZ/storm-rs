@@ -14,7 +14,7 @@ use symbol_table::SymbolTable;
 use crate::{shed_errors, tree_printer};
 
 use super::{
-	lexer::{Token, TokenKind},
+	lexer::{Token, TokenKind, TokenKindTag},
 	stream::{Stream, StreamErrorExpectErr, StreamExt},
 	ResultSH,
 };
@@ -101,7 +101,7 @@ fn discard_space<'a, 'i>(stream: &mut TokStream<
 	)).is_some() { };
 }
 
-pub fn parse_ast<'a, 'i>(
+pub fn parse<'a, 'i>(
 	tokens: &'i Vec<Token>,
 	observer: &'a mut impl RuleObserver<'i>,
 ) -> Result<Node, RuleError> {
@@ -152,6 +152,8 @@ fn parse_stmt<'a, 'i>(stream: &mut TokStream<'i,
 >, table: &'a mut SymbolTable, observer: &'a mut impl RuleObserver<'i>) -> RuleResult {
 	let expr = if let Ok(expr) = try_rule("let", stream, table, observer, parse_let)? {
 		Some(expr)
+	} else if let Ok(expr) = try_rule("return", stream, table, observer, parse_return)? {
+		Some(expr)
 	} else if let Ok(expr) = try_rule("give", stream, table, observer, parse_give)? {
 		Some(expr)
 	} else if let Ok(expr) = try_rule("break", stream, table, observer, parse_break)? {
@@ -164,22 +166,21 @@ fn parse_stmt<'a, 'i>(stream: &mut TokStream<'i,
 		Some(expr)
 	} else if let Ok(expr) = try_rule("assign", stream, table, observer, parse_assignment)? {
 		Some(expr)
-	} else if let Ok(expr) = try_rule("expr", stream, table, observer, parse_expr)? {
-		Some(expr)
 	} else {
 		None
 	};
 
-	if let Some(expr) = expr {
-		discard_space(stream);
-		match expect_eq(stream, TokenKind::Semicolon) {
-			Some(_) => Ok(Ok(Node { kind: NodeKind::Statement(Statement {
-				expr: Box::new(expr),
-			}) })),
-			None => Ok(Ok(expr)),
-		}
-	} else {
-		Ok(Err(error(stream)))
+	match expr {
+		Some(expr) => {
+			discard_space(stream);
+			match expect_eq(stream, TokenKind::Semicolon) {
+				Some(_) => Ok(Ok(Node { kind: NodeKind::Statement(Statement {
+					expr: Box::new(expr),
+				}) })),
+				None => Ok(Ok(expr)),
+			}
+		},
+		None => Ok(Err(error(stream))),
 	}
 }
 
@@ -193,12 +194,12 @@ fn parse_let<'a, 'i>(stream: &mut TokStream<'i,
 	}
 	
 	discard_space(stream);
-	let lhs = Box::new(try_rule("expr (lhs)", stream, table, observer, parse_expr)??);
+	let lhs = Box::new(try_rule("lhs:expr", stream, table, observer, parse_expr)??);
 	
 	discard_space(stream);
 	let rhs = if expect_eq(stream, TokenKind::Equals).is_some() {
 		discard_space(stream);
-		Some(Box::new(try_rule("expr (rhs)", stream, table, observer, parse_expr)??))
+		Some(Box::new(try_rule("rhs:expr", stream, table, observer, parse_expr)??))
 	} else {
 		None
 	};
@@ -211,7 +212,7 @@ fn parse_assignment<'a, 'i>(stream: &mut TokStream<'i,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
 >, table: &'a mut SymbolTable, observer: &mut impl RuleObserver<'i>) -> RuleResult {
-	let lhs = Box::new(shed_errors!(try_rule("expr (lhs)", stream, table, observer, parse_expr)));
+	let lhs = Box::new(shed_errors!(try_rule("lhs:expr", stream, table, observer, parse_expr)));
 	
 	discard_space(stream);
 	if let Err(err) = expect_eq_err(stream, TokenKind::Equals) {
@@ -219,7 +220,7 @@ fn parse_assignment<'a, 'i>(stream: &mut TokStream<'i,
 	};
 	
 	discard_space(stream);
-	let rhs = Box::new(try_rule("expr (rhs)", stream, table, observer, parse_expr)??);
+	let rhs = Box::new(try_rule("rhs:expr", stream, table, observer, parse_expr)??);
 	
 	Ok(Ok(Node { kind: NodeKind::Assign(Assign { lhs, rhs }) }))
 }
@@ -250,6 +251,22 @@ fn parse_block<'a, 'i>(stream: &mut TokStream<'i,
 	};
 }
 
+fn parse_return<'a, 'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>, table: &'a mut SymbolTable, observer: &mut impl RuleObserver<'i>) -> RuleResult {
+	if let Err(err) = expect_eq_err(stream, TokenKind::Return) {
+		return Ok(Err(err));
+	}
+	
+	discard_space(stream);
+	let expr = try_rule("expr", stream, table, observer, parse_expr)?;
+	Ok(Ok(Node { kind: NodeKind::Return(Return {
+		expr: expr.ok().map(|expr| Box::new(expr)),
+	}) }))
+}
+
 fn parse_give<'a, 'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
@@ -260,8 +277,10 @@ fn parse_give<'a, 'i>(stream: &mut TokStream<'i,
 	}
 	
 	discard_space(stream);
-	let expr =  try_rule("expr", stream, table, observer, parse_expr)??;
-	return Ok(Ok(Node { kind: NodeKind::Give(Give { expr: Box::new(expr) }) }));
+	let expr = try_rule("expr", stream, table, observer, parse_expr)??;
+	Ok(Ok(Node { kind: NodeKind::Give(Give {
+		expr: Box::new(expr),
+	}) }))
 }
 
 fn parse_break<'a, 'i>(stream: &mut TokStream<'i,
@@ -278,11 +297,15 @@ fn parse_break<'a, 'i>(stream: &mut TokStream<'i,
 		Some(expr)
 	} else if let Ok(expr) = try_rule("continue", stream, table, observer, parse_continue)? {
 		Some(expr)
+	} else if let Ok(expr) = try_rule("expr", stream, table, observer, parse_expr)? {
+		Some(expr)
 	} else {
-		try_rule("expr", stream, table, observer, parse_expr)?.ok()
+		None
 	};
 	
-	return Ok(Ok(Node { kind: NodeKind::Break(Break { expr: expr.map(|expr| Box::new(expr)) }) }));
+	Ok(Ok(Node { kind: NodeKind::Break(Break {
+		expr: expr.map(|expr| Box::new(expr)),
+	}) }))
 }
 
 fn parse_continue<'a, 'i>(stream: &mut TokStream<'i,
@@ -294,7 +317,7 @@ fn parse_continue<'a, 'i>(stream: &mut TokStream<'i,
 		return Ok(Err(err));
 	}
 	
-	return Ok(Ok(Node { kind: NodeKind::Continue }));
+	Ok(Ok(Node { kind: NodeKind::Continue }))
 }
 
 fn parse_unreachable<'a, 'i>(stream: &mut TokStream<'i,
@@ -306,7 +329,7 @@ fn parse_unreachable<'a, 'i>(stream: &mut TokStream<'i,
 		return Ok(Err(err));
 	}
 
-	return Ok(Ok(Node { kind: NodeKind::Unreachable }));
+	Ok(Ok(Node { kind: NodeKind::Unreachable }))
 }
 
 fn parse_if_else<'a, 'i>(stream: &mut TokStream<'i,
@@ -319,22 +342,28 @@ fn parse_if_else<'a, 'i>(stream: &mut TokStream<'i,
 	}
 
 	discard_space(stream);
-	let cond =  try_rule("expr (cond)", stream, table, observer, parse_expr)??;
+	let cond = try_rule("cond:expr", stream, table, observer, parse_expr)??;
 
 	discard_space(stream);
-	let body_true =  try_rule("expr (if)", stream, table, observer, parse_expr)??;
+	let body_true = match expect_eq(stream, TokenKind::Colon) {
+		Some(_) => {
+			discard_space(stream);
+			try_rule("body:expr", stream, table, observer, parse_expr)??
+		},
+		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
+	};
 
 	discard_space(stream);
 	let body_false = if expect_eq(stream, TokenKind::Else).is_some() {
 		discard_space(stream);
-		Some(try_rule("expr (else)", stream, table, observer, parse_expr)??)
+		Some(try_rule("else:expr", stream, table, observer, parse_expr)??)
 	} else { None };
 
-	return Ok(Ok(Node { kind: NodeKind::IfElse(IfElse {
+	Ok(Ok(Node { kind: NodeKind::IfElse(IfElse {
 		cond: Box::new(cond),
 		body_true: Box::new(body_true),
 		body_false: body_false.map(|body_false| Box::new(body_false)),
-	}) }));
+	}) }))
 }
 
 fn parse_loop<'a, 'i>(stream: &mut TokStream<'i,
@@ -347,8 +376,10 @@ fn parse_loop<'a, 'i>(stream: &mut TokStream<'i,
 	}
 
 	discard_space(stream);
-	let body =  try_rule("stmt", stream, table, observer, parse_stmt)??;
-	return Ok(Ok(Node { kind: NodeKind::Loop(Loop { body: Box::new(body) }) }));
+	let body = try_rule("body:expr", stream, table, observer, parse_expr)??;
+	Ok(Ok(Node { kind: NodeKind::Loop(Loop {
+		body: Box::new(body),
+	}) }))
 }
 
 fn parse_while<'a, 'i>(stream: &mut TokStream<'i,
@@ -361,15 +392,21 @@ fn parse_while<'a, 'i>(stream: &mut TokStream<'i,
 	}
 
 	discard_space(stream);
-	let cond =  try_rule("cond", stream, table, observer, parse_expr)??;
+	let cond = try_rule("cond:expr", stream, table, observer, parse_expr)??;
 	
 	discard_space(stream);
-	let body =  try_rule("stmt", stream, table, observer, parse_stmt)??;
+	let body = match expect_eq(stream, TokenKind::Colon) {
+		Some(_) => {
+			discard_space(stream);
+			try_rule("body:expr", stream, table, observer, parse_expr)??
+		},
+		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
+	};
 
-	return Ok(Ok(Node { kind: NodeKind::While(While {
+	Ok(Ok(Node { kind: NodeKind::While(While {
 		cond: Box::new(cond),
 		body: Box::new(body),
-	}) }));
+	}) }))
 }
 
 fn parse_for<'a, 'i>(stream: &mut TokStream<'i,
@@ -382,22 +419,28 @@ fn parse_for<'a, 'i>(stream: &mut TokStream<'i,
 	}
 
 	discard_space(stream);
-	let up_value =  try_rule("expr", stream, table, observer, parse_expr)??;
+	let label = try_rule("label:expr", stream, table, observer, parse_expr)??;
 
 	discard_space(stream);
 	expect_eq_err(stream, TokenKind::In)?;
 
 	discard_space(stream);
-	let iter =  try_rule("iter", stream, table, observer, parse_expr)??;
+	let iter = try_rule("iter:expr", stream, table, observer, parse_expr)??;
 	
 	discard_space(stream);
-	let body =  try_rule("stmt", stream, table, observer, parse_stmt)??;
+	let body = match expect_eq(stream, TokenKind::Colon) {
+		Some(_) => {
+			discard_space(stream);
+			try_rule("body:expr", stream, table, observer, parse_expr)??
+		},
+		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
+	};
 
-	return Ok(Ok(Node { kind: NodeKind::For(For {
-		up_value: Box::new(up_value),
+	Ok(Ok(Node { kind: NodeKind::For(For {
+		label: Box::new(label),
 		iter: Box::new(iter),
 		body: Box::new(body),
-	}) }));
+	}) }))
 }
 
 fn parse_expr<'a, 'i>(stream: &mut TokStream<'i,
@@ -503,7 +546,10 @@ fn parse_expr_atom<'a, 'i>(stream: &mut TokStream<'i,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
 >, table: &'a mut SymbolTable, observer: &'a mut impl RuleObserver<'i>) -> RuleResult {
-	if let Ok(paren) = parse_parenthesis(stream, table, observer)? {
+	if let Ok(tuple_ctor) = try_rule("tuple_ctor", stream, table, observer, parse_tuple_ctor)? {
+		return Ok(Ok(tuple_ctor));
+	}
+	if let Ok(paren) = try_rule("parenthesis", stream, table, observer, parse_parenthesis)? {
 		return Ok(Ok(paren));
 	}
 
@@ -541,5 +587,38 @@ fn parse_parenthesis<'a, 'i>(stream: &mut TokStream<'i,
 	expect_eq_err(stream, TokenKind::RParen)?;
 	discard_space(stream);
 
-	return Ok(Ok(expr));
+	Ok(Ok(expr))
+}
+
+fn parse_tuple_ctor<'a, 'i>(stream: &mut TokStream<'i,
+	impl TokStreamIter<'i> + Clone,
+	impl TokStreamRF<'i> + Clone,
+	impl TokStreamMF<'i> + Clone,
+>, table: &'a mut SymbolTable, observer: &'a mut impl RuleObserver<'i>) -> RuleResult {
+	if let Err(err) = expect_eq_err(stream, TokenKind::LParen) {
+		return Ok(Err(err));
+	}
+	discard_space(stream);
+
+	let mut tuple_ctor = TupleCtor::new();
+	while expect_eq(stream, TokenKind::RParen).is_none() {
+		let expr = try_rule("expr:arg", stream, table, observer, parse_expr)??;
+		tuple_ctor.items.push(expr);
+
+		discard_space(stream);
+		if expect_eq(stream, TokenKind::Comma).is_none() {
+			discard_space(stream);
+			if let Err(err) = expect_eq_err(stream, TokenKind::RParen) {
+				return Err(err);
+			}
+			if tuple_ctor.items.len() == 1 {
+				return Ok(Err(RuleErrorKind::UnexpectedToken(TokenKindTag::RParen)));
+			}
+			break;
+		}
+		discard_space(stream);
+	}
+	discard_space(stream);
+
+	Ok(Ok(Node { kind: NodeKind::TupleCtor(tuple_ctor) }))
 }

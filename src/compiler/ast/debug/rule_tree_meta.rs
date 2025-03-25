@@ -1,6 +1,7 @@
 use crate::tree_printer::{TreeDisplay, TreeDisplayChild};
 use itertools::Itertools;
 use owo_colors::{AnsiColors, DynColors, OwoColorize};
+use szu::opt_own::OptOwnStr;
 
 use super::{
 	super::{
@@ -22,11 +23,11 @@ impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
 			.to_string()
 	}
 
-	fn get_children<'s>(&'s self) -> Option<Vec<(String, TreeDisplayChild<'s>)>> {
+	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
 		(self.tree.children.len() > 0)
 			.then(|| self.tree.children
 				.iter()
-				.map(|child| ("".to_string(), TreeDisplayChild::Owned(Box::new(child.with_meta(self.document)))))
+				.map(|child| ("".into(), TreeDisplayChild::Owned(Box::new(child.with_meta(self.document)))))
 				.collect_vec()
 			)
 	}

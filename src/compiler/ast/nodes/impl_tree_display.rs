@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use color_print::cformat;
-
+use szu::opt_own::OptOwnStr;
 use super::super::super::tree_printer::{
 	TreeDisplay,
 	TreeDisplayChild,
@@ -12,7 +12,7 @@ impl<T: Display> TreeDisplay for T {
 		cformat!("<cyan>{}</>", self)
 	}
 
-	fn get_children<'s>(&'s self) -> Option<Vec<(String, TreeDisplayChild<'s>)>> {
+	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
 		None
 	}
 }

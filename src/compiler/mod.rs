@@ -1,6 +1,8 @@
 use std::{error::Error, fmt::Display};
 
-use color_print::cprintln;
+use ast::debug::RuleTree;
+use color_print::{cformat, cprintln};
+use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
 
 use crate::tree_printer;
@@ -8,7 +10,7 @@ use crate::tree_printer;
 pub mod source;
 pub mod lexer;
 pub mod ast;
-pub mod sat;
+pub mod semantic_analyzer;
 pub mod generator;
 
 mod stream;
@@ -34,8 +36,8 @@ pub enum CompilerError {
 }
 
 impl Display for CompilerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_ref()) //TODO? make it less crap?
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.as_ref()) //TODO? make it less crap?
 	}
 }
 
@@ -51,7 +53,10 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!();
 	}
 
-	let tokens = match lexer::lex(src_doc) {
+	let mut lex_timer = Stopwatch::start_new();
+	let tokens = lexer::lex(src_doc);
+	lex_timer.stop();
+	let tokens = match tokens {
 		Ok(tokens) => tokens,
 		Err(err) => {
 			let err_meta = err.with_meta(&src_doc);
@@ -68,53 +73,62 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!();
 	}
 	
-	let (ast_root, rule_tree) = match flags.show_ast_rule_path {
-		true => {
-			let mut observer = ast::debug::rule_observers::DebugObserver::new();
-			(ast::parse_ast(&tokens, &mut observer), Some(observer.conclude()))
-		},
-		false => (ast::parse_ast(&tokens, &mut ast::debug::rule_observers::DummyObserver { }), None),
+	let mut ast_timer = Stopwatch::start_new();
+	let (ast_root, rule_tree) = if flags.show_ast_rule_path {
+		let mut observer = ast::debug::rule_observers::DebugObserver::new();
+		(ast::parse(&tokens, &mut observer), Some(observer.conclude()))
+	} else {
+		(ast::parse(&tokens, &mut ast::debug::rule_observers::DummyObserver { }), None)
 	};
+	ast_timer.stop();
+
+	fn print_rule_tree(rule_tree: Option<RuleTree>, src_doc: &source::Document) {
+		if let Some(rule_tree) = &rule_tree {
+			tree_printer::print_tree("", &rule_tree.with_meta(&src_doc), |_label, value| cformat!("{}", value))
+		}
+	}
+
 	let ast_root = match ast_root {
 		Ok(root) => root,
 		Err(err) => {
 			let err_meta = err.to_meta(&src_doc);
 			cprintln!("<red>AST Failed:</>\n{}", err_meta);
-	
-			if let Some(rule_tree) = &rule_tree {
-				tree_printer::print_tree("", &rule_tree.with_meta(&src_doc))
-			}
+			print_rule_tree(rule_tree, src_doc);
+			println!();
 			
 			return Err(CompilerError::AstParserFailed);
 		},
 	};
 	
-	if let Some(rule_tree) = &rule_tree {
-		tree_printer::print_tree("", &rule_tree.with_meta(&src_doc))
-	}
+	print_rule_tree(rule_tree, src_doc);
 
 	if flags.show_ast {
 		println!("=== AST ===");
-		tree_printer::print_tree("Root", &ast_root);
+		tree_printer::print_tree("Root", &ast_root, |label, value| cformat!("<green>{}</>: {}", label, value));
 		println!();
 	}
 	
-	let sat_root = match sat::parse_sat(&ast_root) {
+	let mut sem_timer = Stopwatch::start_new();
+	let sem_root = match semantic_analyzer::parse(&ast_root) {
 		Ok(root) => root,
 		Err(err) => {
-			cprintln!("<red>SAT Failed:</>\n{:?}", err);
+			cprintln!("<red>SEM Failed:</>\n{:?}", err);
 			return Err(CompilerError::SatParserFailed);
 		},
 	};
+	sem_timer.stop();
 
 	
 	if flags.show_sat {
-		println!("=== SAT ===");
-		println!("\t{}", sat_root.as_ref());
+		println!("=== SEMANTIC ANALYSIS ===");
+		println!("\t{}", sem_root.as_ref());
 		println!();
 	}
 	
-	let gen_output = match generator::generate(&sat_root) {
+	let mut gen_timer = Stopwatch::start_new();
+	let gen_output = generator::generate(&sem_root);
+	gen_timer.stop();
+	let gen_output = match gen_output {
 		Ok(output) => output,
 		Err(err) => {
 			cprintln!("<red>Generator Failed:</>\n{}", err.as_ref());
@@ -128,5 +142,9 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!();
 	}
 
+	println!("lex time: {}", lex_timer);
+	println!("ast time: {}", ast_timer);
+	println!("sem time: {}", sem_timer);
+	println!("gen time: {}", gen_timer);
 	return Ok(gen_output);
 }

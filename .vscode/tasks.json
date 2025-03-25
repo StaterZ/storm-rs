@@ -7,7 +7,7 @@
 			"args": [
 				"run",
 				"--",
-				"--debug"
+				"-i=data/in.storm"
 			],
 			"problemMatcher": [
 				"$rustc"
