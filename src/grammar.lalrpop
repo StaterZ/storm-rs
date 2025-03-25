@@ -1,0 +1,59 @@
+use crate::tokens::Token;
+use crate::LexicalError;
+use std::str::FromStr;
+use std::sync::Arc;
+
+grammar(file_path: &std::path::Path);
+
+extern {
+	type Location = usize;
+	type Error = LexicalError;
+
+	enum Token {
+		// keywords
+		"let" => Token::KeywordLet,
+		"fn" => Token::KeywordFn,
+		"ret" => Token::KeywordReturn,
+		"struct" => Token::KeywordStruct,
+		"if" => Token::KeywordIf,
+		"else" => Token::KeywordElse,
+		"while" => Token::KeywordWhile,
+		"for" => Token::KeywordFor,
+		"match" => Token::KeywordMatch,
+		"pub" => Token::KeywordPub,
+		"mut" => Token::KeywordMut,
+
+		// literals
+		"identifier" => Token::Identifier(<String>),
+		"integer" => Token::Integer(<u128>),
+		"string" => Token::String(<String>),
+
+		"(" => Token::LeftParen,
+		")" => Token::RightParen,
+		"{" => Token::LeftBracket,
+		"}" => Token::RightBracket,
+		"[" => Token::LeftSquareBracket,
+		"]" => Token::RightSquareBracket,
+		"=" => Token::Assign,
+		";" => Token::Semicolon,
+		":" => Token::Colon,
+		"," => Token::Coma,
+		"." => Token::Dot,
+		"<" => Token::LessThanSign,
+		">" => Token::MoreThanSign,
+		">=" => Token::MoreThanEqSign,
+		"<=" => Token::LessThanEqSign,
+
+		// operators
+		"+" => Token::OperatorAdd,
+		"-" => Token::OperatorSub,
+		"*" => Token::OperatorMul,
+		"/" => Token::OperatorDiv,
+		"%" => Token::OperatorRem,
+		"&&" => Token::OperatorAnd,
+		"||" => Token::OperatorOr,
+		"==" => Token::OperatorEq,
+		"!=" => Token::OperatorNe,
+		"!" => Token::OperatorNot,
+	}
+}
