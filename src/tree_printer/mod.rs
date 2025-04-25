@@ -13,7 +13,7 @@ pub fn print_tree(label: &str, node: &impl TreeDisplay, line_formatter: impl Fn(
 }
 
 fn print_tree_node(label: &str, node: &dyn TreeDisplay, line_formatter: &impl Fn(&str, &str) -> String, indent: &mut Indent) {
-	cprintln!("{}{}", indent, line_formatter(label, &node.get_text_line()));
+	cprintln!("{}{}", indent, line_formatter(label, node.get_text_line().deref()));
 	
 	if let Some(children) = node.get_children() {
 		indent.extend();

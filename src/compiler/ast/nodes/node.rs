@@ -45,27 +45,27 @@ pub struct Node {
 
 impl TreeDisplay for Node {
 	fn get_text_line(&self) -> String {
-		let text = match &self.kind {
-			NodeKind::Block(_) => "".to_string(),
-			NodeKind::Statement(_) => "".to_string(),
-			NodeKind::Let(_) => "".to_string(),
-			NodeKind::Assign(_) => "".to_string(),
-			NodeKind::Return(_) => "".to_string(),
-			NodeKind::Give(_) => "".to_string(),
-			NodeKind::Break(_) => "".to_string(),
-			NodeKind::Continue => "".to_string(),
-			NodeKind::Unreachable => "".to_string(),
-			NodeKind::IfElse(_) => "".to_string(),
-			NodeKind::Loop(_) => "".to_string(),
-			NodeKind::While(_) => "".to_string(),
-			NodeKind::For(_) => "".to_string(),
-			NodeKind::TupleCtor(_) => "".to_string(),
-			NodeKind::BinOp(value) => format!("{}", value.op),
-			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value),
-			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value),
-			NodeKind::Identifier(value) => cformat!("<cyan>{}</>", value),
+		let text: OptOwnStr = match &self.kind {
+			NodeKind::Block(_) => "".into(),
+			NodeKind::Statement(_) => "".into(),
+			NodeKind::Let(_) => "".into(),
+			NodeKind::Assign(_) => "".into(),
+			NodeKind::Return(_) => "".into(),
+			NodeKind::Give(_) => "".into(),
+			NodeKind::Break(_) => "".into(),
+			NodeKind::Continue => "".into(),
+			NodeKind::Unreachable => "".into(),
+			NodeKind::IfElse(_) => "".into(),
+			NodeKind::Loop(_) => "".into(),
+			NodeKind::While(_) => "".into(),
+			NodeKind::For(_) => "".into(),
+			NodeKind::TupleCtor(_) => "".into(),
+			NodeKind::BinOp(value) => format!("{}", value.op).into(),
+			NodeKind::IntLit(value) => cformat!("<cyan>{}</>", value).into(),
+			NodeKind::StrLit(value) => cformat!("<cyan>{:?}</>", value).into(),
+			NodeKind::Identifier(value) => cformat!("<cyan>{}</>", value).into(),
 		};
-		format!("{}{}({})", text, ternary!(text.len() > 0 => " ", ""), self.kind.as_ref())
+		format!("{}{}({})", text.deref(), ternary!(text.len() > 0 => " ", ""), self.kind.as_ref())
 	}
 
 	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {

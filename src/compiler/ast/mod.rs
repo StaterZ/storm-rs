@@ -162,9 +162,9 @@ fn parse_stmt<'a, 'i>(stream: &mut TokStream<'i,
 		Some(expr)
 	} else if let Ok(expr) = try_rule("unreachable", stream, table, observer, parse_unreachable)? {
 		Some(expr)
-	} else if let Ok(expr) = try_rule("loop", stream, table, observer, parse_loop)? {
+	} else if let Ok(expr) = try_rule("assign", stream, table, observer, parse_assign)? {
 		Some(expr)
-	} else if let Ok(expr) = try_rule("assign", stream, table, observer, parse_assignment)? {
+	} else if let Ok(expr) = try_rule("expr", stream, table, observer, parse_expr)? {
 		Some(expr)
 	} else {
 		None
@@ -207,7 +207,7 @@ fn parse_let<'a, 'i>(stream: &mut TokStream<'i,
 	Ok(Ok(Node { kind: NodeKind::Let(Let { lhs, rhs }) }))
 }
 
-fn parse_assignment<'a, 'i>(stream: &mut TokStream<'i,
+fn parse_assign<'a, 'i>(stream: &mut TokStream<'i,
 	impl TokStreamIter<'i> + Clone,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
@@ -348,9 +348,9 @@ fn parse_if_else<'a, 'i>(stream: &mut TokStream<'i,
 	let body_true = match expect_eq(stream, TokenKind::Colon) {
 		Some(_) => {
 			discard_space(stream);
-			try_rule("body:expr", stream, table, observer, parse_expr)??
+			try_rule("body:expr", stream, table, observer, parse_stmt)??
 		},
-		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
+		None => try_rule("body:expr", stream, table, observer, parse_block)??,
 	};
 
 	discard_space(stream);
@@ -452,6 +452,9 @@ fn parse_expr<'a, 'i>(stream: &mut TokStream<'i,
 		return Ok(Ok(expr));
 	}
 	if let Ok(expr) = try_rule("if-else", stream, table, observer, parse_if_else)? {
+		return Ok(Ok(expr));
+	}
+	if let Ok(expr) = try_rule("loop", stream, table, observer, parse_loop)? {
 		return Ok(Ok(expr));
 	}
 	if let Ok(expr) = try_rule("while", stream, table, observer, parse_while)? {

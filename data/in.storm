@@ -11,7 +11,9 @@ loop {
 	let a;
 	let a = b;
 
-	if a { b } else c;
+	let a = 3 + b * c + 8r53 - 0q33;
+
+	if a { b } else { c };
 	if a: b else c;
 	if a { ret; }
 	if a: ret;
