@@ -7,9 +7,8 @@
 use std::error::Error;
 
 mod tree_printer;
-mod impl_tree_display;
 mod driver;
-mod tokens;
+mod lexer;
 mod ast;
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -1,12 +1,12 @@
 use std::str::FromStr;
 use lalrpop_util::ParseError;
 use lalrpop_util::ErrorRecovery;
-use crate::ast::{AstError, Expr, Lit, BinOp, UnaOp, ArithBinOp};
+use crate::ast::*;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, AstError>>);
 
 extern {
-    type Error = AstError;
+	type Error = AstError;
 }
 
 Delimit<T, S>: Vec<T> = {
@@ -18,69 +18,104 @@ Delimit<T, S>: Vec<T> = {
 	}
 };
 
-Tier<Op,NextTier>: Box<Expr> = {
-	<lhs:Tier<Op,NextTier>> <op:Op> <rhs:NextTier> => Box::new(Expr::BinOp { <> }),
+Tier<Op,NextTier>: Node = {
+	<lhs:Tier<Op,NextTier>> <op:Op> <rhs:NextTier> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	NextTier
 };
 
-pub Top: Expr = {
-	Body => Expr::Block(<>),
-};
-Block: Expr = {
-	"{" <Body> "}" => Expr::Block(<>),
+pub Top: Node = {
+	<stmts:Body> => Node::Block(Block { <> }),
 };
 Body = Delimit<Stmt, ";">;
-Stmt: Expr = {
-	"let" <binding:Ident> "=" <expr:Expr> => Expr::Let { <> },
+Stmt: Node = {
+	Let => Node::Let(<>),
+	Block => Node::Block(<>),
+	Loop => Node::Loop(<>),
+	While => Node::While(<>),
+	For => Node::For(<>),
+	IfElse => Node::IfElse(<>),
+	"unreachable" => Node::Unreachable,
+	Continue,
+	Break => Node::Break(<>),
+	Ret => Node::Return(<>),
 };
-Expr = Tier<ExprOp, Factor>;
-Factor = Tier<FactorOp, Term>;
-
-ExprOp: BinOp = {
-	"+" => BinOp::Arith(ArithBinOp::Add),
-	"-" => BinOp::Arith(ArithBinOp::Sub),
-};
-
-FactorOp: BinOp = {
-	"*" => BinOp::Arith(ArithBinOp::Mul),
-	"/" => BinOp::Arith(ArithBinOp::Div),
-};
-
-UnaOp: UnaOp = {
-	"+" => UnaOp::Identity,
-	"-" => UnaOp::Negate,
-};
-
-Term: Box<Expr> = {
-	Lit => Box::new(Expr::Lit(<>)),
-	"(" <Expr> ")",
-    //! => { errors.push(<>); Box::new(Expr::Error) },
-};
-
-Lit: Lit = {
-	Int => Lit::Int(<>),
-	// Float => Lit::Float(<>),
-	// String => Lit::String(<>),
-	Ident => Lit::Ident(<>),
-};
-
-Int: i32 = {
-	r"[0-9]+" =>? i32::from_str(<>).map_err(|e| ParseError::User {
-		error: AstError::BadNumber(e)
-	}),
-};
-
-Ident: String = {
-	r"[\p{XID_Start}_]\p{XID_Continue}*" => <>.to_string(),
+Let: Let = {
+	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
 }
+Block: Block = "{" <stmts:Body> "}" => Block { <> };
+Loop: Loop = {
+	"loop" <body:Expr> => Loop { body: Box::new(body) },
+};
+While: While = {
+	"while" <cond:Expr> <body:Block> => While { cond: Box::new(cond), body: Box::new(Node::Block(body)) },
+	"while" <cond:Expr> ":" <body:Expr> => While { cond: Box::new(cond), body: Box::new(body) },
+};
+For: For = {
+	"for" <bind:Pat> "in" <iter:Expr> <body:Block> => For { bind: Box::new(bind), iter: Box::new(iter), body: Box::new(Node::Block(body)) },
+	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Expr> => For { bind: Box::new(bind), iter: Box::new(iter), body: Box::new(body) },
+};
+IfElse: IfElse = {
+	"if" <cond:Expr> <body_if:Block> <body_else:("else" <Expr>)?> => IfElse { cond: Box::new(cond), body_if: Box::new(Node::Block(body_if)), body_else: body_else.map(|body_else| Box::new(body_else)) },
+	"if" <cond:Expr> ":" <body_if:Expr> <body_else:("else" <Expr>)?> => IfElse {cond: Box::new(cond), body_if: Box::new(body_if), body_else: body_else.map(|body_else| Box::new(body_else)) },
+};
+Continue: Node = "continue" => Node::Continue;
+Break: Break = {
+	"break" <expr:Expr?> => Break { expr: expr.map(|expr| Box::new(expr)) },
+	"break" <expr:Continue> => Break { expr: Some(Box::new(<>)) },
+}
+Ret: Return = {
+	"ret" <expr:Expr?> => Return { expr: expr.map(|expr| Box::new(expr)) },
+}
+Pat: Node = {
+	Ident => Node::Literal(Literal::Identifier(<>)),
+};
 
-//use crate::tokens::Token;
-//use crate::LexicalError;
-//use std::str::FromStr;
-//use std::sync::Arc;
+Expr = Tier<BinOp0, Factor>;
+Factor = Tier<BinOp1, Term>;
 
-//grammar(file_path: &std::path::Path);
-//
+//BinOpLogic: BinOpKind = {
+//	"&&" => BinOpKind::(ArithBinOpKind::And),
+//	"||" => BinOpKind::Arith(ArithBinOpKind::Or),
+//};
+
+BinOp0: BinOpKind = {
+	"+" => BinOpKind::Arith(ArithBinOpKind::Add),
+	"-" => BinOpKind::Arith(ArithBinOpKind::Sub),
+};
+
+BinOp1: BinOpKind = {
+	"*" => BinOpKind::Arith(ArithBinOpKind::Mul),
+	"/" => BinOpKind::Arith(ArithBinOpKind::Div),
+};
+
+UnaOp: UnaOpKind = {
+	"+" => UnaOpKind::Identity,
+	"-" => UnaOpKind::Negate,
+};
+
+Term: Node = {
+	Atom,
+	<op:UnaOp> <expr:Term> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
+};
+Atom: Node = {
+	Lit => Node::Literal(<>),
+	"(" <Expr> ")",
+	//! => { errors.push(<>); Node::Error },
+};
+
+Lit: Literal = {
+	Int => Literal::Integer(<>),
+	// Float => Literal::Float(<>),
+	// String => Literal::String(<>),
+	Ident => Literal::Identifier(<>),
+};
+
+Int: u64 = r"[0-9]+" =>? u64::from_str(<>).map_err(|e| ParseError::User {
+	error: AstError::BadNumber(e)
+});
+
+Ident: String = r"[\p{XID_Start}_]\p{XID_Continue}*" => <>.to_string();
+
 //extern {
 //	type Location = usize;
 //	type Error = LexicalError;

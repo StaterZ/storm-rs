@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use color_print::cformat;
 use szu::opt_own::OptOwnStr;
-use crate::tree_printer::{TreeDisplay, TreeDisplayChild};
+use super::super::super::tree_printer::{
+	TreeDisplay,
+	TreeDisplayChild,
+};
 
 impl<T: Display> TreeDisplay for T {
 	fn get_text_line(&self) -> String {

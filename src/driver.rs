@@ -3,7 +3,6 @@ use clap::Parser;
 use anyhow::Result;
 
 use color_print::cformat;
-use lalrpop_util::lalrpop_mod;
 use stopwatch::Stopwatch;
 
 use crate::tree_printer::print_tree;
@@ -35,21 +34,18 @@ pub fn main() -> Result<()> {
 	Ok(())
 }
 
-lalrpop_mod!(grammar);
-
 fn build(args: Args) -> Result<()> {
 	let src_in = std::fs::read_to_string(&args.in_path)?;
-	let mut errors = Vec::new();
 
-	let ast = grammar::TopParser::new()
-		.parse(&mut errors, &src_in);
+	let out = crate::ast::parse(&src_in);
 	
-	println!("ERRORS");
-	for (i, err) in errors.iter().enumerate() {
+
+	println!("=== ERRORS ===");
+	for (i, err) in out.errors.iter().enumerate() {
 		println!("{} | {:?}", i, err);
 	}
 	println!("=== AST ===");
-	print_tree("Root", &ast.unwrap(), |label, value| cformat!("<green>{}</>: {}", label, value));
+	print_tree("Root", &out.ast, |label, value| cformat!("<green>{}</>: {}", label, value));
 	println!();
 	
 	Ok(())
