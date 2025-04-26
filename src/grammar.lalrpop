@@ -19,11 +19,17 @@ Delimit<T, S>: Vec<T> = {
 };
 
 Tier<Op,NextTier>: Box<Expr> = {
-	Tier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+	<lhs:Tier<Op,NextTier>> <op:Op> <rhs:NextTier> => Box::new(Expr::BinOp { <> }),
 	NextTier
 };
 
-pub Exprs = Delimit<Stmt, ";">;
+pub Top: Expr = {
+	Body => Expr::Block(<>),
+};
+Block: Expr = {
+	"{" <Body> "}" => Expr::Block(<>),
+};
+Body = Delimit<Stmt, ";">;
 Stmt: Expr = {
 	"let" <binding:Ident> "=" <expr:Expr> => Expr::Let { <> },
 };

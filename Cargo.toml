@@ -8,17 +8,22 @@ edition = "2021"
 [dependencies]
 ### terminal stuff ###
 clap = { version = "4.5.32", features= ["derive"] }
-color-print = "0.3.7"
+owo-colors = "4.2.0" # ansi color formatter (good for dynamic colors)
+color-print = "0.3.7" # ansi color formatter (good for static colors)
 unicode-width = "0.2.0"
 
 ### error handling ###
 thiserror = "2.0.12"
 anyhow = { version = "1.0.82", features = ["backtrace"] } 
 
+### enums ###
+enum-display = "0.1.4"
+strum = { version = "0.27.1", features = ["derive"] }
+enum-as-inner = "0.6.1"
+
 ### misc ###
 phf = { version = "0.11.3", features = ["macros"] }
 string-builder = "0.2.0"
-enum-as-inner = "0.6.1"
 itertools = "0.14.0"
 more-asserts = "0.3.1"
 stopwatch = "0.0.7"

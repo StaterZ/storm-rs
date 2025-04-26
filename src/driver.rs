@@ -2,8 +2,11 @@ use std::path::PathBuf;
 use clap::Parser;
 use anyhow::Result;
 
+use color_print::cformat;
 use lalrpop_util::lalrpop_mod;
 use stopwatch::Stopwatch;
+
+use crate::tree_printer::print_tree;
 
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
@@ -38,10 +41,16 @@ fn build(args: Args) -> Result<()> {
 	let src_in = std::fs::read_to_string(&args.in_path)?;
 	let mut errors = Vec::new();
 
-	let ast = grammar::ExprsParser::new()
+	let ast = grammar::TopParser::new()
 		.parse(&mut errors, &src_in);
-	println!("RESULT: {:?}", ast);
-	println!("ERRORS: {:?}", errors);
-
+	
+	println!("ERRORS");
+	for (i, err) in errors.iter().enumerate() {
+		println!("{} | {:?}", i, err);
+	}
+	println!("=== AST ===");
+	print_tree("Root", &ast.unwrap(), |label, value| cformat!("<green>{}</>: {}", label, value));
+	println!();
+	
 	Ok(())
 }
