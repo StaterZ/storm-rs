@@ -27,7 +27,7 @@ stopwatch = "0.0.7"
 logos = "0.15.0"
 logos-display = "0.1.3"
 ariadne = { version = "0.5.1", features = ["auto-color"] }
-lalrpop-util = { version = "0.22.0", features = ["unicode"] }
+lalrpop-util = { version = "0.22.1", features = ["lexer", "unicode"] }
 unescaper = "0.1.5"
 
 ### LLVM ###

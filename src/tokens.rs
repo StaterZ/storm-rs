@@ -1,7 +1,8 @@
 use logos::Logos;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub enum LexingError {
+	#[default] Geh,
 }
 
 #[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Clone)]

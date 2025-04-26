@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use anyhow::Result;
 
+use lalrpop_util::lalrpop_mod;
 use stopwatch::Stopwatch;
 
 #[derive(Parser, Debug)]
@@ -31,8 +32,16 @@ pub fn main() -> Result<()> {
 	Ok(())
 }
 
+lalrpop_mod!(grammar);
+
 fn build(args: Args) -> Result<()> {
-	//let Ok(src_in) = std::fs::read_to_string(&args.in_path)?;
+	let src_in = std::fs::read_to_string(&args.in_path)?;
+	let mut errors = Vec::new();
+
+	let ast = grammar::ExprsParser::new()
+		.parse(&mut errors, &src_in);
+	println!("RESULT: {:?}", ast);
+	println!("ERRORS: {:?}", errors);
 
 	Ok(())
 }

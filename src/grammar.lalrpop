@@ -1,59 +1,129 @@
-use crate::tokens::Token;
-use crate::LexicalError;
 use std::str::FromStr;
-use std::sync::Arc;
+use lalrpop_util::ParseError;
+use lalrpop_util::ErrorRecovery;
+use crate::ast::{AstError, Expr, Lit, BinOp, UnaOp, ArithBinOp};
 
-grammar(file_path: &std::path::Path);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, AstError>>);
 
 extern {
-	type Location = usize;
-	type Error = LexicalError;
-
-	enum Token {
-		// keywords
-		"let" => Token::KeywordLet,
-		"fn" => Token::KeywordFn,
-		"ret" => Token::KeywordReturn,
-		"struct" => Token::KeywordStruct,
-		"if" => Token::KeywordIf,
-		"else" => Token::KeywordElse,
-		"while" => Token::KeywordWhile,
-		"for" => Token::KeywordFor,
-		"match" => Token::KeywordMatch,
-		"pub" => Token::KeywordPub,
-		"mut" => Token::KeywordMut,
-
-		// literals
-		"identifier" => Token::Identifier(<String>),
-		"integer" => Token::Integer(<u128>),
-		"string" => Token::String(<String>),
-
-		"(" => Token::LeftParen,
-		")" => Token::RightParen,
-		"{" => Token::LeftBracket,
-		"}" => Token::RightBracket,
-		"[" => Token::LeftSquareBracket,
-		"]" => Token::RightSquareBracket,
-		"=" => Token::Assign,
-		";" => Token::Semicolon,
-		":" => Token::Colon,
-		"," => Token::Coma,
-		"." => Token::Dot,
-		"<" => Token::LessThanSign,
-		">" => Token::MoreThanSign,
-		">=" => Token::MoreThanEqSign,
-		"<=" => Token::LessThanEqSign,
-
-		// operators
-		"+" => Token::OperatorAdd,
-		"-" => Token::OperatorSub,
-		"*" => Token::OperatorMul,
-		"/" => Token::OperatorDiv,
-		"%" => Token::OperatorRem,
-		"&&" => Token::OperatorAnd,
-		"||" => Token::OperatorOr,
-		"==" => Token::OperatorEq,
-		"!=" => Token::OperatorNe,
-		"!" => Token::OperatorNot,
-	}
+    type Error = AstError;
 }
+
+Delimit<T, S>: Vec<T> = {
+	<mut v:(<T> S)*> <e:T?> => {
+		if let Some(e) = e {
+			v.push(e);
+		}
+		v
+	}
+};
+
+Tier<Op,NextTier>: Box<Expr> = {
+	Tier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+	NextTier
+};
+
+pub Exprs = Delimit<Stmt, ";">;
+Stmt: Expr = {
+	"let" <binding:Ident> "=" <expr:Expr> => Expr::Let { <> },
+};
+Expr = Tier<ExprOp, Factor>;
+Factor = Tier<FactorOp, Term>;
+
+ExprOp: BinOp = {
+	"+" => BinOp::Arith(ArithBinOp::Add),
+	"-" => BinOp::Arith(ArithBinOp::Sub),
+};
+
+FactorOp: BinOp = {
+	"*" => BinOp::Arith(ArithBinOp::Mul),
+	"/" => BinOp::Arith(ArithBinOp::Div),
+};
+
+UnaOp: UnaOp = {
+	"+" => UnaOp::Identity,
+	"-" => UnaOp::Negate,
+};
+
+Term: Box<Expr> = {
+	Lit => Box::new(Expr::Lit(<>)),
+	"(" <Expr> ")",
+    //! => { errors.push(<>); Box::new(Expr::Error) },
+};
+
+Lit: Lit = {
+	Int => Lit::Int(<>),
+	// Float => Lit::Float(<>),
+	// String => Lit::String(<>),
+	Ident => Lit::Ident(<>),
+};
+
+Int: i32 = {
+	r"[0-9]+" =>? i32::from_str(<>).map_err(|e| ParseError::User {
+		error: AstError::BadNumber(e)
+	}),
+};
+
+Ident: String = {
+	r"[\p{XID_Start}_]\p{XID_Continue}*" => <>.to_string(),
+}
+
+//use crate::tokens::Token;
+//use crate::LexicalError;
+//use std::str::FromStr;
+//use std::sync::Arc;
+
+//grammar(file_path: &std::path::Path);
+//
+//extern {
+//	type Location = usize;
+//	type Error = LexicalError;
+//
+//	enum Token {
+//		// keywords
+//		"let" => Token::KeywordLet,
+//		"fn" => Token::KeywordFn,
+//		"ret" => Token::KeywordReturn,
+//		"struct" => Token::KeywordStruct,
+//		"if" => Token::KeywordIf,
+//		"else" => Token::KeywordElse,
+//		"while" => Token::KeywordWhile,
+//		"for" => Token::KeywordFor,
+//		"match" => Token::KeywordMatch,
+//		"pub" => Token::KeywordPub,
+//		"mut" => Token::KeywordMut,
+//
+//		// literals
+//		"identifier" => Token::Identifier(<String>),
+//		"integer" => Token::Integer(<u128>),
+//		"string" => Token::String(<String>),
+//
+//		"(" => Token::LeftParen,
+//		")" => Token::RightParen,
+//		"{" => Token::LeftBracket,
+//		"}" => Token::RightBracket,
+//		"[" => Token::LeftSquareBracket,
+//		"]" => Token::RightSquareBracket,
+//		"=" => Token::Assign,
+//		";" => Token::Semicolon,
+//		":" => Token::Colon,
+//		"," => Token::Coma,
+//		"." => Token::Dot,
+//		"<" => Token::LessThanSign,
+//		">" => Token::MoreThanSign,
+//		">=" => Token::MoreThanEqSign,
+//		"<=" => Token::LessThanEqSign,
+//
+//		// operators
+//		"+" => Token::OperatorAdd,
+//		"-" => Token::OperatorSub,
+//		"*" => Token::OperatorMul,
+//		"/" => Token::OperatorDiv,
+//		"%" => Token::OperatorRem,
+//		"&&" => Token::OperatorAnd,
+//		"||" => Token::OperatorOr,
+//		"==" => Token::OperatorEq,
+//		"!=" => Token::OperatorNe,
+//		"!" => Token::OperatorNot,
+//	}
+//}

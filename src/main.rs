@@ -8,6 +8,7 @@ use std::error::Error;
 
 mod driver;
 mod tokens;
+mod ast;
 
 fn main() -> Result<(), Box<dyn Error>> {
 	Ok(driver::main()?)
