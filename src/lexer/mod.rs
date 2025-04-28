@@ -6,30 +6,45 @@ pub enum LexingError {
 }
 
 #[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Clone)]
-#[logos(error = LexingError, skip r"[ \t\n\f]+", skip r"//[^/][^\n]*", skip r"/\*(?:[^*]|\*[^/])*\*/")]
+#[logos(
+	error = LexingError,
+	skip r"[ \t\n\f]+",
+	skip r"//[^/][^\n]*",
+	skip r"/\*(?:[^*]|\*[^/])*\*/",
+)]
 pub enum Token {
 	#[token("let")]
-	KeywordLet,
-	#[token("fn")]
-	KeywordFn,
-	#[token("ret")]
-	KeywordRet,
-	#[token("struct")]
-	KeywordStruct,
-	#[token("if")]
-	KeywordIf,
-	#[token("else")]
-	KeywordElse,
+	Let,
+	#[token("loop")]
+	Loop,
 	#[token("while")]
-	KeywordWhile,
+	While,
 	#[token("for")]
-	KeywordFor,
-	#[token("match")]
-	KeywordMatch,
-	#[token("pub")]
-	KeywordPub,
-	#[token("mut")]
-	KeywordMut,
+	For,
+	#[token("if")]
+	If,
+	#[token("else")]
+	Else,
+	// #[token("match")]
+	// Match,
+
+	#[token("ret")]
+	Ret,
+	#[token("break")]
+	Break,
+	#[token("continue")]
+	Continue,
+	#[token("unreachable")]
+	Unreachable,
+
+	// #[token("pub")]
+	// Pub,
+	// #[token("mut")]
+	// Mut,
+	// #[token("struct")]
+	// Struct,
+	// #[token("fn")]
+	// Fn,
 
 	// Modern way of allowing identifiers, read: https://unicode.org/reports/tr31/
 	#[regex(r"[\p{XID_Start}_]\p{XID_Continue}*", |lex| lex.slice().to_string())]
@@ -48,13 +63,14 @@ pub enum Token {
 	#[token(")")]
 	RParen,
 	#[token("{")]
-	LCurlyBracket,
+	LBrace,
 	#[token("}")]
-	RCurlyBracket,
+	RBrace,
 	#[token("[")]
-	LSquareBracket,
+	LBracket,
 	#[token("]")]
-	RSquareBracket,
+	RBracket,
+
 	#[token("=")]
 	Assign,
 	#[token(";")]
@@ -65,33 +81,34 @@ pub enum Token {
 	Coma,
 	#[token(".")]
 	Dot,
+
 	#[token("<")]
-	LessThanSign,
-	#[token(">")]
-	MoreThanSign,
-	#[token(">=")]
-	MoreThanEqSign,
+	Lt,
 	#[token("<=")]
-	LessThanEqSign,
+	Le,
+	#[token(">")]
+	Gt,
+	#[token(">=")]
+	Ge,
+	#[token("==")]
+	Eq,
+	#[token("!=")]
+	Ne,
 
 	#[token("+")]
-	OperatorAdd,
+	Add,
 	#[token("-")]
-	OperatorSub,
+	Sub,
 	#[token("*")]
-	OperatorMul,
+	Mul,
 	#[token("/")]
-	OperatorDiv,
-	#[token("%")]
-	OperatorRem,
+	Div,
+	// #[token("%")]
+	// Rem,
 	#[token("&&")]
-	OperatorAnd,
+	And,
 	#[token("||")]
-	OperatorOr,
-	#[token("==")]
-	OperatorEq,
-	#[token("!=")]
-	OperatorNe,
+	Or,
 	#[token("!")]
-	OperatorNot,
+	Not,
 }

@@ -29,77 +29,113 @@ pub Top: Node = {
 Body = Delimit<Stmt, ";">;
 Stmt: Node = {
 	Let => Node::Let(<>),
+	Assign => Node::Assign(<>),
+	Ret => Node::Return(<>),
+	Break => Node::Break(<>),
+	Continue,
+
 	Block => Node::Block(<>),
 	Loop => Node::Loop(<>),
 	While => Node::While(<>),
 	For => Node::For(<>),
 	IfElse => Node::IfElse(<>),
 	"unreachable" => Node::Unreachable,
-	Continue,
-	Break => Node::Break(<>),
-	Ret => Node::Return(<>),
 };
+Block: Block = "{" <stmts:Body> "}" => Block { <> };
 Let: Let = {
 	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
-}
-Block: Block = "{" <stmts:Body> "}" => Block { <> };
+};
+Assign: Assign = {
+	<lhs:Expr> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
+};
+Ret: Return = {
+	"ret" <expr:Expr?> => Return { expr: expr.map(|expr| Box::new(expr)) },
+};
+Break: Break = {
+	"break" <expr:Expr?> => Break { expr: expr.map(|expr| Box::new(expr)) },
+	"break" <expr:Continue> => Break { expr: Some(Box::new(<>)) },
+};
+Continue: Node = "continue" => Node::Continue;
 Loop: Loop = {
 	"loop" <body:Expr> => Loop { body: Box::new(body) },
 };
 While: While = {
-	"while" <cond:Expr> <body:Block> => While { cond: Box::new(cond), body: Box::new(Node::Block(body)) },
-	"while" <cond:Expr> ":" <body:Expr> => While { cond: Box::new(cond), body: Box::new(body) },
+	"while" <cond:Expr> <body:Block> <body_else:("else" <Expr>)?> => While {
+		cond: Box::new(cond),
+		body: Box::new(Node::Block(body)),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
+	"while" <cond:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => While {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
 };
 For: For = {
-	"for" <bind:Pat> "in" <iter:Expr> <body:Block> => For { bind: Box::new(bind), iter: Box::new(iter), body: Box::new(Node::Block(body)) },
-	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Expr> => For { bind: Box::new(bind), iter: Box::new(iter), body: Box::new(body) },
+	"for" <bind:Pat> "in" <iter:Expr> <body:Block> <body_else:("else" <Expr>)?> => For {
+		bind: Box::new(bind),
+		iter: Box::new(iter),
+		body: Box::new(Node::Block(body)),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
+	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => For {
+		bind: Box::new(bind),
+		iter: Box::new(iter),
+		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
 };
 IfElse: IfElse = {
-	"if" <cond:Expr> <body_if:Block> <body_else:("else" <Expr>)?> => IfElse { cond: Box::new(cond), body_if: Box::new(Node::Block(body_if)), body_else: body_else.map(|body_else| Box::new(body_else)) },
-	"if" <cond:Expr> ":" <body_if:Expr> <body_else:("else" <Expr>)?> => IfElse {cond: Box::new(cond), body_if: Box::new(body_if), body_else: body_else.map(|body_else| Box::new(body_else)) },
+	"if" <cond:Expr> <body_if:Block> <body_else:("else" <Expr>)?> => IfElse {
+		cond: Box::new(cond),
+		body_if: Box::new(Node::Block(body_if)),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
+	"if" <cond:Expr> ":" <body_if:Expr> <body_else:("else" <Expr>)?> => IfElse {
+		cond: Box::new(cond),
+		body_if: Box::new(body_if),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
+	},
 };
-Continue: Node = "continue" => Node::Continue;
-Break: Break = {
-	"break" <expr:Expr?> => Break { expr: expr.map(|expr| Box::new(expr)) },
-	"break" <expr:Continue> => Break { expr: Some(Box::new(<>)) },
-}
-Ret: Return = {
-	"ret" <expr:Expr?> => Return { expr: expr.map(|expr| Box::new(expr)) },
-}
+
 Pat: Node = {
 	Ident => Node::Literal(Literal::Identifier(<>)),
 };
 
 Expr = Tier<BinOp0, Factor>;
 Factor = Tier<BinOp1, Term>;
-
 //BinOpLogic: BinOpKind = {
 //	"&&" => BinOpKind::(ArithBinOpKind::And),
 //	"||" => BinOpKind::Arith(ArithBinOpKind::Or),
 //};
-
 BinOp0: BinOpKind = {
 	"+" => BinOpKind::Arith(ArithBinOpKind::Add),
 	"-" => BinOpKind::Arith(ArithBinOpKind::Sub),
 };
-
 BinOp1: BinOpKind = {
 	"*" => BinOpKind::Arith(ArithBinOpKind::Mul),
 	"/" => BinOpKind::Arith(ArithBinOpKind::Div),
-};
-
-UnaOp: UnaOpKind = {
-	"+" => UnaOpKind::Identity,
-	"-" => UnaOpKind::Negate,
 };
 
 Term: Node = {
 	Atom,
 	<op:UnaOp> <expr:Term> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
 };
+UnaOp: UnaOpKind = {
+	"+" => UnaOpKind::Identity,
+	"-" => UnaOpKind::Negate,
+};
 Atom: Node = {
+	Block => Node::Block(<>),
+	//Loop => Node::Loop(<>),
+	//While => Node::While(<>),
+	//For => Node::For(<>),
+	//IfElse => Node::IfElse(<>),
+	"unreachable" => Node::Unreachable,
+
 	Lit => Node::Literal(<>),
 	"(" <Expr> ")",
+
 	//! => { errors.push(<>); Node::Error },
 };
 
@@ -120,51 +156,56 @@ Ident: String = r"[\p{XID_Start}_]\p{XID_Continue}*" => <>.to_string();
 //	type Location = usize;
 //	type Error = LexicalError;
 //
-//	enum Token {
-//		// keywords
-//		"let" => Token::KeywordLet,
-//		"fn" => Token::KeywordFn,
-//		"ret" => Token::KeywordReturn,
-//		"struct" => Token::KeywordStruct,
-//		"if" => Token::KeywordIf,
-//		"else" => Token::KeywordElse,
-//		"while" => Token::KeywordWhile,
-//		"for" => Token::KeywordFor,
-//		"match" => Token::KeywordMatch,
-//		"pub" => Token::KeywordPub,
-//		"mut" => Token::KeywordMut,
+//	pub enum Token {
+//		Let,
+//		Loop,
+//		While,
+//		For,
+//		If,
+//		Else,
+//		// Match,
 //
-//		// literals
-//		"identifier" => Token::Identifier(<String>),
-//		"integer" => Token::Integer(<u128>),
-//		"string" => Token::String(<String>),
+//		Ret,
+//		Break,
+//		Continue,
+//		Unreachable,
 //
-//		"(" => Token::LeftParen,
-//		")" => Token::RightParen,
-//		"{" => Token::LeftBracket,
-//		"}" => Token::RightBracket,
-//		"[" => Token::LeftSquareBracket,
-//		"]" => Token::RightSquareBracket,
-//		"=" => Token::Assign,
-//		";" => Token::Semicolon,
-//		":" => Token::Colon,
-//		"," => Token::Coma,
-//		"." => Token::Dot,
-//		"<" => Token::LessThanSign,
-//		">" => Token::MoreThanSign,
-//		">=" => Token::MoreThanEqSign,
-//		"<=" => Token::LessThanEqSign,
+//		// Pub,
+//		// Mut,
+//		// Struct,
+//		// Fn,
 //
-//		// operators
-//		"+" => Token::OperatorAdd,
-//		"-" => Token::OperatorSub,
-//		"*" => Token::OperatorMul,
-//		"/" => Token::OperatorDiv,
-//		"%" => Token::OperatorRem,
-//		"&&" => Token::OperatorAnd,
-//		"||" => Token::OperatorOr,
-//		"==" => Token::OperatorEq,
-//		"!=" => Token::OperatorNe,
-//		"!" => Token::OperatorNot,
+//		Identifier(String),
+//		Integer(u128),
+//		String(String),
+//		
+//		LParen,
+//		RParen,
+//		LBrace,
+//		RBrace,
+//		LBracket,
+//		RBracket,
+//
+//		Assign,
+//		Semicolon,
+//		Colon,
+//		Coma,
+//		Dot,
+//
+//		Lt,
+//		Le,
+//		Gt,
+//		Ge,
+//		Eq,
+//		Ne,
+//
+//		Add,
+//		Sub,
+//		Mul,
+//		Div,
+//		// Rem,
+//		And,
+//		Or,
+//		Not,
 //	}
 //}
