@@ -7,12 +7,15 @@ use lalrpop_util::{lalrpop_mod, ErrorRecovery, ParseError};
 mod nodes;
 use nodes::*;
 
+use crate::lexer::{Lexer, Token};
+
 lalrpop_mod!(grammar);
 
 pub fn parse(src_in: &str) -> Output {
 	let mut errors = Vec::new();
 	let parser = grammar::TopParser::new();
-	let ast = parser.parse(&mut errors, &src_in);
+	let lexer = Lexer::new(&src_in);
+	let ast = parser.parse(&mut errors, lexer);
 	let path = "data/in.storm".to_string(); //TODO
 
 	match ast {
@@ -38,10 +41,11 @@ pub fn parse(src_in: &str) -> Output {
 						))
 						.with_message("There was a problem parsing part of this code."))
 					.finish(),
-				_ => {
-					println!("OUF!");
-					panic!();
-				},
+				err => Report::build(
+					ReportKind::Error,
+					FileSpan::new(path.clone(), 0..0))
+					.with_message(format!("OUF! {:?}", err))
+					.finish()
 			};
 			report.eprint(ariadne::FnCache::new(|x: &String| {
 				std::fs::read_to_string(Path::new(x.as_str()))
@@ -52,9 +56,9 @@ pub fn parse(src_in: &str) -> Output {
 	}
 }
 
-pub struct Output<'i> {
+pub struct Output {
 	pub ast: Node,
-	pub errors: Vec<ErrorRecovery<usize, grammar::Token<'i>, AstError>>,
+	pub errors: Vec<ErrorRecovery<usize, Token, AstError>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -36,8 +36,7 @@ pub enum ArithBinOpKind {
 	Div,
 	Add,
 	Sub,
-	//Rem,
-	//Mod,
+	//Rem, //Mod,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, EnumDisplay)]

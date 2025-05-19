@@ -7,6 +7,6 @@ pub struct TupleCtor {
 
 impl TupleCtor {
 	pub fn new() -> Self {
-		Self { items: vec![] }
+		Self { items: Vec::new() }
 	}
 }

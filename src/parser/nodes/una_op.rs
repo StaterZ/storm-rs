@@ -12,5 +12,5 @@ pub struct UnaOp {
 pub enum UnaOpKind {
 	Identity,
 	Negate,
-	Not,
+	Invert,
 }

@@ -8,7 +8,6 @@ loop {
 //void, nothing
 //'void' can be passed and cascade returned, 'nothing' fails to compile if cascade returned
 {
-	let a;
 	let a = b;
 
 	if a { b } else c;

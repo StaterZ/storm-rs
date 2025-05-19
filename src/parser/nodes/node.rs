@@ -69,7 +69,7 @@ impl TreeDisplay for Node {
 		match self {
 			Node::Error => None,
 			Node::Block(value) => Some(
-				value.stmts
+				value.body
 					.iter()
 					.enumerate()
 					.map(|(i, stmt)| (format!("[{}]", i).into(), (stmt as &dyn TreeDisplay).into()))
@@ -96,7 +96,7 @@ impl TreeDisplay for Node {
 			Node::Unreachable => None,
 			Node::IfElse(value) => Some(vec![
 				("cond".into(), (value.cond.deref() as &dyn TreeDisplay).into()),
-				("if".into(), (value.body_if.deref() as &dyn TreeDisplay).into()),
+				("if".into(), (value.body.deref() as &dyn TreeDisplay).into()),
 				("else".into(), value.body_else.as_ref().map_or(&"none" as &dyn TreeDisplay, |body_else| body_else.deref() as &dyn TreeDisplay).into()),
 			]),
 			Node::Loop(value) => Some(vec![

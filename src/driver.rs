@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use clap::Parser;
 use anyhow::Result;
-
 use color_print::cformat;
 use stopwatch::Stopwatch;
 
@@ -36,16 +35,15 @@ pub fn main() -> Result<()> {
 
 fn build(args: Args) -> Result<()> {
 	let src_in = std::fs::read_to_string(&args.in_path)?;
-
-	let out = crate::ast::parse(&src_in);
+	let ast = crate::parser::parse(&src_in);
 	
 
 	println!("=== ERRORS ===");
-	for (i, err) in out.errors.iter().enumerate() {
+	for (i, err) in ast.errors.iter().enumerate() {
 		println!("{} | {:?}", i, err);
 	}
 	println!("=== AST ===");
-	print_tree("Root", &out.ast, |label, value| cformat!("<green>{}</>: {}", label, value));
+	print_tree("Root", &ast.ast, |label, value| cformat!("<green>{}</>: {}", label, value));
 	println!();
 	
 	Ok(())

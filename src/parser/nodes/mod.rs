@@ -14,8 +14,8 @@ pub use bin_op::{
 	BinOp,
 	BinOpKind,
 	ArithBinOpKind,
-	//LogicBinOpKind,
-	//CmpBinOpKind,
+	LogicBinOpKind,
+	CmpBinOpKind,
 };
 pub use una_op::{
 	UnaOp,
