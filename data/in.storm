@@ -10,15 +10,21 @@ loop {
 {
 	let a = b;
 
-	if a { b } else c;
-	if a: b else c;
 	if a { ret; }
 	if a: ret;
+	if a { b } else c;
+	if a: b else c;
 
 	loop a;
+	loop { a };
+	loop { a } else b;
 
 	while a { b; }
 	while a: b;
+	while a { b; } else c;
+	while a: b else c;
+
+	if a: while b: c else d //else should bind to while
 
 	for a in b { c; }
 	for a in b: c;

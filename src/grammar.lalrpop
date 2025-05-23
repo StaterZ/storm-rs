@@ -21,28 +21,76 @@ Tier<Op,NextTier>: Node = {
 pub Top: Node = {
 	<body:Body> => Node::Block(Block { <> }),
 };
-Body = Stmt*;
+Body = Delimit<Stmt, ";">;
 Stmt: Node = {
-	<Let> ";" => Node::Let(<>),
-	<Assign> ";" => Node::Assign(<>),
-	<Ret> ";" => Node::Return(<>),
-	<Break> ";" => Node::Break(<>),
-	<Continue> ";",
-	<Unreachable> ";",
-
-	Block => Node::Block(<>),
-	Loop => Node::Loop(<>),
-	While => Node::While(<>),
-	For => Node::For(<>),
-	IfElse => Node::IfElse(<>),
+	Let => Node::Let(<>),
+	Assign => Node::Assign(<>),
+	Ret => Node::Return(<>),
+	Break => Node::Break(<>),
+	Continue,
+	Unreachable,
+	Expr,
 };
+Lit: Literal = {
+	"identifier" => Literal::Identifier(<>),
+	"integer" => Literal::Integer(<>),
+	// "real" => Literal::Float(<>),
+	// "string" => Literal::String(<>),
+};
+Atom: Node = {
+	Lit => Node::Literal(<>),
+	Block => Node::Block(<>),
+	"(" <Expr> ")",
+};
+Expr: Node = {
+	#[precedence(level="0")] Atom,
+	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:Expr> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
+	#[precedence(level="2")] #[assoc(side="left")] <lhs:Expr> <op:BinOp0> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="3")] #[assoc(side="left")] <lhs:Expr> <op:BinOp1> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="4")] #[assoc(side="left")] <lhs:Expr> <op:BinOp2> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="5")] #[assoc(side="left")] <lhs:Expr> <op:BinOp3> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="6")] #[assoc(side="left")] <lhs:Expr> <op:BinOp4> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="7")] #[assoc(side="left")]
+	//Loop => Node::Loop(<>),
+	//While => Node::While(<>),
+	//For => Node::For(<>),
+	If => Node::IfElse(<>),
+};
+UnaOp: UnaOpKind = {
+	"+" => UnaOpKind::Identity,
+	"-" => UnaOpKind::Negate,
+	"!" => UnaOpKind::Invert,
+};
+BinOp0: BinOpKind = {
+	"*" => BinOpKind::Arith(ArithBinOpKind::Mul),
+	"/" => BinOpKind::Arith(ArithBinOpKind::Div),
+};
+BinOp1: BinOpKind = {
+	"+" => BinOpKind::Arith(ArithBinOpKind::Add),
+	"-" => BinOpKind::Arith(ArithBinOpKind::Sub),
+};
+BinOp2: BinOpKind = {
+	"==" => BinOpKind::Cmp(CmpBinOpKind::Eq),
+	"!=" => BinOpKind::Cmp(CmpBinOpKind::Ne),
+	"<" => BinOpKind::Cmp(CmpBinOpKind::Lt),
+	"<=" => BinOpKind::Cmp(CmpBinOpKind::Le),
+	">" => BinOpKind::Cmp(CmpBinOpKind::Gt),
+	">=" => BinOpKind::Cmp(CmpBinOpKind::Ge),
+}
+BinOp3: BinOpKind = {
+	"&&" => BinOpKind::Logic(LogicBinOpKind::And),
+};
+BinOp4: BinOpKind = {
+	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
+}
+
 Block: Block = "{" <body:Body> "}" => Block { <> };
 Let: Let = {
 	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
 };
 Assign: Assign = {
 	//<lhs:Expr> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
-	<lhs:Atom> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
+	<lhs:Pat> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
 };
 Ret: Return = {
 	"ret" <expr:Expr?> => Return { expr: expr.map(|expr| Box::new(expr)) },
@@ -82,16 +130,16 @@ For: For = {
 		body_else: body_else.map(|body_else| Box::new(body_else)),
 	},
 };
-IfElse: IfElse = {
+If: IfElse = {
 	"if" <cond:Expr> <body:Block> <body_else:("else" <Expr>)?> => IfElse {
 		cond: Box::new(cond),
 		body: Box::new(Node::Block(body)),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: Box::new(body_else),
 	},
 	"if" <cond:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => IfElse {
 		cond: Box::new(cond),
 		body: Box::new(body),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: Box::new(body_else),
 	},
 };
 
@@ -99,63 +147,6 @@ Pat: Node = {
 	"identifier" => Node::Literal(Literal::Identifier(<>)),
 };
 
-Expr: Node = {
-	#[precedence(level="0")] Atom,
-	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:Expr> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
-	#[precedence(level="2")] #[assoc(side="left")] <lhs:Expr> <op:BinOp0> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="3")] #[assoc(side="left")] <lhs:Expr> <op:BinOp1> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="4")] #[assoc(side="left")] <lhs:Expr> <op:BinOp2> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="5")] #[assoc(side="left")] <lhs:Expr> <op:BinOp3> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="6")] #[assoc(side="left")] <lhs:Expr> <op:BinOp4> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-};
-UnaOp: UnaOpKind = {
-	"+" => UnaOpKind::Identity,
-	"-" => UnaOpKind::Negate,
-	"!" => UnaOpKind::Invert,
-};
-BinOp0: BinOpKind = {
-	"*" => BinOpKind::Arith(ArithBinOpKind::Mul),
-	"/" => BinOpKind::Arith(ArithBinOpKind::Div),
-};
-BinOp1: BinOpKind = {
-	"+" => BinOpKind::Arith(ArithBinOpKind::Add),
-	"-" => BinOpKind::Arith(ArithBinOpKind::Sub),
-};
-BinOp2: BinOpKind = {
-	"&&" => BinOpKind::Logic(LogicBinOpKind::And),
-};
-BinOp3: BinOpKind = {
-	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
-}
-BinOp4: BinOpKind = {
-	"==" => BinOpKind::Cmp(CmpBinOpKind::Eq),
-	"!=" => BinOpKind::Cmp(CmpBinOpKind::Ne),
-	"<" => BinOpKind::Cmp(CmpBinOpKind::Lt),
-	"<=" => BinOpKind::Cmp(CmpBinOpKind::Le),
-	">" => BinOpKind::Cmp(CmpBinOpKind::Gt),
-	">=" => BinOpKind::Cmp(CmpBinOpKind::Ge),
-}
-
-Atom: Node = {
-	Block => Node::Block(<>),
-	//Loop => Node::Loop(<>),
-	//While => Node::While(<>),
-	//For => Node::For(<>),
-	//IfElse => Node::IfElse(<>),
-	//<Unreachable>,
-
-	Lit => Node::Literal(<>),
-	"(" <Expr> ")",
-
-	//! => { errors.push(<>); Node::Error },
-};
-
-Lit: Literal = {
-	"identifier" => Literal::Identifier(<>),
-	"integer" => Literal::Integer(<>),
-	// "real" => Literal::Float(<>),
-	// "string" => Literal::String(<>),
-};
 
 extern {
 	type Location = usize;
