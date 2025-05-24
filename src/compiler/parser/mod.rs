@@ -128,16 +128,18 @@ fn parse_file<'a, 'i>(stream: &'a mut TokStream<'i,
 	impl TokStreamRF<'i> + Clone,
 	impl TokStreamMF<'i> + Clone,
 >, table: &'a mut SymbolTable, observer: &'a mut impl RuleObserver<'i>) -> RuleResult {
-	let mut block = Block::new();
+	let mut stmts = Vec::new();
 	loop {
 		discard_space(stream);
 
 		if expect_eq(stream, TokenKind::Eof).is_some() {
-			return Ok(Ok(Node { kind: NodeKind::Block(block) }));
+			return Ok(Ok(Node { kind: NodeKind::Block(Block {
+				stmts
+			}) }));
 		}
 		
 		if let Ok(stmt) = try_rule("stmt", stream, table, observer, parse_stmt)? {
-			block.stmts.push(stmt);
+			stmts.push(stmt);
 			continue;
 		}
 
@@ -153,8 +155,6 @@ fn parse_stmt<'a, 'i>(stream: &mut TokStream<'i,
 	let expr = if let Ok(expr) = try_rule("let", stream, table, observer, parse_let)? {
 		Some(expr)
 	} else if let Ok(expr) = try_rule("return", stream, table, observer, parse_return)? {
-		Some(expr)
-	} else if let Ok(expr) = try_rule("give", stream, table, observer, parse_give)? {
 		Some(expr)
 	} else if let Ok(expr) = try_rule("break", stream, table, observer, parse_break)? {
 		Some(expr)
@@ -174,7 +174,7 @@ fn parse_stmt<'a, 'i>(stream: &mut TokStream<'i,
 		Some(expr) => {
 			discard_space(stream);
 			match expect_eq(stream, TokenKind::Semicolon) {
-				Some(_) => Ok(Ok(Node { kind: NodeKind::Statement(Statement {
+				Some(_) => Ok(Ok(Node { kind: NodeKind::Stmt(Stmt {
 					expr: Box::new(expr),
 				}) })),
 				None => Ok(Ok(expr)),
@@ -234,16 +234,18 @@ fn parse_block<'a, 'i>(stream: &mut TokStream<'i,
 		return Ok(Err(err));
 	}
 	
-	let mut block = Block::new();
+	let mut stmts = Vec::new();
 	loop {
 		discard_space(stream);
 
 		if expect_eq(stream, TokenKind::RBrace).is_some() {
-			return Ok(Ok(Node { kind: NodeKind::Block(block) }));
+			return Ok(Ok(Node { kind: NodeKind::Block(Block {
+				stmts
+			}) }));
 		}
 		
 		if let Ok(stmt) = try_rule("stmt", stream, table, observer, parse_stmt)? {
-			block.stmts.push(stmt);
+			stmts.push(stmt);
 			continue;
 		}
 
@@ -264,22 +266,6 @@ fn parse_return<'a, 'i>(stream: &mut TokStream<'i,
 	let expr = try_rule("expr", stream, table, observer, parse_expr)?;
 	Ok(Ok(Node { kind: NodeKind::Return(Return {
 		expr: expr.ok().map(|expr| Box::new(expr)),
-	}) }))
-}
-
-fn parse_give<'a, 'i>(stream: &mut TokStream<'i,
-	impl TokStreamIter<'i> + Clone,
-	impl TokStreamRF<'i> + Clone,
-	impl TokStreamMF<'i> + Clone,
->, table: &'a mut SymbolTable, observer: &mut impl RuleObserver<'i>) -> RuleResult {
-	if let Err(err) = expect_eq_err(stream, TokenKind::Give) {
-		return Ok(Err(err));
-	}
-	
-	discard_space(stream);
-	let expr = try_rule("expr", stream, table, observer, parse_expr)??;
-	Ok(Ok(Node { kind: NodeKind::Give(Give {
-		expr: Box::new(expr),
 	}) }))
 }
 
@@ -345,7 +331,7 @@ fn parse_if_else<'a, 'i>(stream: &mut TokStream<'i,
 	let cond = try_rule("cond:expr", stream, table, observer, parse_expr)??;
 
 	discard_space(stream);
-	let body_true = match expect_eq(stream, TokenKind::Colon) {
+	let body = match expect_eq(stream, TokenKind::Colon) {
 		Some(_) => {
 			discard_space(stream);
 			try_rule("body:expr", stream, table, observer, parse_stmt)??
@@ -354,15 +340,15 @@ fn parse_if_else<'a, 'i>(stream: &mut TokStream<'i,
 	};
 
 	discard_space(stream);
-	let body_false = if expect_eq(stream, TokenKind::Else).is_some() {
+	let body_else = if expect_eq(stream, TokenKind::Else).is_some() {
 		discard_space(stream);
 		Some(try_rule("else:expr", stream, table, observer, parse_expr)??)
 	} else { None };
 
 	Ok(Ok(Node { kind: NodeKind::IfElse(IfElse {
 		cond: Box::new(cond),
-		body_true: Box::new(body_true),
-		body_false: body_false.map(|body_false| Box::new(body_false)),
+		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
 	}) }))
 }
 
@@ -377,8 +363,16 @@ fn parse_loop<'a, 'i>(stream: &mut TokStream<'i,
 
 	discard_space(stream);
 	let body = try_rule("body:expr", stream, table, observer, parse_expr)??;
+	
+	discard_space(stream);
+	let body_else = if expect_eq(stream, TokenKind::Else).is_some() {
+		discard_space(stream);
+		Some(try_rule("else:expr", stream, table, observer, parse_expr)??)
+	} else { None };
+
 	Ok(Ok(Node { kind: NodeKind::Loop(Loop {
 		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
 	}) }))
 }
 
@@ -403,9 +397,16 @@ fn parse_while<'a, 'i>(stream: &mut TokStream<'i,
 		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
 	};
 
+	discard_space(stream);
+	let body_else = if expect_eq(stream, TokenKind::Else).is_some() {
+		discard_space(stream);
+		Some(try_rule("else:expr", stream, table, observer, parse_expr)??)
+	} else { None };
+
 	Ok(Ok(Node { kind: NodeKind::While(While {
 		cond: Box::new(cond),
 		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
 	}) }))
 }
 
@@ -419,7 +420,7 @@ fn parse_for<'a, 'i>(stream: &mut TokStream<'i,
 	}
 
 	discard_space(stream);
-	let label = try_rule("label:expr", stream, table, observer, parse_expr)??;
+	let binding = try_rule("binding:expr", stream, table, observer, parse_expr)??;
 
 	discard_space(stream);
 	expect_eq_err(stream, TokenKind::In)?;
@@ -436,10 +437,17 @@ fn parse_for<'a, 'i>(stream: &mut TokStream<'i,
 		None => try_rule("body:expr", stream, table, observer, parse_expr)??,
 	};
 
+	discard_space(stream);
+	let body_else = if expect_eq(stream, TokenKind::Else).is_some() {
+		discard_space(stream);
+		Some(try_rule("else:expr", stream, table, observer, parse_expr)??)
+	} else { None };
+
 	Ok(Ok(Node { kind: NodeKind::For(For {
-		label: Box::new(label),
+		binding: Box::new(binding),
 		iter: Box::new(iter),
 		body: Box::new(body),
+		body_else: body_else.map(|body_else| Box::new(body_else)),
 	}) }))
 }
 
@@ -483,22 +491,26 @@ fn parse_expr_bin<'a, 'i>(stream: &mut TokStream<'i,
 	let mut stream = stream.dup();
 	discard_space(stream.get());
 	let op = stream.get().expect_map(|&t| match t.kind {
-		TokenKind::Plus => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Add, allow_wrap: false })),
-		TokenKind::Dash => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Sub, allow_wrap: false })),
-		TokenKind::Star => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Mul, allow_wrap: false })),
-		TokenKind::Slash => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Div, allow_wrap: false })),
-		TokenKind::Percent => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Mod, allow_wrap: false })),
-		TokenKind::LShift => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Shl, allow_wrap: false })),
-		TokenKind::RShift => Some(BinOpKind::Math(MathBinOpVariant { kind: MathBinOpKind::Shr, allow_wrap: false })),
-		
-		//TokenKind::Equals => Some(BinOpKind::Assign(None)),
+		TokenKind::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: false })),
+		TokenKind::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: false })),
+		TokenKind::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: false })),
+		TokenKind::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: false })),
+		TokenKind::Percent => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false })),
 
-		TokenKind::LessThan => Some(BinOpKind::Cmp(CmpBinOpKind { lt: true, eq: false, gt: false })),
-		TokenKind::LessThanOrEqual => Some(BinOpKind::Cmp(CmpBinOpKind { lt: true, eq: true, gt: false })),
-		TokenKind::GreaterThan => Some(BinOpKind::Cmp(CmpBinOpKind { lt: false, eq: false, gt: true })),
-		TokenKind::GreaterThanOrEqual => Some(BinOpKind::Cmp(CmpBinOpKind { lt: false, eq: true, gt: true })),
-		TokenKind::Equal => Some(BinOpKind::Cmp(CmpBinOpKind { lt: false, eq: true, gt: false })),
-		TokenKind::NotEqual => Some(BinOpKind::Cmp(CmpBinOpKind { lt: true, eq: false, gt: true })),
+		TokenKind::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
+		TokenKind::RShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shr)),
+		
+		TokenKind::Eq => Some(BinOpKind::Cmp(CmpBinOpKind::Eq)),
+		TokenKind::Ne => Some(BinOpKind::Cmp(CmpBinOpKind::Ne)),
+		TokenKind::Lt => Some(BinOpKind::Cmp(CmpBinOpKind::Lt)),
+		TokenKind::Le => Some(BinOpKind::Cmp(CmpBinOpKind::Le)),
+		TokenKind::Gt => Some(BinOpKind::Cmp(CmpBinOpKind::Gt)),
+		TokenKind::Ge => Some(BinOpKind::Cmp(CmpBinOpKind::Ge)),
+
+		TokenKind::And => Some(BinOpKind::Logic(LogicBinOpKind::And)),
+		TokenKind::Or => Some(BinOpKind::Logic(LogicBinOpKind::Or)),
+
+		//TokenKind::Equals => Some(BinOpKind::Assign(None)),
 		_ => None,
 	});
 
@@ -510,7 +522,7 @@ fn parse_expr_bin<'a, 'i>(stream: &mut TokStream<'i,
 			stream.nip();
 
 			if let NodeKind::BinOp(rhs_bin_op) = &rhs.kind {
-				if rhs_bin_op.op < op {
+				if rhs_bin_op.op.precedence() > op.precedence() {
 					let mut rhs_bin_op = rhs.kind.into_bin_op().unwrap();
 
 					rhs_bin_op.lhs = Box::new(Node{

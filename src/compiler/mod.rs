@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-use ast::debug::RuleTree;
+use parser::debug::RuleTree;
 use color_print::{cformat, cprintln};
 use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
@@ -9,7 +9,7 @@ use crate::tree_printer;
 
 pub mod source;
 pub mod lexer;
-pub mod ast;
+pub mod parser;
 pub mod semantic_analyzer;
 pub mod generator;
 
@@ -74,11 +74,11 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 	}
 	
 	let mut ast_timer = Stopwatch::start_new();
-	let (ast_root, rule_tree) = if flags.show_ast_rule_path {
-		let mut observer = ast::debug::rule_observers::DebugObserver::new();
-		(ast::parse(&tokens, &mut observer), Some(observer.conclude()))
+	let (ast, rule_tree) = if flags.show_ast_rule_path {
+		let mut observer = parser::debug::rule_observers::DebugObserver::new();
+		(parser::parse(&tokens, &mut observer), Some(observer.conclude()))
 	} else {
-		(ast::parse(&tokens, &mut ast::debug::rule_observers::DummyObserver { }), None)
+		(parser::parse(&tokens, &mut parser::debug::rule_observers::DummyObserver { }), None)
 	};
 	ast_timer.stop();
 
@@ -88,7 +88,7 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		}
 	}
 
-	let ast_root = match ast_root {
+	let ast = match ast {
 		Ok(root) => root,
 		Err(err) => {
 			let err_meta = err.to_meta(&src_doc);
@@ -104,12 +104,12 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 
 	if flags.show_ast {
 		println!("=== AST ===");
-		tree_printer::print_tree("Root", &ast_root, |label, value| cformat!("<green>{}</>: {}", label, value));
+		tree_printer::print_tree("Root", &ast, |label, value| cformat!("<green>{}</>: {}", label, value));
 		println!();
 	}
 	
 	let mut sem_timer = Stopwatch::start_new();
-	let sem_root = match semantic_analyzer::parse(&ast_root) {
+	let sem_root = match semantic_analyzer::parse(&ast) {
 		Ok(root) => root,
 		Err(err) => {
 			cprintln!("<red>SEM Failed:</>\n{:?}", err);

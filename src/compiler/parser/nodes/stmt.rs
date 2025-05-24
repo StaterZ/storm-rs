@@ -1,6 +1,6 @@
 use super::Node;
 
 #[derive(Debug)]
-pub struct Statement {
+pub struct Stmt {
 	pub expr: Box<Node>,
 }

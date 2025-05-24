@@ -1,5 +1,6 @@
 mod tree_display;
 mod indent;
+mod impl_display;
 
 use std::ops::Deref;
 

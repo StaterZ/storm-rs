@@ -284,25 +284,25 @@ fn next_token_kind(stream: &mut CharStream<
 			return Ok(TokenKind::LShift);
 		}
 		if stream.expect_eq(&'=').is_some() {
-			return Ok(TokenKind::LessThanOrEqual);
+			return Ok(TokenKind::Le);
 		}
 
-		return Ok(TokenKind::LessThan);
+		return Ok(TokenKind::Lt);
 	}
 	if stream.expect_eq(&'>').is_some() {
 		if stream.expect_eq(&'>').is_some() {
 			return Ok(TokenKind::RShift);
 		}
 		if stream.expect_eq(&'=').is_some() {
-			return Ok(TokenKind::GreaterThanOrEqual);
+			return Ok(TokenKind::Ge);
 		}
 
-		return Ok(TokenKind::GreaterThan);
+		return Ok(TokenKind::Gt);
 	}
 
 	if stream.expect_eq(&'=').is_some() {
 		if stream.expect_eq(&'=').is_some() {
-			return Ok(TokenKind::Equal);
+			return Ok(TokenKind::Eq);
 		}
 
 		return Ok(TokenKind::Equals);
@@ -310,7 +310,7 @@ fn next_token_kind(stream: &mut CharStream<
 
 	if stream.expect_eq(&'!').is_some() {
 		if stream.expect_eq(&'=').is_some() {
-			return Ok(TokenKind::NotEqual);
+			return Ok(TokenKind::Ne);
 		}
 
 		return Ok(TokenKind::Bang);
@@ -349,19 +349,17 @@ fn next_token_kind(stream: &mut CharStream<
 		static KEYWORDS: phf::Map<&'static str, TokenKindTag> = phf_map! {
 			"let" => TokenKindTag::Let,
 			
-			"if" => TokenKindTag::If,
-			"else" => TokenKindTag::Else,
-
+			"ret" => TokenKindTag::Return,
+			"break" => TokenKindTag::Break,
+			"continue" => TokenKindTag::Continue,
+			"unreachable" => TokenKindTag::Unreachable,
+			
 			"loop" => TokenKindTag::Loop,
 			"while" => TokenKindTag::While,
 			"for" => TokenKindTag::For,
 			"in" => TokenKindTag::In,
-
-			"ret" => TokenKindTag::Return,
-			"give" => TokenKindTag::Give,
-			"break" => TokenKindTag::Break,
-			"continue" => TokenKindTag::Continue,
-			"unreachable" => TokenKindTag::Unreachable,
+			"if" => TokenKindTag::If,
+			"else" => TokenKindTag::Else,
 
 			"ipt" => TokenKindTag::Ipt,
 			"yield" => TokenKindTag::Yield,

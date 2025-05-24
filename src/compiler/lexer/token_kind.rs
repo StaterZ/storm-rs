@@ -34,29 +34,31 @@ tag_enum!(
 		RShift,
 		
 		Equals,
-		LessThan,
-		LessThanOrEqual,
-		GreaterThan,
-		GreaterThanOrEqual,
-		Equal,
-		NotEqual,
+		Eq,
+		Ne,
+		Lt,
+		Le,
+		Gt,
+		Ge,
+		And,
+		Or,
 		Bang,
 
 		Let,
-		If,
-		Else,
+
+		Return,
+		Break,
+		Continue,
+		Unreachable,
 
 		Loop,
 		While,
 		For,
 		In,
-
-		Return,
-		Give,
-		Break,
-		Continue,
-		Unreachable,
+		If,
+		Else,
 		
+		//temp?
 		Ipt,
 		Yield,
 		

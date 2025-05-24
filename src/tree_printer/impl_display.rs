@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use color_print::cformat;
 use szu::opt_own::OptOwnStr;
-use super::super::super::tree_printer::{
+use super::{
 	TreeDisplay,
 	TreeDisplayChild,
 };
