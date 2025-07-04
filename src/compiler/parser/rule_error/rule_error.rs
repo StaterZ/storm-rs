@@ -1,5 +1,8 @@
+use crate::compiler::parser::SoftResult;
+
 use super::{
 	super::super::source,
+	super::nodes::Node,
 	RuleErrorKind,
 	RuleErrorMeta,
 };
@@ -18,3 +21,5 @@ impl RuleError {
 		}
 	}
 }
+
+pub type RuleResult = SoftResult<Node, RuleErrorKind, RuleErrorKind>;

@@ -15,8 +15,6 @@ pub mod generator;
 
 mod stream;
 
-type ResultSH<T, E> = Result<Result<T, E>, E>;
-
 #[derive(Debug)]
 pub struct Flags {
 	pub show_source: bool,

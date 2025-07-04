@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-use super::super::super::lexer::TokenKindTag;
+use crate::compiler::lexer::TokenKindTag;
 
 #[derive(Debug)]
 pub enum RuleErrorKind {

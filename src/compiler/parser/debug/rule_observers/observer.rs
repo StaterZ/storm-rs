@@ -1,5 +1,6 @@
+use crate::compiler::parser::RuleResult;
+
 use super::super::super::{
-	RuleResult,
 	TokStream,
 	TokStreamIter,
 	TokStreamMF,

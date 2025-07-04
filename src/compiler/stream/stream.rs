@@ -1,31 +1,31 @@
-use std::iter::{FusedIterator, Peekable};
+use std::iter::FusedIterator;
+
 
 use super::{
 	Peeker,
 	StreamErrorExpectErr,
-	//StreamErrorExpectErrEq,
-	StreamHypothetical,
-	super::ResultSH,
+	PeekableIterator,
+	soft_error::{SoftError, SoftResult},
 };
 
 pub struct Stream<I, RF, MF, B> where
-	I: Iterator,
+	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
-	iter: Peekable<I>,
+	iter: I,
 	rf: RF,
 	mf: MF,
 }
 
 impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-	I: Iterator,
+	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
 	pub fn new(iter: I, rf: RF, mf: MF) -> Self {
-		return Self{
-			iter: iter.peekable(),
+		return Self {
+			iter,
 			rf,
 			mf,
 		};
@@ -45,13 +45,13 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 			.map_or(false, pred)
 	}
 	
-	pub fn expect(&mut self, pred: impl FnOnce(&B) -> bool) -> Option<B> {
+	pub fn next_if(&mut self, pred: impl FnOnce(&B) -> bool) -> Option<B> {
 		self
 			.check(pred)
 			.then(|| self.next().unwrap()) //unwrap is safe here since 'check' returned true, meaning we managed to peek something
 	}
 	
-	pub fn expect_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
+	pub fn next_if_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
 		self
 			.get_peeker()
 			.get()
@@ -59,7 +59,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 			.map(|value| (self.next().unwrap(), value)) //unwrap is safe here since we managed to peek something
 	}
 
-	pub fn expect_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, StreamErrorExpectErr<E>> {
+	pub fn next_if_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, StreamErrorExpectErr<E>> {
 		match self.get_peeker().get() {
 			Some(item) => match pred(item) {
 				Ok(_) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
@@ -71,24 +71,24 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 }
 
 impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-	I: Iterator,
+	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 	B: PartialEq,
 {
-	pub fn expect_eq(&mut self, expected: &B) -> Option<B> {
-		self.expect(|item| item == expected)
+	pub fn next_if_eq(&mut self, expected: &B) -> Option<B> {
+		self.next_if(|item| item == expected)
 	}
 }
 
 // impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-// 	I: Iterator,
+// 	I: PeekableIterator,
 // 	RF: Fn(&I::Item) -> &B,
 // 	MF: Fn(I::Item) -> B,
 // 	B: Display + PartialEq,
 // {
-// 	pub fn expect_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
-// 		self.expect_err(|item| if item == expected {
+// 	pub fn next_if_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
+// 		self.next_if_err(|item| if item == expected {
 // 			Ok(())
 // 		} else {
 // 			Err(item)
@@ -100,38 +100,41 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 // }
 
 impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-	I: Iterator + Clone,
+	I: PeekableIterator + Clone,
 	I::Item: Clone,
 	RF: Fn(&I::Item) -> &B,
 	RF: Clone,
 	MF: Fn(I::Item) -> B,
 	MF: Clone,
 {
-	pub fn dup<'a>(&mut self) -> StreamHypothetical<I, RF, MF, B> {
-		StreamHypothetical::new(self)
-	}
-	
 	pub fn try_rule<T, E>(&mut self, rule: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
-		let mut hypothetical = self.dup();
+		let recover_state = self.clone();
 
-		let result = rule(hypothetical.get());
-		if result.is_ok() {
-			hypothetical.nip();
+		let result = rule(self);
+		if result.is_err() {
+			*self = recover_state;
 		}
 
 		result
 	}
 
-	pub fn try_rule_sh<T, E>(&mut self, rule: impl FnOnce(&mut Self) -> ResultSH<T, E>) -> ResultSH<T, E> {
-		self.try_rule_arg_sh(|stream, (), ()| rule(stream), (), ())
+	pub fn try_rule_sh<T, ES, EH>(&mut self, rule: impl FnOnce(&mut Self) -> SoftResult<T, ES, EH>) -> SoftResult<T, ES, EH> {
+		let recover_state = self.clone();
+
+		let result = rule(self);
+		if matches!(result, Err(SoftError::Soft(_))) {
+			*self = recover_state;
+		}
+
+		result
 	}
 
-	pub fn try_rule_arg_sh<A0, A1, T, E>(&mut self, rule: impl FnOnce(&mut Self, A0, A1) -> ResultSH<T, E>, a0: A0, a1: A1) -> ResultSH<T, E> {
-		let mut hypothetical = self.dup();
+	pub fn try_rule_sh_arg<T, ES, EH, ARG>(&mut self, rule: impl FnOnce(&mut Self, ARG) -> SoftResult<T, ES, EH>, arg: ARG) -> SoftResult<T, ES, EH> {
+		let recover_state = self.clone();
 
-		let result = rule(hypothetical.get(), a0, a1);
-		if matches!(result, Ok(Ok(_)) | Err(_)) {
-			hypothetical.nip();
+		let result = rule(self, arg);
+		if matches!(result, Err(SoftError::Soft(_))) {
+			*self = recover_state;
 		}
 
 		result
@@ -139,7 +142,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 }
 
 impl<I, RF, MF, B> Clone for Stream<I, RF, MF, B> where
-	I: Iterator + Clone,
+	I: PeekableIterator + Clone,
 	I::Item: Clone,
 	RF: Fn(&I::Item) -> &B,
 	RF: Clone,
@@ -156,7 +159,7 @@ impl<I, RF, MF, B> Clone for Stream<I, RF, MF, B> where
 }
 
 impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
-	I: Iterator,
+	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
@@ -172,7 +175,7 @@ impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
 
 impl<I, RF, MF, B> ExactSizeIterator for Stream<I, RF, MF, B>
 where
-	I: ExactSizeIterator,
+	I: PeekableIterator + ExactSizeIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
@@ -183,7 +186,7 @@ where
 
 impl<I, RF, MF, B> DoubleEndedIterator for Stream<I, RF, MF, B>
 where
-	I: DoubleEndedIterator,
+	I: PeekableIterator + DoubleEndedIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 {
@@ -204,7 +207,7 @@ where
 
 impl<I, RF, MF, B> FusedIterator for Stream<I, RF, MF, B>
 where
-	I: FusedIterator,
+	I: PeekableIterator + FusedIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
 { }

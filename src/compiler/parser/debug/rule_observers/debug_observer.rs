@@ -1,10 +1,11 @@
 use std::debug_assert_eq;
 
+use crate::compiler::parser::{RuleResult, SoftError};
+
 use super::super::{
 	super::{
 		super::lexer::Token,
 		RuleObserver,
-		RuleResult,
 		TokStream,
 		TokStreamIter,
 		TokStreamRF,
@@ -54,7 +55,11 @@ impl<'i> RuleObserver<'i> for DebugObserver<'i> {
 		self.tree.push(RuleTree {
 			name: rule_name,
 			stream_state: signal.stream_state,
-			result_kind: result.into(),
+			result_kind: match result {
+				Ok(_) => Ok(()),
+				Err(SoftError::Soft(_)) => Err(SoftError::Soft(())),
+				Err(SoftError::Hard(_)) => Err(SoftError::Hard(())),
+			},
 			children,
 		});
 	}

@@ -1,10 +1,10 @@
 use super::{
 	super::super::{
-		RuleResult,
 		TokStream,
 		TokStreamIter,
 		TokStreamMF,
 		TokStreamRF,
+		RuleResult,
 	},
 	Observer,
 };

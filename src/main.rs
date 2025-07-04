@@ -52,7 +52,7 @@ fn compile() {
 	let flags = compiler::Flags {
 		show_source: false,
 		show_tokens: false,
-		show_ast_rule_path: true,
+		show_ast_rule_path: false,
 		show_ast: true,
 		show_sat: true,
 		show_output: false,

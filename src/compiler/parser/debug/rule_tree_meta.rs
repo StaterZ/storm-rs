@@ -1,13 +1,10 @@
-use crate::tree_printer::{TreeDisplay, TreeDisplayChild};
+use crate::{compiler::stream::soft_error::SoftError, tree_printer::{TreeDisplay, TreeDisplayChild}};
 use itertools::Itertools;
 use owo_colors::{AnsiColors, DynColors, OwoColorize};
 use szu::opt_own::OptOwnStr;
 
 use super::{
-	super::{
-		super::source,
-		rule_error::ResultSHKind,
-	},
+	super::super::source,
 	RuleTree,
 };
 
@@ -34,9 +31,9 @@ impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
 
 	fn get_scope_color(&self) -> DynColors {
 		DynColors::Ansi(match self.tree.result_kind {
-			ResultSHKind::Success => AnsiColors::Green,
-			ResultSHKind::SoftErr => AnsiColors::Yellow,
-			ResultSHKind::HardErr => AnsiColors::Red,
+			Ok(_) => AnsiColors::Green,
+			Err(SoftError::Soft(_)) => AnsiColors::Yellow,
+			Err(SoftError::Hard(_)) => AnsiColors::Red,
 		})
 	}
 }
