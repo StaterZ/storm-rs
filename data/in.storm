@@ -1,42 +1,10 @@
-let i = 0;
-loop {
-	//print("hello " + i);
-	i = i + 1;
-	//yld;
-}
-
-//void, nothing
-//'void' can be passed and cascade returned, 'nothing' fails to compile if cascade returned
-{
-	let a = b;
-	//let a = b.c.d;
-	//∃a = b;
-	//∃a = b∋c∋d;
-	//∃a = b ∧ c ∨ ¬d;
-
-	if a { ret; }
-	if a: ret;
-	if a { b } else c;
-	if a: b else c;
-
-	loop a;
-	loop { a };
-	loop { a } else b;
-
-	while a { b; }
-	while a: b;
-	while a { b; } else c;
-	while a: b else c;
-
-	if a: while b: c else d //else should bind to while
-
-	for a in b { c; }
-	for a in b: c;
-	//∀a∈b: c
-
-	let a = (1); //paren
-	let a = (); //tuple unit
-	let a = (1,); //tuple one
-	let a = (1, 2, 3); //tuple many
-	let a = (1, 2, 3,); //tuple many trail
-}
+let a = b;
+let mut a = b;
+a = b;
+(a, b) = c;
+let (a, b) = c;
+let mut (a, b) = c;
+let (mut a, b) = c;
+(let a, let mut b, c) = d;
+(let a, let mut b, (if c: d else e)*) = f;
+(if a: b else c)* = d;

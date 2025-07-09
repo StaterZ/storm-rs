@@ -45,7 +45,7 @@ impl<'i> RuleObserver<'i> for DebugObserver<'i> {
 		impl TokStreamMF<'i>,
 	>) -> Self::Signal {
 		Self::Signal {
-			stream_state: stream.get_peeker().get().map(|state| *state),
+			stream_state: stream.peek().map(|state| *state),
 			rule_tree_parent_children: std::mem::replace(&mut self.tree, vec![]),
 		}
 	}

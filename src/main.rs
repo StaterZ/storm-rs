@@ -3,9 +3,9 @@
 #![feature(map_try_insert)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_trait_impl)]
+#![feature(try_blocks)]
 
 mod compiler;
-mod tree_printer;
 
 use std::path::PathBuf;
 

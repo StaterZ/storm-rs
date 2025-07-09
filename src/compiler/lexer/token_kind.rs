@@ -4,7 +4,7 @@ use szu::tag_enum;
 
 tag_enum!(
 	pub enum (
-		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr)] TokenKind,
+		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr, enum_as_inner::EnumAsInner)] TokenKind,
 		#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::AsRefStr)] TokenKindTag,
 	) {
 		Space,
@@ -32,6 +32,7 @@ tag_enum!(
 		Percent,
 		LShift,
 		RShift,
+		Ampersand,
 		
 		Equals,
 		Eq,
@@ -45,6 +46,7 @@ tag_enum!(
 		Bang,
 
 		Let,
+		Mut,
 
 		Return,
 		Break,

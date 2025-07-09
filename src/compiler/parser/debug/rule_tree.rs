@@ -1,4 +1,4 @@
-use crate::compiler::stream::soft_error::SoftResultKind;
+use crate::compiler::map_peekable::soft_error::SoftResultUnit;
 
 use super::{
 	super::{
@@ -11,7 +11,7 @@ use super::{
 pub struct RuleTree<'a> {
 	pub name: &'static str,
 	pub stream_state: Option<&'a Token>,
-	pub result_kind: SoftResultKind,
+	pub result_kind: SoftResultUnit,
 	pub children: Vec<RuleTree<'a>>,
 }
 

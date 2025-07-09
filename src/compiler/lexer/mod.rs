@@ -12,8 +12,8 @@ pub use token_kind::{TokenKind, TokenKindTag};
 use crate::compiler::{
 	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult},
 	source,
-	stream::{
-		soft_error::{SoftError, SoftResultTrait}, PeekableIterator, Stream
+	map_peekable::{
+		soft_error::{SoftError, SoftResultTrait}, PeekableIterator, MapPeekable
 	}
 };
 
@@ -24,7 +24,7 @@ type CharStream<
 	I/*: CharStreamIter*/,
 	RF/*: CharStreamRF*/,
 	MF/*: CharStreamMF*/,
-> = Stream<I, RF, MF, char>;
+> = MapPeekable<I, RF, MF, char>;
 
 pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	let mut stream = document
@@ -43,8 +43,8 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	impl CharStreamMF + Clone,
 >) -> source::PosMeta<'a> {
 		stream
-			.get_peeker()
-			.get_raw()
+			.inner_mut()
+			.peek()
 			.map(|&(i, _)| source::Pos::new(i))
 			.map_or_else(
 				|| document.get_eof(),
@@ -241,6 +241,7 @@ fn next_token_kind(stream: &mut CharStream<
 
 		static KEYWORDS: phf::Map<&'static str, TokenKindTag> = phf_map! {
 			"let" => TokenKindTag::Let,
+			"mut" => TokenKindTag::Mut,
 			
 			"ret" => TokenKindTag::Return,
 			"break" => TokenKindTag::Break,
@@ -265,7 +266,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Identifier(value));
 	}
 
-	if stream.get_peeker().get().is_none() {
+	if stream.peek().is_none() {
 		return Ok(TokenKind::Eof);
 	}
 
@@ -321,7 +322,7 @@ fn parse_radix_symbol(stream: &mut CharStream<
 		'x' => 16,
 	};
 
-	match stream.get_peeker().get() {
+	match stream.peek() {
 		Some(c) => match RADICES.get(&c) {
 			Some(&radix) => {
 				stream.next();
@@ -351,7 +352,7 @@ fn parse_digits(
 	let mut has_trailing_underscore = false;
 	let mut value = 0u64;
 	let mut i = 0usize;
-	while let Some(&c) = stream.get_peeker().get() {
+	while let Some(&c) = stream.peek() {
 		if c == '_' {
 			if i == 0 {
 				return Err(SoftError::Hard(LexerErrorKind::DigitsHaveLeadingUnderscore));

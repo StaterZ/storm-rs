@@ -4,8 +4,7 @@ use parser::debug::RuleTree;
 use color_print::{cformat, cprintln};
 use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
-
-use crate::tree_printer;
+use tree_printer;
 
 pub mod source;
 pub mod lexer;
@@ -13,7 +12,7 @@ pub mod parser;
 pub mod semantic_analyzer;
 pub mod generator;
 
-mod stream;
+mod map_peekable;
 
 #[derive(Debug)]
 pub struct Flags {
@@ -106,8 +105,11 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!();
 	}
 	
+	if flags.show_sat {
+		println!("=== SEMANTIC ANALYSIS ===");
+	}
 	let mut sem_timer = Stopwatch::start_new();
-	let sem_root = match semantic_analyzer::parse(&ast) {
+	match semantic_analyzer::analyze(&ast) {
 		Ok(root) => root,
 		Err(err) => {
 			cprintln!("<red>SEM Failed:</>\n{:?}", err);
@@ -115,16 +117,10 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		},
 	};
 	sem_timer.stop();
+	println!();
 
-	
-	if flags.show_sat {
-		println!("=== SEMANTIC ANALYSIS ===");
-		println!("\t{}", sem_root.as_ref());
-		println!();
-	}
-	
 	let mut gen_timer = Stopwatch::start_new();
-	let gen_output = generator::generate(&sem_root);
+	let gen_output = generator::generate(&ast);
 	gen_timer.stop();
 	let gen_output = match gen_output {
 		Ok(output) => output,

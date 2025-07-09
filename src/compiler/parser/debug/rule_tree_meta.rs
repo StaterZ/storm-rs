@@ -1,12 +1,11 @@
-use crate::{compiler::stream::soft_error::SoftError, tree_printer::{TreeDisplay, TreeDisplayChild}};
 use itertools::Itertools;
 use owo_colors::{AnsiColors, DynColors, OwoColorize};
 use szu::opt_own::OptOwnStr;
+use tree_printer::{TreeDisplay, TreeDisplayChild};
 
-use super::{
-	super::super::source,
-	RuleTree,
-};
+use crate::compiler::map_peekable::soft_error::SoftError;
+use crate::compiler::source;
+use super::RuleTree;
 
 pub struct RuleTreeMeta<'a, 'b, 'c> {
 	pub tree: &'b RuleTree<'a>,

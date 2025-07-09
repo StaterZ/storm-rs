@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 ### terminal stuff ###
-clap = { version = "4.5.31", features= ["derive"] } # command line parser
-owo-colors = "4.2.0" # ansi color formatter (good for dynamic colors)
+clap = { version = "4.5.40", features= ["derive"] } # command line parser
+owo-colors = "4.2.2" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
 #prettytable-rs = "0.10.0"
-unicode-width = "0.2.0"
+unicode-width = "0.2.1"
 
 ### error handling ###
 thiserror = "2.0.12" # error type generation
@@ -20,7 +20,7 @@ thiserror = "2.0.12" # error type generation
 
 ### misc ###
 #lazy_static = "1.4.0" #init statics at runtime
-phf = { version = "0.11.3", features = ["macros"] } # generate LUTs and other data at comptime
+phf = { version = "0.12.1", features = ["macros"] } # generate LUTs and other data at comptime
 string-builder = "0.2.0" # basic string builder utility
 enum-as-inner = "0.6.1" # unwarp for enum fields without needing annyong pattern mathing
 strum = { version = "0.27.1", features = ["derive"] } # get names of enum fields as strings
@@ -33,5 +33,6 @@ stopwatch = "0.0.7" #easy timer library
 ### LLVM ###
 #inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm18-0"] }
 
-#custom
+### custom ###
 szu = { version = "0.2.1", path = "../szu" } # custom utils lib
+tree_printer = { version = "0.1.0", path = "../tree_printer" }

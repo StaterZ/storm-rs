@@ -3,7 +3,7 @@ use std::fmt::Display;
 use color_print::cformat;
 use unicode_width::UnicodeWidthStr;
 
-use crate::compiler::{lexer::Token, source, stream::soft_error::SoftResult};
+use crate::compiler::{lexer::Token, source, map_peekable::soft_error::SoftResult};
 
 pub enum LexerErrorKind {
 	StreamExhausted,

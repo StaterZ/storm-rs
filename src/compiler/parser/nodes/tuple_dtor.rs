@@ -1,6 +1,6 @@
 use super::Node;
 
 #[derive(Debug)]
-pub struct TupleCtor {
+pub struct TupleDtor {
 	pub items: Vec<Node>,
 }

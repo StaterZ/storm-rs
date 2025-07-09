@@ -5,7 +5,6 @@ pub enum SoftError<S, H> {
 	Hard(H),
 }
 
-
 impl<E> SoftError<E, E> {
 	pub fn value(self) -> E {
 		match self {
@@ -16,7 +15,7 @@ impl<E> SoftError<E, E> {
 }
 
 pub type SoftResult<T, ES, EH> = Result<T, SoftError<ES, EH>>;
-pub type SoftResultKind = SoftResult<(), (), ()>;
+pub type SoftResultUnit = SoftResult<(), (), ()>;
 
 pub trait SoftResultTrait<T, ES, EH> {
 	fn shed_hard_raw(self) -> Result<Result<T, ES>, EH>;

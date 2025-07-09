@@ -2,13 +2,16 @@ use std::iter::FusedIterator;
 
 
 use super::{
-	Peeker,
-	StreamErrorExpectErr,
 	PeekableIterator,
 	soft_error::{SoftError, SoftResult},
 };
 
-pub struct Stream<I, RF, MF, B> where
+pub enum MapPeekableExpectError<T> {
+	StreamExhausted,
+	PredicateError(T),
+}
+
+pub struct MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
@@ -18,7 +21,7 @@ pub struct Stream<I, RF, MF, B> where
 	mf: MF,
 }
 
-impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+impl<I, RF, MF, B> MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
@@ -31,46 +34,44 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 		};
 	}
 
-	pub fn get_peeker(&mut self) -> Peeker<'_, I, RF, B> {
-		Peeker {
-			peeked: self.iter.peek(),
-			rf: &self.rf,
-		}
+	pub fn inner(self) -> I {
+		self.iter
 	}
 
-	pub fn check(&mut self, pred: impl FnOnce(&B) -> bool) -> bool {
-		self
-			.get_peeker()
-			.get()
-			.map_or(false, pred)
+	pub fn inner_mut(&mut self) -> &mut I {
+		&mut self.iter
 	}
-	
+
+	pub fn peek(&mut self) -> Option<&B> {
+		self.iter.peek().map(&self.rf)
+	}
+
 	pub fn next_if(&mut self, pred: impl FnOnce(&B) -> bool) -> Option<B> {
 		self
-			.check(pred)
+			.peek()
+			.map_or(false, pred)
 			.then(|| self.next().unwrap()) //unwrap is safe here since 'check' returned true, meaning we managed to peek something
 	}
 	
 	pub fn next_if_map<T>(&mut self, pred: impl FnOnce(&B) -> Option<T>) -> Option<(B, T)> {
 		self
-			.get_peeker()
-			.get()
+			.peek()
 			.and_then(pred)
 			.map(|value| (self.next().unwrap(), value)) //unwrap is safe here since we managed to peek something
 	}
 
-	pub fn next_if_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, StreamErrorExpectErr<E>> {
-		match self.get_peeker().get() {
+	pub fn next_if_err<E>(&mut self, pred: impl FnOnce(&B) -> Result<(), E>) -> Result<B, MapPeekableExpectError<E>> {
+		match self.peek() {
 			Some(item) => match pred(item) {
 				Ok(_) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
-				Err(err) => Err(StreamErrorExpectErr::PredicateError(err)),
+				Err(err) => Err(MapPeekableExpectError::PredicateError(err)),
 			},
-			None => Err(StreamErrorExpectErr::StreamExhausted),
+			None => Err(MapPeekableExpectError::StreamExhausted),
 		}
 	}
 }
 
-impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+impl<I, RF, MF, B> MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
@@ -81,25 +82,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	}
 }
 
-// impl<I, RF, MF, B> Stream<I, RF, MF, B> where
-// 	I: PeekableIterator,
-// 	RF: Fn(&I::Item) -> &B,
-// 	MF: Fn(I::Item) -> B,
-// 	B: Display + PartialEq,
-// {
-// 	pub fn next_if_eq_err<'a>(&'a mut self, expected: &'a B) -> Result<B, StreamErrorExpectErrEq<&'a B>> {
-// 		self.next_if_err(|item| if item == expected {
-// 			Ok(())
-// 		} else {
-// 			Err(item)
-// 		}).map_err(|err| match err {
-// 			StreamErrorExpectErr::StreamExhausted => StreamErrorExpectErrEq::StreamExhausted,
-// 			StreamErrorExpectErr::PredicateError(found) => StreamErrorExpectErrEq::ExpectedItem { expected, found },
-// 		})
-// 	}
-// }
-
-impl<I, RF, MF, B> Stream<I, RF, MF, B> where
+impl<I, RF, MF, B> MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator + Clone,
 	I::Item: Clone,
 	RF: Fn(&I::Item) -> &B,
@@ -141,7 +124,7 @@ impl<I, RF, MF, B> Stream<I, RF, MF, B> where
 	}
 }
 
-impl<I, RF, MF, B> Clone for Stream<I, RF, MF, B> where
+impl<I, RF, MF, B> Clone for MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator + Clone,
 	I::Item: Clone,
 	RF: Fn(&I::Item) -> &B,
@@ -158,7 +141,7 @@ impl<I, RF, MF, B> Clone for Stream<I, RF, MF, B> where
 	}
 }
 
-impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
+impl<I, RF, MF, B> Iterator for MapPeekable<I, RF, MF, B> where
 	I: PeekableIterator,
 	RF: Fn(&I::Item) -> &B,
 	MF: Fn(I::Item) -> B,
@@ -173,7 +156,7 @@ impl<I, RF, MF, B> Iterator for Stream<I, RF, MF, B> where
 	}
 }
 
-impl<I, RF, MF, B> ExactSizeIterator for Stream<I, RF, MF, B>
+impl<I, RF, MF, B> ExactSizeIterator for MapPeekable<I, RF, MF, B>
 where
 	I: PeekableIterator + ExactSizeIterator,
 	RF: Fn(&I::Item) -> &B,
@@ -184,7 +167,7 @@ where
 	}
 }
 
-impl<I, RF, MF, B> DoubleEndedIterator for Stream<I, RF, MF, B>
+impl<I, RF, MF, B> DoubleEndedIterator for MapPeekable<I, RF, MF, B>
 where
 	I: PeekableIterator + DoubleEndedIterator,
 	RF: Fn(&I::Item) -> &B,
@@ -205,7 +188,7 @@ where
 	}
 }
 
-impl<I, RF, MF, B> FusedIterator for Stream<I, RF, MF, B>
+impl<I, RF, MF, B> FusedIterator for MapPeekable<I, RF, MF, B>
 where
 	I: PeekableIterator + FusedIterator,
 	RF: Fn(&I::Item) -> &B,
