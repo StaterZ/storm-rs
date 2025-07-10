@@ -13,7 +13,10 @@ use crate::compiler::{
 	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult},
 	source,
 	map_peekable::{
-		soft_error::{SoftError, SoftResultTrait}, PeekableIterator, MapPeekable
+		soft_error::{SoftError, SoftResultTrait},
+		PeekableIterator,
+		MapPeekable,
+		PeekIterUtils
 	}
 };
 
@@ -43,7 +46,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	impl CharStreamMF + Clone,
 >) -> source::PosMeta<'a> {
 		stream
-			.inner_mut()
+			.as_inner()
 			.peek()
 			.map(|&(i, _)| source::Pos::new(i))
 			.map_or_else(

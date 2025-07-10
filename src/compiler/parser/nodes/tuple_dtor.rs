@@ -1,6 +1,6 @@
-use super::Node;
+use super::{Node, Pattern};
 
 #[derive(Debug)]
 pub struct TupleDtor {
-	pub items: Vec<Node>,
+	pub items: Vec<Node<Pattern>>,
 }

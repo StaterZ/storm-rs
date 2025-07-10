@@ -1,6 +1,6 @@
-use super::Node;
+use super::{Node, Expr};
 
 #[derive(Debug)]
 pub struct Stmt {
-	pub expr: Box<Node>,
+	pub expr: Box<Node<Expr>>,
 }

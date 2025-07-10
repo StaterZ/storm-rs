@@ -1,6 +1,6 @@
-use super::Node;
+use super::{Node, Expr};
 
 #[derive(Debug)]
 pub struct Block {
-	pub stmts: Vec<Node>,
+	pub stmts: Vec<Node<Expr>>,
 }

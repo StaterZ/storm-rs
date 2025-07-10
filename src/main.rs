@@ -1,9 +1,12 @@
 #![allow(dead_code)]
+#![allow(mismatched_lifetime_syntaxes)]
 #![feature(trait_alias)]
 #![feature(map_try_insert)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_trait_impl)]
 #![feature(try_blocks)]
+#![feature(inplace_iteration)]
+#![feature(min_specialization)]
 
 mod compiler;
 
@@ -61,5 +64,6 @@ fn compile() {
 	let mut timer = Stopwatch::start_new();
 	let _ = compiler::compile(&src_doc, flags);
 	timer.stop();
+	println!();
 	println!("compile time: {}ms", timer.elapsed().as_millis())
 }

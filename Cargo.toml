@@ -10,6 +10,8 @@ edition = "2021"
 clap = { version = "4.5.40", features= ["derive"] } # command line parser
 owo-colors = "4.2.2" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
+colors-transform = "0.2.11" #help with HSV conversions in debug printing
+rand = "0.9.1" #help with visualizations
 #prettytable-rs = "0.10.0"
 unicode-width = "0.2.1"
 

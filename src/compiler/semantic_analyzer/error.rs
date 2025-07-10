@@ -1,24 +1,17 @@
-use std::{error::Error, fmt::Display};
+use std::rc::Rc;
 
-use crate::compiler::parser;
+use thiserror::Error;
 
-#[derive(Debug)]
-pub enum SemError<'a> {
+use crate::compiler::parser::Var;
+
+#[derive(Debug, Error)]
+pub enum SemError {
+	#[error("Found mut outside let")]
 	MutWithoutLet,
+	#[error("Found mut inside mut")]
 	DoubleMut,
+	#[error("Found let inside let")]
 	DoubleLet,
-	BadPattern(&'a parser::nodes::Node),
+	#[error("No variable '{0}' is defined")]
+	UndefinedSymbol(Rc<Var>),
 }
-
-impl<'a> Display for SemError<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			SemError::MutWithoutLet => write!(f, "Found mut outside let"),
-			SemError::DoubleMut => write!(f, "Found mut inside mut"),
-			SemError::DoubleLet => write!(f, "Found let inside let"),
-			SemError::BadPattern(node) => write!(f, "Malformed pattern {}", node.kind.as_ref()),
-		}
-	}
-}
-
-impl<'a> Error for SemError<'a> { }

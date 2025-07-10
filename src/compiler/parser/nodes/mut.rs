@@ -1,6 +1,6 @@
-use super::Node;
+use super::{Node, Pattern};
 
 #[derive(Debug)]
 pub struct Mut {
-	pub expr: Box<Node>,
+	pub pat: Box<Node<Pattern>>,
 }

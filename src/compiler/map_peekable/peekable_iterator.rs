@@ -5,27 +5,36 @@ use super::MapPeekable;
 pub trait PeekableIterator : Iterator {
 	fn peek(&mut self) -> Option<&Self::Item>;
 
-	fn map_peekable<RF, MF, B>(self, rf: RF, mf: MF) -> MapPeekable<Self, RF, MF, B> where
+	fn next_if(&mut self, pred: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+		self
+		.peek()
+		.map_or(false, pred)
+		.then(|| self.next().unwrap()) //unwrap is safe here since 'check' returned true, meaning we managed to peek something
+	}
+	
+	fn next_if_eq<T>(&mut self, expected: &T) -> Option<Self::Item> where Self::Item: PartialEq<T> {
+		self.next_if(|item| item == expected)
+	}
+
+	fn map_peekable<RF, MF, T>(self, rf: RF, mf: MF) -> MapPeekable<Self, RF, MF, T> where
 		Self: Sized,
-		RF: Fn(&Self::Item) -> &B,
-		MF: Fn(Self::Item) -> B,
+		RF: Fn(&Self::Item) -> &T,
+		MF: Fn(Self::Item) -> T,
 	{
 		MapPeekable::new(self, rf, mf)
-	}
-}
-
-impl<I, RF, MF, B> PeekableIterator for MapPeekable<I, RF, MF, B> where
-	I: PeekableIterator,
-	RF: Fn(&I::Item) -> &B,
-	MF: Fn(I::Item) -> B,
-{
-	fn peek(&mut self) -> Option<&Self::Item> {
-		MapPeekable::peek(self)
 	}
 }
 
 impl<I: Iterator> PeekableIterator for Peekable<I> {
 	fn peek(&mut self) -> Option<&Self::Item> {
 		Peekable::peek(self)
+	}
+
+	fn next_if(&mut self, func: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+		Peekable::next_if(self, func)
+	}
+
+	fn next_if_eq<T>(&mut self, expected: &T) -> Option<Self::Item> where Self::Item: PartialEq<T> {
+		Peekable::next_if_eq(self, expected)
 	}
 }

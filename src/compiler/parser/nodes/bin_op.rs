@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::Node;
+use super::{Node, Expr};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
@@ -164,6 +164,6 @@ impl Display for BinOpKind {
 #[derive(Debug)]
 pub struct BinOp {
 	pub op: BinOpKind,
-	pub lhs: Box<Node>,
-	pub rhs: Box<Node>
+	pub lhs: Box<Node<Expr>>,
+	pub rhs: Box<Node<Expr>>
 }

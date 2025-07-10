@@ -85,14 +85,12 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		}
 	}
 
-	let ast = match ast {
+	let mut ast = match ast {
 		Ok(root) => root,
 		Err(err) => {
 			let err_meta = err.to_meta(&src_doc);
 			cprintln!("<red>AST Failed:</>\n{}", err_meta);
 			print_rule_tree(rule_tree, src_doc);
-			println!();
-			
 			return Err(CompilerError::AstParserFailed);
 		},
 	};
@@ -109,10 +107,10 @@ pub fn compile(src_doc: &source::Document, flags: Flags) -> Result<String, Compi
 		println!("=== SEMANTIC ANALYSIS ===");
 	}
 	let mut sem_timer = Stopwatch::start_new();
-	match semantic_analyzer::analyze(&ast) {
+	match semantic_analyzer::analyze(&mut ast) {
 		Ok(root) => root,
 		Err(err) => {
-			cprintln!("<red>SEM Failed:</>\n{:?}", err);
+			cprintln!("<red>SEM Failed:</>\n{}", err);
 			return Err(CompilerError::SatParserFailed);
 		},
 	};

@@ -7,9 +7,6 @@ use super::super::{
 		super::lexer::Token,
 		RuleObserver,
 		TokStream,
-		TokStreamIter,
-		TokStreamRF,
-		TokStreamMF,
 	},
 	RuleTree,
 };
@@ -39,18 +36,14 @@ impl<'i> DebugObserver<'i> {
 impl<'i> RuleObserver<'i> for DebugObserver<'i> {
 	type Signal = DebugSignal<'i>;
 
-	fn pre_rule<'s>(&'s mut self, stream: &'s mut TokStream<'i,
-		impl TokStreamIter<'i>,
-		impl TokStreamRF<'i>,
-		impl TokStreamMF<'i>,
-	>) -> Self::Signal {
+	fn pre_rule<'s>(&'s mut self, stream: &'s mut impl TokStream<'i>) -> Self::Signal {
 		Self::Signal {
 			stream_state: stream.peek().map(|state| *state),
 			rule_tree_parent_children: std::mem::replace(&mut self.tree, vec![]),
 		}
 	}
 
-	fn post_rule(&mut self, rule_name: &'static str, signal: Self::Signal, result: &RuleResult) {
+	fn post_rule<T>(&mut self, rule_name: &'static str, signal: Self::Signal, result: &RuleResult<T>) {
 		let children = std::mem::replace(&mut self.tree, signal.rule_tree_parent_children);
 		self.tree.push(RuleTree {
 			name: rule_name,

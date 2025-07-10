@@ -1,8 +1,10 @@
-use crate::compiler::parser::SoftResult;
+use crate::compiler::source;
 
 use super::{
-	super::super::source,
-	super::nodes::Node,
+	super::{
+		nodes::Node,
+		SoftResult,
+	},
 	RuleErrorKind,
 	RuleErrorMeta,
 };
@@ -22,4 +24,10 @@ impl RuleError {
 	}
 }
 
-pub type RuleResult = SoftResult<Node, RuleErrorKind, RuleErrorKind>;
+pub type RuleResult<T> = SoftResult<Node<T>, RuleErrorKind, RuleErrorKind>;
+
+pub enum CreateOrPass<T> {
+	Create(T),
+	Pass(Node<T>),
+}
+pub type RuleResultCreateOrPass<T> = SoftResult<CreateOrPass<T>, RuleErrorKind, RuleErrorKind>;
