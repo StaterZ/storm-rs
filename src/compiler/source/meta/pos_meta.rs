@@ -4,14 +4,14 @@ use std::{
 	ptr,
 };
 
-use more_asserts::debug_assert_le;
+use more_asserts::*;
 
 use super::{
 	super::{
 		Pos,
-		Document,
 		Column,
 	},
+	DocumentMeta,
 	LineMeta,
 	RangeMeta,
 };
@@ -19,7 +19,7 @@ use super::{
 #[derive(Clone, Copy)]
 pub struct PosMeta<'a> {
 	pub pos: Pos,
-	pub document: &'a Document,
+	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> PosMeta<'a> {
@@ -45,8 +45,8 @@ impl<'a> PosMeta<'a> {
 		*self == eof
 	}
 
-	pub fn to_range(&self) -> RangeMeta {
-		self.pos.to_range().to_meta(self.document)
+	pub fn to_range(&self) -> RangeMeta<'_> {
+		self.pos.to_range().with_meta(self.document)
 	}
 
 	pub fn byte_index(&self) -> usize {
@@ -113,7 +113,7 @@ impl<'a> Add<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
-		(self.pos + rhs).to_meta(self.document)
+		(self.pos + rhs).with_meta(self.document)
 	}
 }
 
@@ -130,6 +130,6 @@ impl<'a> Sub<usize> for PosMeta<'a> {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {
-		(self.pos - rhs).to_meta(self.document)
+		(self.pos - rhs).with_meta(self.document)
 	}
 }

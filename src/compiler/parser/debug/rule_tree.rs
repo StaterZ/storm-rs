@@ -16,7 +16,7 @@ pub struct RuleTree<'a> {
 }
 
 impl<'a> RuleTree<'a> {
-	pub fn with_meta<'b, 'c>(&'b self, document: &'c source::Document) -> RuleTreeMeta<'a, 'b, 'c> {
+	pub fn with_meta<'b, 'c>(&'b self, document: &'c source::DocumentMeta<'c>) -> RuleTreeMeta<'a, 'b, 'c> {
 		RuleTreeMeta {
 			tree: self,
 			document,

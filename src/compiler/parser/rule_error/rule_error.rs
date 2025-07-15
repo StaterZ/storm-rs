@@ -16,7 +16,7 @@ pub struct RuleError {
 }
 
 impl RuleError {
-	pub fn to_meta(self, document: &source::Document) -> RuleErrorMeta {
+	pub fn to_meta<'a>(self, document: &'a source::DocumentMeta<'a>) -> RuleErrorMeta<'a> {
 		RuleErrorMeta {
 			error: self,
 			document,

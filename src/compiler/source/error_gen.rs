@@ -2,9 +2,11 @@ use color_print::cformat;
 use szu::iter::FindLastMapExt;
 use unicode_width::UnicodeWidthStr;
 
+use crate::compiler::source::DocumentMeta;
+
 use super::RangeMeta;
 
-pub fn generate_error_line(range: RangeMeta) -> String {
+pub fn generate_error_line(range: RangeMeta, document: &DocumentMeta<'_>) -> String { //TODO: remove document argument and get it from inside range when it can contain a meta document
 	let range_str = format!("[{}]", range);
 	
 	let line = {
@@ -19,7 +21,7 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 		match (begin_line, last_line) {
 			(Some(begin_line), Some(last_line)) if begin_line == last_line =>
 				Ok(begin_line),
-			(None, None) => Ok(range.document.get_line(&range.document.get_eof())), //If it's eof, we give the last line
+			(None, None) => Ok(document.eof().with_meta(document).line_raw()), //If it's eof, we give the last line
 			_ => Err("MUTI-LINE NOT SUPPORTED"),
 		}
 	};

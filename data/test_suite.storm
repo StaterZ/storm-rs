@@ -8,6 +8,7 @@ loop {
 //void, nothing
 //'void' can be passed and cascade returned, 'nothing' fails to compile if cascade returned
 {
+	let mut (source, a, b, c, d, e) = 0; //make SEM happy
 	let a = b;
 	let mut a = b;
 	a = b;

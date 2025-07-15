@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use super::{Node, Expr};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum UnaOpKind {
 	Deref,
 	AddressOf,

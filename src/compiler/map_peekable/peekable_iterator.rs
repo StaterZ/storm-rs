@@ -9,7 +9,7 @@ pub trait PeekableIterator : Iterator {
 		self
 		.peek()
 		.map_or(false, pred)
-		.then(|| self.next().unwrap()) //unwrap is safe here since 'check' returned true, meaning we managed to peek something
+		.then(|| self.next().unwrap()) //unwrap is safe here since 'pred' returned true, meaning we managed to peek something
 	}
 	
 	fn next_if_eq<T>(&mut self, expected: &T) -> Option<Self::Item> where Self::Item: PartialEq<T> {

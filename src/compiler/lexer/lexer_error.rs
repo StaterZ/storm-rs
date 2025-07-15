@@ -63,7 +63,7 @@ pub struct LexerError {
 }
 
 impl LexerError {
-	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::Document) -> LexerErrorMeta<'a, 'b> {
+	pub fn with_meta<'a, 'b>(&'a self, document: &'b source::DocumentMeta) -> LexerErrorMeta<'a, 'b> {
 		LexerErrorMeta {
 			error: self,
 			document,
@@ -73,7 +73,7 @@ impl LexerError {
 
 pub struct LexerErrorMeta<'a, 'b> {
 	error: &'a LexerError,
-	document: &'b source::Document,
+	document: &'b source::DocumentMeta<'b>,
 }
 
 impl<'a, 'b> Display for LexerErrorMeta<'a, 'b> {

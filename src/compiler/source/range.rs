@@ -1,10 +1,10 @@
 use std::ptr;
 
-use more_asserts::debug_assert_le;
+use more_asserts::*;
 
 use super::{
-	Document,
 	Pos,
+	DocumentMeta,
 	PosMeta,
 	RangeMeta,
 };
@@ -25,7 +25,7 @@ impl Range {
 		}
 	}
 
-	pub fn to_meta(self, document: &Document) -> RangeMeta {
+	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> RangeMeta<'a> {
 		RangeMeta {
 			range: self,
 			document,

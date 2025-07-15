@@ -1,16 +1,16 @@
 use super::{
-	Document,
+	DocumentMeta,
 	Line,
 	LineMeta,
 };
 
 pub struct Lines<'a> {
-	document: &'a Document,
+	document: &'a DocumentMeta<'a>,
 	index: usize,
 }
 
 impl<'a> Lines<'a> {
-	pub fn new(document: &'a Document) -> Self {
+	pub fn new(document: &'a DocumentMeta<'a>) -> Self {
 		Self {
 			document,
 			index: 0,
@@ -25,7 +25,7 @@ impl<'a> Iterator for Lines<'a> {
 		(self.index < self.document.get_num_lines()).then(|| {
 			let index = self.index;
 			self.index += 1;
-			Line::new(index).to_meta(&self.document)
+			Line::new(index).with_meta(&self.document)
 		})
 	}
 }

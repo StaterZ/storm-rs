@@ -1,12 +1,11 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use std::ops::Deref;
 
 use enum_as_inner::EnumAsInner;
-use itertools::Itertools;
 use strum::AsRefStr;
 use color_print::cformat;
 use szu::opt_own::OptOwnStr;
-use tree_printer::{TreeDisplay, TreeDisplayChild};
+use tree_printer::{TreeDisplay, TreeDisplayChild, make_list};
 
 use super::{
 	super::Var,
@@ -19,7 +18,7 @@ pub enum Pattern {
 	Mut(Mut),
 	TupleDtor(TupleDtor),
 	Deref(Box<Node<Expr>>),
-	Binding(Rc<Var>),
+	Binding(Rc<RefCell<Var>>),
 }
 
 impl TreeDisplay for Node<Pattern> {
@@ -29,19 +28,12 @@ impl TreeDisplay for Node<Pattern> {
 			Pattern::Mut(_) => "".into(),
 			Pattern::Deref(_) => "".into(),
 			Pattern::TupleDtor(_) => "".into(),
-			Pattern::Binding(value) => cformat!("<cyan>{}</>", value).into(),
+			Pattern::Binding(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
 		};
 		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.kind.as_ref())
 	}
 
 	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
-		fn make_list<'s, T: TreeDisplay + 's>(items: impl Iterator<Item = &'s T>) -> Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)> {
-			items	
-				.enumerate()
-				.map(|(i, item)| (format!("[{}]", i).into(), (item as &dyn TreeDisplay).into()))
-				.collect_vec()
-		}
-
 		match &self.kind {
 			Pattern::Let(value) => Some(vec![
 				("expr".into(), (value.pat.deref() as &dyn TreeDisplay).into()),

@@ -3,7 +3,7 @@ pub mod debug;
 mod var;
 mod rule_error;
 
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use nodes::*;
 
@@ -74,7 +74,7 @@ fn create_node<'i, T, I: TokStream<'i>>(
 ) -> RuleResult<T> {
 	let begin = stream.peek().unwrap().range.begin; //TODO: unsafe unwrap!!!
 	let kind = f(stream)?;
-	let end = stream.peek().map_or(Pos::new(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
+	let end = stream.peek().map_or(Pos::new_todo(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
 	Ok(Node {
 		kind,
 		range: source::Range {
@@ -93,7 +93,7 @@ fn create_node_or_pass<'i, T, I: TokStream<'i>>(
 		CreateOrPass::Create(kind) => kind,
 		CreateOrPass::Pass(node) => return Ok(node),
 	};
-	let end = stream.peek().map_or(Pos::new(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
+	let end = stream.peek().map_or(Pos::new_todo(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
 	Ok(Node {
 		kind,
 		range: source::Range {
@@ -193,6 +193,9 @@ fn parse_assign<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rul
 		let lhs = try_rule("lhs:pattern", stream, observer, parse_pattern)?;
 		
 		discard_space(stream);
+		let op = stream.try_rule_opt(parse_bin_op);
+
+		discard_space(stream);
 		if let Err(err) = next_if_eq_err(stream, TokenKind::Equals) {
 			return Err(SoftError::Soft(err));
 		};
@@ -201,6 +204,7 @@ fn parse_assign<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rul
 		let rhs = try_rule("rhs:expr", stream, observer, parse_expr).force_hard()?;
 		
 		Ok(Expr::Assign(Assign {
+			op,
 			lhs: Box::new(lhs),
 			rhs: Box::new(rhs),
 		}))
@@ -235,7 +239,7 @@ fn parse_deref<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 		let expr = try_rule("expr_atom", stream, observer, parse_expr_atom)?;
 
 		discard_space(stream);
-		next_if_eq_err(stream, TokenKind::Star).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenKind::Hash).map_err(|err| SoftError::Soft(err))?;
 
 		Ok(Pattern::Deref(Box::new(expr)))
 	})
@@ -483,29 +487,7 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 		
 		let stream_recover_state = stream.clone();
 		discard_space(stream);
-		let op = stream.next_if_map(|&t| match t.kind {
-			TokenKind::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: false })),
-			TokenKind::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: false })),
-			TokenKind::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: false })),
-			TokenKind::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: false })),
-			TokenKind::Percent => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false })),
-
-			TokenKind::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
-			TokenKind::RShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shr)),
-			
-			TokenKind::Eq => Some(BinOpKind::Cmp(CmpBinOpKind::Eq)),
-			TokenKind::Ne => Some(BinOpKind::Cmp(CmpBinOpKind::Ne)),
-			TokenKind::Lt => Some(BinOpKind::Cmp(CmpBinOpKind::Lt)),
-			TokenKind::Le => Some(BinOpKind::Cmp(CmpBinOpKind::Le)),
-			TokenKind::Gt => Some(BinOpKind::Cmp(CmpBinOpKind::Gt)),
-			TokenKind::Ge => Some(BinOpKind::Cmp(CmpBinOpKind::Ge)),
-
-			TokenKind::And => Some(BinOpKind::Logic(LogicBinOpKind::And)),
-			TokenKind::Or => Some(BinOpKind::Logic(LogicBinOpKind::Or)),
-
-			//TokenKind::Equals => Some(BinOpKind::Assign(None)),
-			_ => None,
-		}).map(|(_, op)| op);
+		let op = stream.try_rule_opt(parse_bin_op);
 
 		match op {
 			None => {
@@ -553,6 +535,31 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 	})
 }
 
+fn parse_bin_op(stream: &mut impl TokStream<'_>) -> Option<BinOpKind> {
+	match stream.next()?.kind {
+		TokenKind::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: next_if_eq(stream, TokenKind::Percent).is_some() })),
+		TokenKind::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: next_if_eq(stream, TokenKind::Percent).is_some() })),
+		TokenKind::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: next_if_eq(stream, TokenKind::Percent).is_some() })),
+		TokenKind::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: next_if_eq(stream, TokenKind::Percent).is_some() })),
+		//TokenKind::Percent => Some(BinOpKind::Arith(ArithBinOp::Mod)), //TODO: allow_wrap is not a thing for mod, change data structure?
+
+		TokenKind::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
+		TokenKind::RShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shr)),
+		
+		TokenKind::Eq => Some(BinOpKind::Cmp(CmpBinOpKind::Eq)),
+		TokenKind::Ne => Some(BinOpKind::Cmp(CmpBinOpKind::Ne)),
+		TokenKind::Lt => Some(BinOpKind::Cmp(CmpBinOpKind::Lt)),
+		TokenKind::Le => Some(BinOpKind::Cmp(CmpBinOpKind::Le)),
+		TokenKind::Gt => Some(BinOpKind::Cmp(CmpBinOpKind::Gt)),
+		TokenKind::Ge => Some(BinOpKind::Cmp(CmpBinOpKind::Ge)),
+
+		TokenKind::And => Some(BinOpKind::Logic(LogicBinOpKind::And)),
+		TokenKind::Or => Some(BinOpKind::Logic(LogicBinOpKind::Or)),
+
+		_ => None,
+	}
+}
+
 fn parse_expr_una<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node_or_pass(stream, |stream| {
 		let expr = try_rule("expr_atom", stream, observer, parse_expr_atom)?;
@@ -564,11 +571,11 @@ fn parse_expr_una<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 		};
 
 		Ok(CreateOrPass::Create(match &token.kind {
-			TokenKind::Star => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
+			TokenKind::Hash => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
 			TokenKind::Ampersand => Expr::UnaOp(UnaOp { op: UnaOpKind::AddressOf, expr: Box::new(expr) }),
 			TokenKind::Dot => {
 				discard_space(stream);
-				let ident = parse_identifier(stream, observer).force_hard()?;
+				let ident = parse_identifier_without_crying_myself_to_sleep(stream, observer).force_hard()?;
 				Expr::FieldAccess(FieldAccess { ident, expr: Box::new(expr) })
 			},
 			_ => {
@@ -594,9 +601,11 @@ fn parse_expr_atom<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut im
 		Some(token) => match &token.kind {
 			TokenKind::IntLit(value) => Ok(Expr::IntLit(value.clone())),
 			TokenKind::StrLit(value) => Ok(Expr::StrLit(value.clone())),
-			TokenKind::Identifier(value) => Ok(Expr::Identifier(Rc::new(Var {
+			TokenKind::Identifier(value) => Ok(Expr::Identifier(Rc::new(RefCell::new(Var {
 				name: value.clone(),
-			}))),
+				id: u64::MAX,
+				is_mut: false, //arbitrary, gets set in SEM stage later
+			})))),
 			_ => Err(SoftError::Soft(RuleErrorKind::UnexpectedToken((&token.kind).into()))),
 		},
 		None => Err(SoftError::Soft(RuleErrorKind::StreamExhausted)),
@@ -607,12 +616,26 @@ fn parse_binding<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl
 	create_node(stream, |stream| Ok(Pattern::Binding(parse_identifier(stream, observer)?)))
 }
 
-fn parse_identifier<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut impl RuleObserver<'i>) -> SoftResult<Rc<Var>, RuleErrorKind, RuleErrorKind> {
+fn parse_identifier<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut impl RuleObserver<'i>) -> SoftResult<Rc<RefCell<Var>>, RuleErrorKind, RuleErrorKind> {
+	let ident = next_if_err(stream, |t| matches!(t.kind, TokenKind::Identifier(_)))
+		.map_err(|err| SoftError::Soft(err))?;
+
+	Ok(Rc::new(RefCell::new(Var {
+		name: ident.kind.as_identifier().unwrap().clone(), //unwrap safe due to guard above
+		id: u64::MAX,
+		is_mut: false, //arbitrary, gets set in SEM stage later
+	})))
+}
+
+//TODO: this is a whole new level of incompetence...
+fn parse_identifier_without_crying_myself_to_sleep<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut impl RuleObserver<'i>) -> SoftResult<Rc<Var>, RuleErrorKind, RuleErrorKind> {
 	let ident = next_if_err(stream, |t| matches!(t.kind, TokenKind::Identifier(_)))
 		.map_err(|err| SoftError::Soft(err))?;
 
 	Ok(Rc::new(Var {
-		name: ident.kind.as_identifier().unwrap().clone(), //unwarp safe due to guard above
+		name: ident.kind.as_identifier().unwrap().clone(), //unwrap safe due to guard above
+		id: u64::MAX,
+		is_mut: false, //arbitrary, gets set in SEM stage later
 	}))
 }
 
@@ -637,12 +660,12 @@ fn parse_tuple_ctor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut i
 
 		let mut items = Vec::new();
 		while next_if_eq(stream, TokenKind::RParen).is_none() {
-			let expr = try_rule("expr:arg", stream, observer, parse_expr).force_hard()?;
-			items.push(expr);
+			let item = try_rule("item:expr", stream, observer, parse_expr);
+			let item = if items.is_empty() { item? } else { item.force_hard()? };
+			items.push(item);
 
 			discard_space(stream);
 			if next_if_eq(stream, TokenKind::Comma).is_none() {
-				discard_space(stream);
 				if let Err(err) = next_if_eq_err(stream, TokenKind::RParen) {
 					return Err(SoftError::Hard(err));
 				}
@@ -666,12 +689,12 @@ fn parse_tuple_dtor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut i
 
 		let mut items = Vec::new();
 		while next_if_eq(stream, TokenKind::RParen).is_none() {
-			let expr = try_rule("pattern:arg", stream, observer, parse_pattern).force_hard()?;
-			items.push(expr);
+			let item = try_rule("pattern:arg", stream, observer, parse_pattern);
+			let item = if items.is_empty() { item? } else { item.force_hard()? };
+			items.push(item);
 
 			discard_space(stream);
 			if next_if_eq(stream, TokenKind::Comma).is_none() {
-				discard_space(stream);
 				if let Err(err) = next_if_eq_err(stream, TokenKind::RParen) {
 					return Err(SoftError::Hard(err));
 				}

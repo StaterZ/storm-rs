@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use thiserror::Error;
 
@@ -12,6 +12,8 @@ pub enum SemError {
 	DoubleMut,
 	#[error("Found let inside let")]
 	DoubleLet,
-	#[error("No variable '{0}' is defined")]
-	UndefinedSymbol(Rc<Var>),
+	#[error("Symbol '{a}' isn't defined", a = .0.borrow())]
+	UndefinedSymbol(Rc<RefCell<Var>>),
+	#[error("Symbol '{a}' assigned but isn't mutable", a = .0.borrow())]
+	AssignImmutableSymbol(Rc<RefCell<Var>>),
 }

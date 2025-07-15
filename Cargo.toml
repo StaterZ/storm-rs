@@ -10,8 +10,7 @@ edition = "2021"
 clap = { version = "4.5.40", features= ["derive"] } # command line parser
 owo-colors = "4.2.2" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
-colors-transform = "0.2.11" #help with HSV conversions in debug printing
-rand = "0.9.1" #help with visualizations
+colors-transform = "0.2.11" #helps with HSV conversions in some temporary debug printing
 #prettytable-rs = "0.10.0"
 unicode-width = "0.2.1"
 
@@ -33,8 +32,8 @@ more-asserts = "0.3.1" #more asserts
 stopwatch = "0.0.7" #easy timer library
 
 ### LLVM ###
-#inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm18-0"] }
+#inkwell = { version = "0.6.0", features = ["llvm10-0"] }
 
 ### custom ###
-szu = { version = "0.2.1", path = "../szu" } # custom utils lib
+szu = { version = "0.2.1", path = "../szu" }
 tree_printer = { version = "0.1.0", path = "../tree_printer" }

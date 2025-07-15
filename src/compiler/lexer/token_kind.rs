@@ -63,6 +63,7 @@ tag_enum!(
 		//temp?
 		Ipt,
 		Yield,
+		Hash,
 		
 		IntLit(u64),
 		StrLit(String),

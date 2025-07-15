@@ -10,50 +10,34 @@ pub use token_meta::TokenMeta;
 pub use token_kind::{TokenKind, TokenKindTag};
 
 use crate::compiler::{
-	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult},
-	source,
-	map_peekable::{
-		soft_error::{SoftError, SoftResultTrait},
-		PeekableIterator,
-		MapPeekable,
-		PeekIterUtils
-	}
+	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult}, map_peekable::{
+		soft_error::{SoftError, SoftResultTrait}, MapPeekable, PeekIterUtils, PeekableIterator
+	}, source
 };
 
-trait CharStreamIter = PeekableIterator<Item = (usize, char)>;
-trait CharStreamRF = for<'a> Fn(&'a (usize, char)) -> &'a char;
-trait CharStreamMF = Fn((usize, char)) -> char;
-type CharStream<
-	I/*: CharStreamIter*/,
-	RF/*: CharStreamRF*/,
-	MF/*: CharStreamMF*/,
-> = MapPeekable<I, RF, MF, char>;
+pub trait CharStream = PeekableIterator<Item = char> + Clone;
 
 pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	let mut stream = document
-		.get_content()
 		.chars()
-		.enumerate()
 		.peekable()
 		.map_peekable(
 			|(_, c)| c,
 			|(_, c)| c,
 		);
 	
-	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> source::PosMeta<'a> {
+	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut MapPeekable<
+		impl PeekableIterator<Item = (source::Pos, char)> + Clone,
+		impl for<'b> Fn(&'b (source::Pos, char)) -> &'b char + Clone,
+		impl Fn((source::Pos, char)) -> char + Clone,
+		char,
+	>) -> source::Pos {
 		stream
 			.as_inner()
 			.peek()
-			.map(|&(i, _)| source::Pos::new(i))
-			.map_or_else(
-				|| document.get_eof(),
-				|p| p.to_meta(document))
+			.map_or(document.eof(), |(p, _c)| *p)
 	}
-		
+	
 	let mut tokens = Vec::new();
 	let mut begin = get_current_source_pos(document, &mut stream);
 	loop {
@@ -64,7 +48,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 				let end = get_current_source_pos(document, &mut stream);
 				tokens.push(Token{
 					kind,
-					range: source::Range::new(begin, end),
+					range: source::Range { begin, end },
 				});
 
 				if is_eof {
@@ -87,11 +71,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	}
 }
 
-fn next_token_kind(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> Result<TokenKind, LexerErrorKind> {
+fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerErrorKind> {
 	{
 		fn is_space(c: &char) -> bool { matches!(*c, ' ' | '\t') }
 		if stream.next_if(is_space).is_some() {
@@ -175,6 +155,9 @@ fn next_token_kind(stream: &mut CharStream<
 	if stream.next_if_eq(&'%').is_some() {
 		return Ok(TokenKind::Percent);
 	}
+	if stream.next_if_eq(&'#').is_some() {
+		return Ok(TokenKind::Hash);
+	}
 	if stream.next_if_eq(&'<').is_some() {
 		if stream.next_if_eq(&'<').is_some() {
 			return Ok(TokenKind::LShift);
@@ -212,7 +195,7 @@ fn next_token_kind(stream: &mut CharStream<
 		return Ok(TokenKind::Bang);
 	}
 
-	if let Ok(value) = stream.try_rule(parse_int).shed_hard_raw()? {
+	if let Ok(value) = stream.try_rule_sh(parse_int).shed_hard_raw()? {
 		return Ok(TokenKind::IntLit(value));
 	}
 
@@ -276,12 +259,8 @@ fn next_token_kind(stream: &mut CharStream<
 	return Err(LexerErrorKind::NoTokenMatchingStream);
 }
 
-fn parse_int(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> LexerResult<u64> {
-	let radix = stream.try_rule(parse_radix_symbol).shed_hard()?;
+fn parse_int(stream: &mut impl CharStream) -> LexerResult<u64> {
+	let radix = stream.try_rule_sh(parse_radix_symbol).shed_hard()?;
 	let has_radix_symbol = radix.is_ok();
 	let mut digits = parse_digits(
 		stream,
@@ -308,11 +287,7 @@ fn parse_int(stream: &mut CharStream<
 	digits.map_err(|err| SoftError::Soft(err))
 }
 
-fn parse_radix_symbol(stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->) -> LexerResult<u64> {
+fn parse_radix_symbol(stream: &mut impl CharStream) -> LexerResult<u64> {
 	if stream.next_if_eq(&'0').is_none() {
 		return Err(SoftError::Soft(LexerErrorKind::RadixSymbolExpectedLeadingZero));
 	}
@@ -343,11 +318,7 @@ fn parse_radix_symbol(stream: &mut CharStream<
 }
 
 fn parse_digits(
-	stream: &mut CharStream<
-	impl CharStreamIter + Clone,
-	impl CharStreamRF + Clone,
-	impl CharStreamMF + Clone,
->,
+	stream: &mut impl CharStream,
 	radix: u64,
 	mut is_match: bool,
 	allow_radix_end: bool,

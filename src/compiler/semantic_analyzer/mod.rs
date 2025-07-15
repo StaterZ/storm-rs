@@ -1,128 +1,149 @@
-use std::{collections::HashMap, rc::Rc};
-
-use color_print::cprintln;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::compiler::parser::{self, Var};
 use error::SemError;
 
 mod error;
 
-pub fn analyze(ast: &mut parser::nodes::Node<parser::nodes::Expr>) -> Result<(), SemError> {
-	let mut symbols = HashMap::new();
-	let result = eval_expr(ast, &mut symbols);
-	match &result {
-		Ok(_) => cprintln!("<yellow>HAPPY! ^v^</>"),
-		Err(_) => cprintln!("<blue>SAD >~<<</>"),
-	}
-	result
+#[derive(Debug, Clone)]
+struct SymTbl {
+	symbols: HashMap<String, Rc<RefCell<Var>>>,
 }
 
-fn eval_expr(node: &mut parser::nodes::Node<parser::nodes::Expr>, symbols: &mut HashMap<String, Rc<Var>>) -> Result<(), SemError> {
+impl SymTbl {
+	pub fn new() -> Self {
+		Self {
+			symbols: HashMap::new(),
+		}
+	}
+
+	fn declare(&mut self, var: Rc<RefCell<Var>>, is_mut: bool) {
+		let name = {
+			let mut var = var.borrow_mut();
+			var.is_mut = is_mut;
+			var.id = self.symbols.len() as u64;
+			var.name.clone()
+		};
+		self.symbols.insert(name, var);
+	}
+	
+	fn get(&self, var: &mut Rc<RefCell<Var>>) -> Result<(), SemError> {
+		let sym_var = self.symbols
+			.get(&var.borrow().name)
+			.ok_or_else(|| SemError::UndefinedSymbol(var.clone()))?;
+		*var = sym_var.clone();
+		Ok(())
+	}
+}
+
+pub fn analyze(ast: &mut parser::nodes::Node<parser::nodes::Expr>) -> Result<(), Vec<SemError>> {
+	let mut sym_tbl = SymTbl::new();
+	let mut errors = Vec::new();
+	eval_expr(ast, &mut sym_tbl, &mut errors);
+	if errors.is_empty() {
+		Ok(())
+	} else {
+		Err(errors)
+	}
+}
+
+fn eval_expr(node: &mut parser::nodes::Node<parser::nodes::Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>) {
 	match &mut node.kind {
 		parser::nodes::Expr::Assign(value) => {
 			//NOTE: order is important! otherwise things can get defined after they're used.
-			eval_expr(&mut value.rhs, symbols)?;
-			eval_pattern(&mut value.lhs, symbols, false, false)?;
+			eval_expr(&mut value.rhs, sym_tbl, errors);
+			eval_pattern(&mut value.lhs, sym_tbl, errors, false, false);
 		},
-		parser::nodes::Expr::Return(value) => value.expr
-			.as_mut()
-			.map_or(Ok(()), |expr|
-				eval_expr(expr, symbols))?,
-		parser::nodes::Expr::Break(value) => value.expr
-			.as_mut()
-			.map_or(Ok(()), |expr|
-				eval_expr(expr, symbols))?,
+		parser::nodes::Expr::Return(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
+		parser::nodes::Expr::Break(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
 		parser::nodes::Expr::Continue => { },
 		parser::nodes::Expr::Unreachable => { },
 		
 		parser::nodes::Expr::Loop(value) => {
-			eval_expr(&mut value.body, &mut symbols.clone())?;
-			value.body_else
-				.as_mut()
-				.map_or(Ok(()), |body_else|
-					eval_expr(body_else, &mut symbols.clone()))?;
+			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
+			if let Some(body_else) = &mut value.body_else {
+				eval_expr(body_else, &mut sym_tbl.clone(), errors)
+			}
 		}
 		parser::nodes::Expr::While(value) => {
-			eval_expr(&mut value.cond, symbols)?;
-			eval_expr(&mut value.body, &mut symbols.clone())?;
-			value.body_else
-				.as_mut()
-				.map_or(Ok(()), |body_else|
-					eval_expr(body_else, &mut symbols.clone()))?;
+			eval_expr(&mut value.cond, sym_tbl, errors);
+			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
+			if let Some(body_else) = &mut value.body_else {
+				eval_expr(body_else, &mut sym_tbl.clone(), errors)
+			}
 		}
 		parser::nodes::Expr::For(value) => {
-			eval_expr(&mut value.iter, symbols)?;
-			let mut body_symbols = symbols.clone();
-			eval_pattern(&mut value.binding, &mut body_symbols, true, false)?;
-			eval_expr(&mut value.body, &mut body_symbols)?;
-			value.body_else
-				.as_mut()
-				.map_or(Ok(()), |body_else|
-					eval_expr(body_else, &mut symbols.clone()))?;
+			eval_expr(&mut value.iter, sym_tbl, errors);
+			let mut body_sym_tbl = sym_tbl.clone();
+			eval_pattern(&mut value.binding, &mut body_sym_tbl, errors, true, false);
+			eval_expr(&mut value.body, &mut body_sym_tbl, errors);
+			if let Some(body_else) = &mut value.body_else {
+				eval_expr(body_else, &mut sym_tbl.clone(), errors)
+			}
 		}
 		parser::nodes::Expr::If(value) => {
-			eval_expr(&mut value.cond, symbols)?;
-			eval_expr(&mut value.body, &mut symbols.clone())?;
-			value.body_else
-				.as_mut()
-				.map_or(Ok(()), |body_else|
-					eval_expr(body_else, &mut symbols.clone()))?;
+			eval_expr(&mut value.cond, sym_tbl, errors);
+			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
+			if let Some(body_else) = &mut value.body_else {
+				eval_expr(body_else, &mut sym_tbl.clone(), errors)
+			}
 		}
 
 		parser::nodes::Expr::Block(value) => {
-			let mut symbols = symbols.clone();
+			let mut sym_tbl = sym_tbl.clone();
 			for stmt in value.stmts.iter_mut() {
-				eval_expr(stmt, &mut symbols)?;
+				eval_expr(stmt, &mut sym_tbl, errors);
 			}
 		},
-		parser::nodes::Expr::Stmt(value) => eval_expr(&mut value.expr, symbols)?,
+		parser::nodes::Expr::Stmt(value) => eval_expr(&mut value.expr, sym_tbl, errors),
 		parser::nodes::Expr::BinOp(value) => {
-			eval_expr(&mut value.lhs, symbols)?;
-			eval_expr(&mut value.rhs, symbols)?;
+			eval_expr(&mut value.lhs, sym_tbl, errors);
+			eval_expr(&mut value.rhs, sym_tbl, errors);
 		},
-		parser::nodes::Expr::UnaOp(value) => eval_expr(&mut value.expr, symbols)?,
-		parser::nodes::Expr::FieldAccess(value) => eval_expr(&mut value.expr, symbols)?,
+		parser::nodes::Expr::UnaOp(value) => eval_expr(&mut value.expr, sym_tbl, errors),
+		parser::nodes::Expr::FieldAccess(value) => eval_expr(&mut value.expr, sym_tbl, errors),
 
 		parser::nodes::Expr::TupleCtor(value) => {
 			for item in value.items.iter_mut() {
-				eval_expr(item, symbols)?;
+				eval_expr(item, sym_tbl, errors);
 			}
 		},
 		parser::nodes::Expr::IntLit(_value) => { },
 		parser::nodes::Expr::StrLit(_value) => { },
 		parser::nodes::Expr::Identifier(var) => {
-			let sym_var = symbols
-				.get(&var.name)
-				.ok_or_else(|| SemError::UndefinedSymbol(var.clone()))?;
-			*var = sym_var.clone();
-			println!("var:{}, USE", var);
+			if let Err(err) = sym_tbl.get(var) { errors.push(err); return; }
+			//println!("USE:  {}", var.borrow());
 		},
 	}
-	Ok(())
 }
 
-fn eval_pattern(node: &mut parser::nodes::Node<parser::nodes::Pattern>, symbols: &mut HashMap<String, Rc<Var>>, is_decl: bool, is_mut: bool) -> Result<(), SemError> {
+fn eval_pattern(node: &mut parser::nodes::Node<parser::nodes::Pattern>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>, is_decl: bool, is_mut: bool) {
 	match &mut node.kind {
 		parser::nodes::Pattern::Let(value) => {
-			if is_decl { return Err(SemError::DoubleLet); }
+			if is_decl { errors.push(SemError::DoubleLet); return; }
 			debug_assert!(!is_mut);
-			eval_pattern(&mut value.pat, symbols, true, false)?
+			eval_pattern(&mut value.pat, sym_tbl, errors, true, false);
 		},
 		parser::nodes::Pattern::Mut(value) => {
-			if is_mut { return Err(SemError::DoubleMut); }
-			if !is_decl { return Err(SemError::MutWithoutLet); }
-			eval_pattern(&mut value.pat, symbols, is_decl, true)?
+			if is_mut { errors.push(SemError::DoubleMut); return; }
+			if !is_decl { errors.push(SemError::MutWithoutLet); return; }
+			eval_pattern(&mut value.pat, sym_tbl, errors, is_decl, true);
 		}
 		parser::nodes::Pattern::TupleDtor(value) => {
 			for item in value.items.iter_mut() {
-				eval_pattern(item, symbols, is_decl, is_mut)?;
+				eval_pattern(item, sym_tbl, errors, is_decl, is_mut);
 			}
 		},
-		parser::nodes::Pattern::Deref(value) => eval_expr(value, symbols)?,
+		parser::nodes::Pattern::Deref(value) => eval_expr(value, sym_tbl, errors),
 		parser::nodes::Pattern::Binding(var) => {
-			symbols.insert(var.name.clone(), var.clone());
-			println!("var:{}, decl:{} mut:{}", var, is_decl, is_mut);
+			if is_decl {
+				sym_tbl.declare(var.clone(), is_mut);
+				//println!("DECL: {}, mut:{}", var.borrow(), is_mut);
+			} else {
+				if let Err(err) = sym_tbl.get(var) { errors.push(err); return; }
+				if !var.borrow().is_mut { errors.push(SemError::AssignImmutableSymbol(var.clone())); return; }
+				//println!("SET:  {}", var.borrow());
+			}
 		},
 	}
-	Ok(())
 }

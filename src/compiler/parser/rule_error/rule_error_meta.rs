@@ -6,14 +6,14 @@ use super::RuleError;
 #[derive(Debug)]
 pub struct RuleErrorMeta<'a> {
 	pub(in super::super) error: RuleError,
-	pub(in super::super) document: &'a source::Document,
+	pub(in super::super) document: &'a source::DocumentMeta<'a>,
 }
 
 impl<'a> Display for RuleErrorMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.error.kind)?;
 		if let Some(source_range) = self.error.source_range {
-			write!(f, "{}", source::error_gen::generate_error_line(source_range.to_meta(&self.document)))?;
+			write!(f, "{}", source::error_gen::generate_error_line(source_range.with_meta(&self.document), self.document))?;
 		} else {
 			write!(f, "No source location >:/")?;
 		}

@@ -17,7 +17,7 @@ pub trait PrecedenceOrd {
 	fn precedence(&self) -> Precedence;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArithBinOpKind {
 	Add,
 	Sub,
@@ -45,7 +45,7 @@ impl Display for ArithBinOpKind {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BitwiseBinOpKind {
 	Shl,
 	Shr,
@@ -64,7 +64,7 @@ impl Display for BitwiseBinOpKind {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogicBinOpKind {
 	And,
 	Or,
@@ -86,7 +86,7 @@ impl Display for LogicBinOpKind {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArithBinOp {
 	pub kind: ArithBinOpKind,
 	pub allow_wrap: bool,
@@ -106,7 +106,7 @@ impl Display for ArithBinOp {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpBinOpKind {
 	Eq,
 	Ne,
@@ -133,7 +133,7 @@ impl Display for CmpBinOpKind {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOpKind {
 	Arith(ArithBinOp),
 	Bitwise(BitwiseBinOpKind),

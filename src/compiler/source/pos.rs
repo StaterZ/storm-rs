@@ -1,7 +1,7 @@
 use std::ops::{Add, Sub};
 
 use super::{
-	Document,
+	DocumentMeta,
 	PosMeta,
 	Range,
 };
@@ -10,11 +10,16 @@ use super::{
 pub struct Pos(usize);
 
 impl Pos {
-	pub fn new(inner: usize) -> Pos {
+	pub(super) fn new(inner: usize) -> Pos {
+		Self(inner)
+	}
+	
+	//TODO: remove me
+	pub fn new_todo(inner: usize) -> Pos {
 		Self(inner)
 	}
 
-	pub fn to_meta(self, document: &Document) -> PosMeta {
+	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> PosMeta<'a> {
 		PosMeta {
 			pos: self,
 			document,

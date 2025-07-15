@@ -5,30 +5,30 @@ use std::{
 
 use super::{
 	super::{
-		Document,
 		Range,
 	},
+	DocumentMeta,
 	PosMeta,
 };
 
 #[derive(Clone, Copy)]
 pub struct RangeMeta<'a> {
 	pub range: Range,
-	pub document: &'a Document,
+	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> RangeMeta<'a> {
 	pub fn new(begin: PosMeta<'a>, end: PosMeta<'a>) -> Self {
 		let document = begin.document; //begin.document == end.document is asserted in Range::new, any of them will do
-		Range::new(begin, end).to_meta(&document)
+		Range::new(begin, end).with_meta(&document)
 	}
 
 	pub fn get_begin(&self) -> PosMeta<'a> {
-		self.range.begin.to_meta(self.document)
+		self.range.begin.with_meta(self.document)
 	}
 
 	pub fn get_end(&self) -> PosMeta<'a> {
-		self.range.end.to_meta(self.document)
+		self.range.end.with_meta(self.document)
 	}
 
 	pub fn get_length(&self) -> usize {

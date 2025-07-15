@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![allow(mismatched_lifetime_syntaxes)]
 #![feature(trait_alias)]
 #![feature(map_try_insert)]
 #![feature(type_alias_impl_trait)]
@@ -7,6 +6,7 @@
 #![feature(try_blocks)]
 #![feature(inplace_iteration)]
 #![feature(min_specialization)]
+#![feature(anonymous_lifetime_in_impl_trait)]
 
 mod compiler;
 
@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use color_print::cprintln;
 use compiler::source;
 use stopwatch::Stopwatch;
 
@@ -56,14 +57,18 @@ fn compile() {
 		show_source: false,
 		show_tokens: false,
 		show_ast_rule_path: false,
-		show_ast: true,
-		show_sat: true,
-		show_output: false,
+		show_ast: false,
+		show_sem: false,
+		show_output: true,
 	};
 
 	let mut timer = Stopwatch::start_new();
-	let _ = compiler::compile(&src_doc, flags);
+	let result = compiler::compile(&src_doc, flags);
 	timer.stop();
 	println!();
-	println!("compile time: {}ms", timer.elapsed().as_millis())
+	println!("compile time: {}ms", timer.elapsed().as_millis());
+	match &result {
+		Ok(_) => cprintln!("<yellow>HAPPY! ^v^</>"),
+		Err(_) => cprintln!("<blue>SAD >~<<</>"),
+	}
 }

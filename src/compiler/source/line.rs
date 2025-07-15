@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{
-	Document,
+	DocumentMeta,
 	LineMeta,
 };
 
@@ -12,7 +12,7 @@ use super::{
 pub struct Line(usize);
 
 impl Line {
-	pub fn new(index: usize) -> Self {
+	pub(super) fn new(index: usize) -> Self {
 		Self(index)
 	}
 
@@ -20,7 +20,7 @@ impl Line {
 		self.0
 	}
 
-	pub fn to_meta(self, document: &Document) -> LineMeta {
+	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> LineMeta<'a> {
 		LineMeta {
 			line: self,
 			document,

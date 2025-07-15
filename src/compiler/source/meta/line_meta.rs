@@ -6,17 +6,17 @@ use std::{
 
 use super::{
 	super::{
-		Document,
 		Range,
 		Line,
 	},
+	DocumentMeta,
 	RangeMeta,
 };
 
 #[derive(Clone, Copy)]
 pub struct LineMeta<'a> {
 	pub line: Line,
-	pub document: &'a Document,
+	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> LineMeta<'a> {
@@ -30,7 +30,7 @@ impl<'a> LineMeta<'a> {
 			self.document.get_eof()
 		};
 		
-		Range::new(begin, end).to_meta(self.document)
+		Range::new(begin, end).with_meta(self.document)
 	}
 
 	fn assert_safe(&self, other: &Self) {
@@ -80,7 +80,7 @@ impl<'a> Add<usize> for LineMeta<'a> {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
-		(self.line + rhs).to_meta(self.document)
+		(self.line + rhs).with_meta(self.document)
 	}
 }
 
@@ -97,6 +97,6 @@ impl<'a> Sub<usize> for LineMeta<'a> {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {
-		(self.line - rhs).to_meta(self.document)
+		(self.line - rhs).with_meta(self.document)
 	}
 }

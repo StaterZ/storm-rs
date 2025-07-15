@@ -9,7 +9,7 @@ use super::RuleTree;
 
 pub struct RuleTreeMeta<'a, 'b, 'c> {
 	pub tree: &'b RuleTree<'a>,
-	pub document: &'c source::Document,
+	pub document: &'c source::DocumentMeta<'c>,
 }
 
 impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
