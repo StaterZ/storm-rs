@@ -13,7 +13,7 @@ impl<'a> Display for RuleErrorMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.error.kind)?;
 		if let Some(source_range) = self.error.source_range {
-			write!(f, "{}", source::error_gen::generate_error_line(source_range.with_meta(&self.document), self.document))?;
+			write!(f, "{}", source::error_gen::generate_error_line(source_range.with_meta(&self.document)))?;
 		} else {
 			write!(f, "No source location >:/")?;
 		}

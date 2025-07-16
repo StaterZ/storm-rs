@@ -20,15 +20,12 @@ impl Range {
 		debug_assert!(ptr::eq(begin.document, end.document));
 		debug_assert_le!(begin, end);
 		Self {
-			begin: begin.pos,
-			end: end.pos,
+			begin: *begin,
+			end: *end,
 		}
 	}
 
 	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> RangeMeta<'a> {
-		RangeMeta {
-			range: self,
-			document,
-		}
+		RangeMeta::new_with_document(self, document)
 	}
 }

@@ -47,7 +47,7 @@ pub fn compile(document: &source::Document, flags: Flags) -> Result<String, Comp
 		println!("=== Source ===");
 		let width = ilog10ceil(document.get_num_lines());
 		for line in document.lines() {
-			cprintln!("<cyan>{:>width$} |</> {:?}", line.line.index(), line.range().get_str());
+			cprintln!("<cyan>{:>width$} |</> {:?}", line.index(), line.range().get_str());
 		}
 		println!();
 	}

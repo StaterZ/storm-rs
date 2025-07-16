@@ -3,18 +3,22 @@ use std::{
 	ptr,
 };
 
-use super::super::{
-	Document,
-	Column,
-};
+use super::super::*;
 
 #[derive(Clone, Copy)]
 pub struct ColumnMeta<'a> {
-	pub column: Column,
-	pub document: &'a Document,
+	column: Column,
+	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> ColumnMeta<'a> {
+	pub(in super::super) fn new_with_document(column: Column, document: &'a DocumentMeta<'a>) -> Self {
+		Self {
+			column,
+			document,
+		}
+	}
+
 	fn assert_safe(&self, other: &Self) {
 		debug_assert!(ptr::eq(self.document, other.document));
 	}

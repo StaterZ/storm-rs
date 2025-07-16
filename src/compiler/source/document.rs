@@ -1,4 +1,4 @@
-use std::{iter::Enumerate, str::Chars};
+use std::{iter::Map, str::CharIndices};
 
 use super::Pos;
 
@@ -25,25 +25,13 @@ impl Document {
 	}
 
 	pub fn eof(&self) -> Pos {
-		Pos::new(self.content.chars().count())
+		Pos::new(self.content.len())
 	}
 
-	pub fn chars(&self) -> std::iter::Map<Enumerate<Chars<'_>>, fn((usize, char)) -> (Pos, char)> {
+	pub fn char_positions(&self) -> Map<CharIndices<'_>, fn((usize, char)) -> (Pos, char)> {
+		let f = |(i, c)| (Pos::new(i), c);
 		self.content
-			.chars()
-			.enumerate()
-			.map(|(i, c)| (Pos::new(i), c))
+			.char_indices()
+			.map(f as fn((usize, char)) -> (Pos, char))
 	}
-
-	// pub fn eof(&self) -> Pos {
-	// 	Pos::new(self.content.len())
-	// }
-
-	// pub fn chars(&self) -> std::iter::Chain<std::iter::Map<CharIndices<'_>, fn((usize, char)) -> (Pos, char)>, std::iter::Once<(Pos, char)>> {
-	// 	let f = |(i, c)| (Pos::new(i), c);
-	// 	self.content
-	// 		.char_indices()
-	// 		.map(f as fn((usize, char)) -> (Pos, char))
-	// 		.chain(std::iter::once((self.eof(), '\0')))
-	// }
 }

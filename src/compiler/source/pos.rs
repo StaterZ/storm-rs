@@ -1,9 +1,6 @@
-use std::ops::{Add, Sub};
-
 use super::{
 	DocumentMeta,
 	PosMeta,
-	Range,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -20,48 +17,14 @@ impl Pos {
 	}
 
 	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> PosMeta<'a> {
-		PosMeta {
-			pos: self,
-			document,
-		}
+		PosMeta::new_with_document(self, document)
 	}
 
-	pub fn char_index(&self) -> usize {
+	pub fn byte_index(&self) -> usize {
 		self.0
 	}
 
-	pub fn to_range(&self) -> Range {
-		Range {
-			begin: *self,
-			end: *self + 1,
-		}
-	}
-}
-
-impl PartialEq<usize> for Pos {
-	fn eq(&self, other: &usize) -> bool {
-		self.char_index() == *other
-	}
-}
-
-impl PartialOrd<usize> for Pos {
-	fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
-		self.char_index().partial_cmp(other)
-	}
-}
-
-impl Add<usize> for Pos {
-	type Output = Self;
-
-	fn add(self, rhs: usize) -> Self::Output {
-		Self::new(self.char_index() + rhs)
-	}
-}
-
-impl Sub<usize> for Pos {
-	type Output = Self;
-
-	fn sub(self, rhs: usize) -> Self::Output {
-		Self::new(self.char_index() - rhs)
+	pub fn add_byte_offset(&self, offset: usize) -> Self {
+		Self(self.0 + offset)
 	}
 }

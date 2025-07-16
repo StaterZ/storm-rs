@@ -21,10 +21,7 @@ impl Line {
 	}
 
 	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> LineMeta<'a> {
-		LineMeta {
-			line: self,
-			document,
-		}
+		LineMeta::new_with_document(self, document)
 	}
 }
 

@@ -19,7 +19,7 @@ pub trait CharStream = PeekableIterator<Item = char> + Clone;
 
 pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 	let mut stream = document
-		.chars()
+		.char_positions()
 		.peekable()
 		.map_peekable(
 			|(_, c)| c,

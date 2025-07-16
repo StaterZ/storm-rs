@@ -3,10 +3,7 @@ use std::{
 	ops::{Add, Sub},
 };
 
-use super::{
-	ColumnMeta,
-	Document,
-};
+use super::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Column(usize);
@@ -20,11 +17,8 @@ impl Column {
 		self.0
 	}
 
-	pub fn with_meta(self, document: &Document) -> ColumnMeta<'_> {
-		ColumnMeta {
-			column: self,
-			document,
-		}
+	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> ColumnMeta<'a> {
+		ColumnMeta::new_with_document(self, document)
 	}
 }
 

@@ -1,40 +1,52 @@
 use std::{
-	fmt::{Display, Debug},
-	ops::{Add, Sub},
+	fmt::{Debug, Display},
+	ops::{Add, Deref, Sub},
 	ptr,
 };
 
-use super::{
-	super::{
-		Range,
-		Line,
-	},
-	DocumentMeta,
-	RangeMeta,
-};
+use super::super::*;
 
 #[derive(Clone, Copy)]
 pub struct LineMeta<'a> {
-	pub line: Line,
+	line: Line,
 	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> LineMeta<'a> {
+	pub(in super::super) fn new_with_document(line: Line, document: &'a DocumentMeta) -> Self {
+		Self {
+			line,
+			document,
+		}
+	}
+
 	pub fn range(&self) -> RangeMeta<'a> {
-		let begin = self.document.get_line_begin(self);
+		let begin = self.get_line_begin();
 		
 		let next_line = *self + 1;
 		let end = if next_line < self.document.get_num_lines() {
-			self.document.get_line_begin(&next_line)
+			next_line.get_line_begin()
 		} else {
-			self.document.get_eof()
+			self.document.eof()
 		};
 		
 		Range::new(begin, end).with_meta(self.document)
 	}
+	
+	fn get_line_begin(&self) -> super::PosMeta<'_> {
+		self.document.lines_begin[self.index()].with_meta(self.document)
+	}
 
 	fn assert_safe(&self, other: &Self) {
 		debug_assert!(ptr::eq(self.document, other.document));
+	}
+}
+
+impl<'a> Deref for LineMeta<'a> {
+	type Target = Line;
+
+	fn deref(&self) -> &Self::Target {
+		&self.line
 	}
 }
 

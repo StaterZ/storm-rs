@@ -3,17 +3,11 @@ use std::{
 	ptr,
 };
 
-use super::{
-	super::{
-		Range,
-	},
-	DocumentMeta,
-	PosMeta,
-};
+use super::super::*;
 
 #[derive(Clone, Copy)]
 pub struct RangeMeta<'a> {
-	pub range: Range,
+	range: Range,
 	pub document: &'a DocumentMeta<'a>,
 }
 
@@ -23,6 +17,13 @@ impl<'a> RangeMeta<'a> {
 		Range::new(begin, end).with_meta(&document)
 	}
 
+	pub(in super::super) fn new_with_document(range: Range, document: &'a DocumentMeta) -> Self {
+		Self {
+			range,
+			document,
+		}
+	}
+
 	pub fn get_begin(&self) -> PosMeta<'a> {
 		self.range.begin.with_meta(self.document)
 	}
@@ -30,9 +31,20 @@ impl<'a> RangeMeta<'a> {
 	pub fn get_end(&self) -> PosMeta<'a> {
 		self.range.end.with_meta(self.document)
 	}
+	
+	pub fn get_last(&self) -> Option<PosMeta<'a>> {
+		if self.get_begin() > self.get_end() { return None; }
+
+		self.document
+			.get_content()[..self.get_end().byte_index()]
+			.char_indices()
+			.map(|(i, _)| Pos::new(i).with_meta(self.document))
+			.rev()
+			.next()
+	}
 
 	pub fn get_length(&self) -> usize {
-		self.get_end() - self.get_begin()
+		self.get_end().char_index() - self.get_begin().char_index()
 	}
 
 	pub fn get_str(&self) -> &'a str {
@@ -52,14 +64,14 @@ impl<'a> Display for RangeMeta<'a> {
 		if begin == end {
 			write!(f, "{} (0 sized)", begin)
 		} else {
-			let last = end - 1;
+			let last = self.get_last().unwrap(); //SAFETY: unwarp safe due to begin != end, i.e 0<=begin<end, so end>0
 
 			if begin.line() != last.line() {
 				write!(f, "{}-{}", begin, last)
 			} else if begin == last {
 				write!(f, "{}", begin)
 			} else {
-				write!(f, "{}-{}", begin, last.column().unwrap())
+				write!(f, "{}-{}", begin, last.column())
 			}
 		}
 	}

@@ -1,56 +1,58 @@
 use std::{
-	fmt::{Display, Debug},
-	ops::{Add, Sub},
+	fmt::{Debug, Display},
+	ops::Deref,
 	ptr,
 };
 
-use more_asserts::*;
-
-use super::{
-	super::{
-		Pos,
-		Column,
-	},
-	DocumentMeta,
-	LineMeta,
-	RangeMeta,
-};
+use super::super::*;
 
 #[derive(Clone, Copy)]
 pub struct PosMeta<'a> {
-	pub pos: Pos,
+	pos: Pos,
 	pub document: &'a DocumentMeta<'a>,
 }
 
 impl<'a> PosMeta<'a> {
-	pub fn line(&self) -> Option<LineMeta<'a>> {
-		(!self.is_eof()).then(|| self.line_raw())
+	pub(in super::super) fn new_with_document(pos: Pos, document: &'a DocumentMeta) -> Self {
+		Self {
+			pos,
+			document,
+		}
 	}
 
-	pub fn line_raw(&self) -> LineMeta<'a> {
-		self.document.get_line(self)
+	pub fn line(&self) -> LineMeta<'a> {
+		let line_index = match self.document.lines_begin.binary_search_by_key(self, |key| key.with_meta(self.document)) {
+			Ok(line_index) => line_index,
+			Err(next_line_index) => next_line_index - 1,
+		};
+
+		Line::new(line_index).with_meta(self.document)
 	}
 
-	pub fn column(&self) -> Option<Column> {
-		(!self.is_eof()).then(|| self.column_raw())
+	pub fn column(&self) -> Column {
+		Column::new(self
+			.line()
+			.range()
+			.get_str()[..self.byte_index()]
+			.chars()
+			.count())
 	}
 
-	pub fn column_raw(&self) -> Column {
-		Column::new(*self - self.line_raw().range().get_begin())
+	pub fn char_index(&self) -> usize {
+		self.document.byte_to_char[self.byte_index()]
 	}
 
-	pub fn is_eof(&self) -> bool {
-		let eof = self.document.get_eof();
-		debug_assert_le!(*self, eof);
-		*self == eof
+	pub fn as_range(&self) -> RangeMeta<'_> {
+		let content = self.document.get_content();
+		let end = Pos::new(content[self.byte_index()..]
+			.char_indices()
+			.nth(1)
+			.map_or(content.len(), |(i, _)| i));
+		Range { begin: **self, end }.with_meta(self.document)
 	}
 
-	pub fn to_range(&self) -> RangeMeta<'_> {
-		self.pos.to_range().with_meta(self.document)
-	}
-
-	pub fn byte_index(&self) -> usize {
-		self.document.get_char_to_byte(self)
+	pub fn add_byte_offset(&self, offset: usize) -> Self {
+		self.pos.add_byte_offset(offset).with_meta(self.document)
 	}
 
 	fn assert_safe(self, other: &Self) {
@@ -58,12 +60,20 @@ impl<'a> PosMeta<'a> {
 	}
 }
 
+impl<'a> Deref for PosMeta<'a> {
+	type Target = Pos;
+
+	fn deref(&self) -> &Self::Target {
+		&self.pos
+	}
+}
+
 impl<'a> Display for PosMeta<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if self.is_eof() {
+		if *self == self.document.eof() {
 			write!(f, "EOF")
 		} else {
-			write!(f, "{}:{}", self.line_raw(), self.column_raw())
+			write!(f, "{}:{}", self.line(), self.column())
 		}
 	}
 }
@@ -79,57 +89,20 @@ impl<'a> Eq for PosMeta<'a> { }
 impl<'a> PartialEq for PosMeta<'a> {
 	fn eq(&self, other: &Self) -> bool {
 		self.assert_safe(other);
-		self.pos.char_index() == other.pos.char_index()
-	}
-}
-
-impl<'a> PartialEq<usize> for PosMeta<'a> {
-	fn eq(&self, other: &usize) -> bool {
-		self.pos.eq(other)
+		self.byte_index() == other.byte_index()
 	}
 }
 
 impl<'a> PartialOrd for PosMeta<'a> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		self.assert_safe(other);
-		self.pos.char_index().partial_cmp(&other.pos.char_index())
-	}
-}
-
-impl<'a> PartialOrd<usize> for PosMeta<'a> {
-	fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
-		self.pos.partial_cmp(other)
+		self.byte_index().partial_cmp(&other.byte_index())
 	}
 }
 
 impl<'a> Ord for PosMeta<'a> {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.assert_safe(other);
-		self.pos.char_index().cmp(&other.pos.char_index())
-	}
-}
-
-impl<'a> Add<usize> for PosMeta<'a> {
-	type Output = Self;
-
-	fn add(self, rhs: usize) -> Self::Output {
-		(self.pos + rhs).with_meta(self.document)
-	}
-}
-
-impl<'a> Sub for PosMeta<'a> {
-	type Output = usize;
-
-	fn sub(self, rhs: Self) -> Self::Output {
-		self.assert_safe(&rhs);
-		self.pos.char_index() - rhs.pos.char_index()
-	}
-}
-
-impl<'a> Sub<usize> for PosMeta<'a> {
-	type Output = Self;
-
-	fn sub(self, rhs: usize) -> Self::Output {
-		(self.pos - rhs).with_meta(self.document)
+		self.byte_index().cmp(&other.byte_index())
 	}
 }

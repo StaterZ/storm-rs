@@ -2,28 +2,19 @@ use color_print::cformat;
 use szu::iter::FindLastMapExt;
 use unicode_width::UnicodeWidthStr;
 
-use crate::compiler::source::DocumentMeta;
-
 use super::RangeMeta;
 
-pub fn generate_error_line(range: RangeMeta, document: &DocumentMeta<'_>) -> String { //TODO: remove document argument and get it from inside range when it can contain a meta document
+pub fn generate_error_line(range: RangeMeta) -> String {
 	let range_str = format!("[{}]", range);
 	
 	let line = {
 		let begin = range.get_begin();
 		let begin_line = begin.line();
 		
-		let end = range.get_end();
-		
-		let last = (begin < end).then(|| end - 1); //begin < end implicitly also ensures end > 0, since begin can't go lower than 0 and end need to be larger than begin
-		let last_line = last.and_then(|last| last.line());
+		let last = range.get_last();
+		let last_line = last.map_or(begin_line, |last| last.line()); //if it's None, that means it's zero size, so then we just grab the begin line
 
-		match (begin_line, last_line) {
-			(Some(begin_line), Some(last_line)) if begin_line == last_line =>
-				Ok(begin_line),
-			(None, None) => Ok(document.eof().with_meta(document).line_raw()), //If it's eof, we give the last line
-			_ => Err("MUTI-LINE NOT SUPPORTED"),
-		}
+		(begin_line == last_line).then_some(begin_line).ok_or("MUTI-LINE NOT SUPPORTED")
 	};
 
 	let (line_str, mut error_inset, error_length) = match line {
@@ -40,7 +31,7 @@ pub fn generate_error_line(range: RangeMeta, document: &DocumentMeta<'_>) -> Str
 				.unwrap_or(line_str.bytes().len());
 			
 			let error_inset = RangeMeta::new(
-				line.range().get_begin() + line_trunc_begin_byte,
+				line.range().get_begin().add_byte_offset(line_trunc_begin_byte),
 				range.get_begin()
 			).get_str().width();
 			let error_length = range.get_str().width();
