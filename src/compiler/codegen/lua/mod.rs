@@ -7,8 +7,8 @@ use crate::compiler::parser::nodes::*;
 pub enum GenError {
 }
 
-pub fn generate(ast: &Node<Expr>) -> Result<String, GenError> {
-	Ok(gen_expr(ast, 0))
+pub fn generate(ast: &Node<Expr>) -> Result<Vec<u8>, GenError> {
+	Ok(gen_expr(ast, 0).into_bytes())
 }
 
 fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {

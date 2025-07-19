@@ -88,12 +88,12 @@ fn create_node_or_pass<'i, T, I: TokStream<'i>>(
 	stream: &mut I,
 	f: impl FnOnce(&mut I) -> RuleResultCreateOrPass<T>
 ) -> RuleResult<T> {
-	let begin = stream.peek().unwrap().range.begin; //TODO: unsafe unwrap!!!
+	let begin = stream.peek().ok_or(SoftError::Soft(RuleErrorKind::StreamExhausted))?.range.begin;
 	let kind = match f(stream)? {
 		CreateOrPass::Create(kind) => kind,
 		CreateOrPass::Pass(node) => return Ok(node),
 	};
-	let end = stream.peek().map_or(Pos::new_todo(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
+	let end = stream.peek().map_or_else(|| todo!(), |t| t.range.begin); //TODO: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
 	Ok(Node {
 		kind,
 		range: source::Range {

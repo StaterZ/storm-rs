@@ -32,7 +32,8 @@ more-asserts = "0.3.1" #more asserts
 stopwatch = "0.0.7" #easy timer library
 
 ### LLVM ###
-#inkwell = { version = "0.6.0", features = ["llvm10-0"] }
+inkwell = { version = "0.6.0", features = ["llvm10-0"] }
+#melior = "0.25.0"
 
 ### custom ###
 szu = { version = "0.2.1", path = "../szu" }

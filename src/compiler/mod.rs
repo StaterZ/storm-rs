@@ -6,11 +6,13 @@ use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
 use tree_printer;
 
+use crate::Backend;
+
 pub mod source;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analyzer;
-pub mod generator;
+pub mod codegen;
 
 mod map_peekable;
 
@@ -40,7 +42,7 @@ impl Display for CompilerError {
 
 impl Error for CompilerError { }
 
-pub fn compile(document: &source::Document, flags: Flags) -> Result<String, CompilerError> {
+pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> Result<Vec<u8>, CompilerError> {
 	let document = source::DocumentMeta::new(document); //TODO: this isn't great, change it to only do this if we find errors
 
 	if flags.show_source {
@@ -130,7 +132,7 @@ pub fn compile(document: &source::Document, flags: Flags) -> Result<String, Comp
 	}
 
 	let mut gen_timer = Stopwatch::start_new();
-	let gen_output = generator::generate(&ast);
+	let gen_output = codegen::generate(&ast, backend);
 	gen_timer.stop();
 	let gen_output = match gen_output {
 		Ok(output) => output,
@@ -142,7 +144,7 @@ pub fn compile(document: &source::Document, flags: Flags) -> Result<String, Comp
 
 	if flags.show_output {
 		println!("=== GENERATOR ===");
-		println!("{}", gen_output);
+		println!("{:?}", gen_output);
 		println!();
 	}
 
@@ -150,6 +152,8 @@ pub fn compile(document: &source::Document, flags: Flags) -> Result<String, Comp
 	println!("ast time: {}", ast_timer);
 	println!("sem time: {}", sem_timer);
 	println!("gen time: {}", gen_timer);
+	let total_elapsed = lex_timer.elapsed() + ast_timer.elapsed() + sem_timer.elapsed() + gen_timer.elapsed();
+	println!("tot time: {}ms", total_elapsed.as_millis());
 	
-	return Ok(gen_output);
+	Ok(gen_output)
 }

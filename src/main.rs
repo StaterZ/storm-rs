@@ -12,15 +12,29 @@ mod compiler;
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 use color_print::cprintln;
 use compiler::source;
 use stopwatch::Stopwatch;
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Backend {
+	LLVM,
+	Lua,
+	Stormworks,
+}
+
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
 struct Args {
+	#[arg(
+		short = 'b',
+		long = "backend",
+	)]
+	#[clap(value_enum)]
+	backend: Backend,
+
 	#[arg(
 		short = 'i',
 		long = "in-path",
@@ -40,12 +54,13 @@ fn main() {
 
 fn compile() {
 	let args = Args::parse();
+	let out_path = args.out_path.unwrap_or(args.in_path.with_extension("storm"));
 
 	let Ok(src_in) = std::fs::read_to_string(&args.in_path) else {
 		return;
 	};
 
-	let src_doc = source::Document::new(
+	let document = source::Document::new(
 			args.in_path
 			.into_os_string()
 			.to_string_lossy()
@@ -58,17 +73,21 @@ fn compile() {
 		show_tokens: false,
 		show_ast_rule_path: false,
 		show_ast: false,
-		show_sem: false,
+		show_sem: true,
 		show_output: true,
 	};
 
 	let mut timer = Stopwatch::start_new();
-	let result = compiler::compile(&src_doc, flags);
+	let result = compiler::compile(&document, args.backend, flags);
 	timer.stop();
 	println!();
 	println!("compile time: {}ms", timer.elapsed().as_millis());
 	match &result {
 		Ok(_) => cprintln!("<yellow>HAPPY! ^v^</>"),
-		Err(_) => cprintln!("<blue>SAD >~<<</>"),
+		Err(_) => { cprintln!("<blue>SAD >~<<</>"); return; },
 	}
+
+	let Ok(_) = std::fs::write(out_path, result.unwrap()) else {
+		return;
+	};
 }
