@@ -33,6 +33,7 @@ tag_enum!(
 		LShift,
 		RShift,
 		Ampersand,
+		Bar,
 		
 		Equals,
 		Eq,
@@ -53,6 +54,8 @@ tag_enum!(
 		Continue,
 		Unreachable,
 
+		Plex,
+
 		Loop,
 		While,
 		For,
@@ -65,6 +68,8 @@ tag_enum!(
 		Yield,
 		Hash,
 		
+		True,
+		False,
 		IntLit(u64),
 		StrLit(String),
 		Identifier(String),

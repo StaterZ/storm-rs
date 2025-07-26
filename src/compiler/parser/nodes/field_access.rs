@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use super::super::Var;
 
-use super::{Node, Expr};
+use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct FieldAccess {
-	pub ident: Rc<Var>,
 	pub expr: Box<Node<Expr>>,
+	pub ident: Rc<Var>,
 }

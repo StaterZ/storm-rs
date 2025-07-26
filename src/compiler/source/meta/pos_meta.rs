@@ -30,10 +30,13 @@ impl<'a> PosMeta<'a> {
 	}
 
 	pub fn column(&self) -> Column {
-		Column::new(self
+		let range = self
 			.line()
-			.range()
-			.get_str()[..self.byte_index()]
+			.range();
+		let range = Range::new(range.get_begin(), self.clone())
+			.with_meta(self.document);
+		Column::new(range
+			.get_str()
 			.chars()
 			.count())
 	}

@@ -1,7 +1,7 @@
 use super::super::node_sets::*;
 
 #[derive(Debug)]
-pub struct Loop {
+pub struct Func {
+	pub arg: Box<Node<Expr>>,
 	pub body: Box<Node<Expr>>,
-	pub body_else: Option<Box<Node<Expr>>>,
 }

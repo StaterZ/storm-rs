@@ -131,6 +131,10 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		println!();
 	}
 
+	if flags.show_output {
+		println!("=== GENERATOR ===");
+	}
+
 	let mut gen_timer = Stopwatch::start_new();
 	let gen_output = codegen::generate(&ast, backend);
 	gen_timer.stop();
@@ -143,7 +147,6 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	};
 
 	if flags.show_output {
-		println!("=== GENERATOR ===");
 		println!("{:?}", gen_output);
 		println!();
 	}

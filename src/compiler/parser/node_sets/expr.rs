@@ -7,10 +7,7 @@ use color_print::cformat;
 use szu::opt_own::OptOwnStr;
 use tree_printer::{make_list, TreeDisplay, TreeDisplayChild};
 
-use super::{
-	super::Var,
-	*
-};
+use super::{super::{nodes::*, Var},	*};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum Expr {
@@ -19,6 +16,8 @@ pub enum Expr {
 	Break(Break),
 	Continue,
 	Unreachable,
+
+	Plex(Plex),
 
 	Loop(Loop),
 	While(While),
@@ -30,8 +29,11 @@ pub enum Expr {
 	BinOp(BinOp),
 	UnaOp(UnaOp),
 	FieldAccess(FieldAccess),
+	Func(Func),
+	Call(Call),
 	
 	TupleCtor(TupleCtor),
+	BoolLit(bool),
 	IntLit(u64),
 	StrLit(String),
 	Identifier(Rc<RefCell<Var>>),
@@ -46,6 +48,8 @@ impl TreeDisplay for Node<Expr> {
 			Expr::Continue => "".into(),
 			Expr::Unreachable => "".into(),
 
+			Expr::Plex(_) => "".into(),
+
 			Expr::Loop(_) => "".into(),
 			Expr::While(_) => "".into(),
 			Expr::For(_) => "".into(),
@@ -56,8 +60,11 @@ impl TreeDisplay for Node<Expr> {
 			Expr::BinOp(_) => "".into(),
 			Expr::UnaOp(_) => "".into(),
 			Expr::FieldAccess(_) => "".into(),
+			Expr::Func(_) => "".into(),
+			Expr::Call(_) => "".into(),
 
 			Expr::TupleCtor(_) => "".into(),
+			Expr::BoolLit(value) => cformat!("<cyan>{}</>", value).into(),
 			Expr::IntLit(value) => cformat!("<cyan>{}</>", value).into(),
 			Expr::StrLit(value) => cformat!("<cyan>{:?}</>", value).into(),
 			Expr::Identifier(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
@@ -80,6 +87,8 @@ impl TreeDisplay for Node<Expr> {
 			]),
 			Expr::Continue => None,
 			Expr::Unreachable => None,
+
+			Expr::Plex(value) => Some(make_list(value.fields.iter())),
 
 			Expr::Loop(value) => Some(vec![
 				("body".into(), (value.body.deref() as &dyn TreeDisplay).into()),
@@ -119,8 +128,17 @@ impl TreeDisplay for Node<Expr> {
 				("ident".into(), (&value.ident as &dyn TreeDisplay).into()),
 				("expr".into(), (value.expr.deref() as &dyn TreeDisplay).into()),
 			]),
+			Expr::Func(value) => Some(vec![
+				("arg".into(), (value.arg.deref() as &dyn TreeDisplay).into()),
+				("body".into(), (value.body.deref() as &dyn TreeDisplay).into()),
+			]),
+			Expr::Call(value) => Some(vec![
+				("func".into(), (value.func.deref() as &dyn TreeDisplay).into()),
+				("arg".into(), (value.arg.deref() as &dyn TreeDisplay).into()),
+			]),
 
 			Expr::TupleCtor(value) => Some(make_list(value.items.iter())),
+			Expr::BoolLit(_) => None,
 			Expr::IntLit(_) => None,
 			Expr::StrLit(_) => None,
 			Expr::Identifier(_) => None,

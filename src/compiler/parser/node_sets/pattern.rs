@@ -2,15 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 use std::ops::Deref;
 
 use enum_as_inner::EnumAsInner;
+use owo_colors::{AnsiColors, DynColors};
 use strum::AsRefStr;
 use color_print::cformat;
 use szu::opt_own::OptOwnStr;
 use tree_printer::{TreeDisplay, TreeDisplayChild, make_list};
 
-use super::{
-	super::Var,
-	*
-};
+use super::{super::{nodes::*, Var}, *};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum Pattern {
@@ -47,5 +45,9 @@ impl TreeDisplay for Node<Pattern> {
 			Pattern::TupleDtor(value) => Some(make_list(value.items.iter())),
 			Pattern::Binding(_) => None,
 		}
+	}
+	
+	fn get_scope_color(&self) -> DynColors {
+		DynColors::Ansi(AnsiColors::Magenta)
 	}
 }

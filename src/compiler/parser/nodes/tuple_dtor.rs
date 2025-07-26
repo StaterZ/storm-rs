@@ -1,4 +1,4 @@
-use super::{Node, Pattern};
+use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct TupleDtor {

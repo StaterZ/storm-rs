@@ -23,7 +23,7 @@ pub trait PeekIterUtils: PeekableIterator {
 	) -> Result<Self::Item, PeekableNextIfError<E>> {
 		match self.peek() {
 			Some(item) => match pred(item) {
-				Ok(_) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
+				Ok(()) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
 				Err(err) => Err(PeekableNextIfError::PredicateError(err)),
 			},
 			None => Err(PeekableNextIfError::StreamExhausted),

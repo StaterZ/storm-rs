@@ -2,7 +2,7 @@ use crate::compiler::source;
 
 use super::{
 	super::{
-		nodes::Node,
+		node_sets::Node,
 		SoftResult,
 	},
 	RuleErrorKind,

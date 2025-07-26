@@ -1,4 +1,4 @@
-use crate::compiler::parser::nodes::*;
+use crate::compiler::parser::node_sets::*;
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {

@@ -1,7 +1,7 @@
 use color_print::cformat;
 use itertools::Itertools;
 
-use crate::compiler::parser::nodes::*;
+use crate::compiler::parser::{node_sets::*, nodes::*};
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {
@@ -22,6 +22,9 @@ fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {
 			|expr| format!("__val={};goto __brk{loop_depth}", gen_expr(&expr, loop_depth))),
 		Expr::Continue => "goto __cont{loop_depth}".to_string(),
 		Expr::Unreachable => "print(\"unreachable\")".to_string(),
+
+		Expr::Plex(_) => todo!(),
+
 		Expr::Loop(value) => value.body_else.as_ref().map_or(
 			format!("while true do \n{} \nend", gen_expr(&value.body, loop_depth + 1)),
 			|body_else| format!("local __val;\nwhile true do \n{} \n::__cont{loop_depth}:: end \n__val={};::__brk{loop_depth}::",
@@ -53,6 +56,7 @@ fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {
 				gen_expr(&value.cond, loop_depth),
 				gen_expr(&value.body, loop_depth + 1),
 				gen_expr(&body_else, loop_depth))),
+
 		Expr::Block(value) => format!("do \n{} \nend", value.stmts
 			.iter()
 			.map(|stmt| gen_expr(stmt, loop_depth))
@@ -61,10 +65,14 @@ fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {
 		Expr::BinOp(value) => format!("{}{}{}", gen_expr(&value.lhs, loop_depth), gen_binop(value.op), gen_expr(&value.rhs, loop_depth)),
 		Expr::UnaOp(value) => format!("{}{}", gen_unaop(value.op), gen_expr(&value.expr, loop_depth)),
 		Expr::FieldAccess(value) => format!("{}.{}", gen_expr(&value.expr, loop_depth), &value.ident.name),
+		Expr::Func(value) => format!("function({}) \n{} \nend\n", gen_expr(&value.arg, loop_depth), gen_expr(&value.body, loop_depth)),
+		Expr::Call(value) => format!("{}({})", gen_expr(&value.func, loop_depth), gen_expr(&value.arg, loop_depth)),
+
 		Expr::TupleCtor(value) => value.items
 			.iter()
 			.map(|item| gen_expr(item, loop_depth))
 			.join(","),
+		Expr::BoolLit(value) => value.to_string(),
 		Expr::IntLit(value) => value.to_string(),
 		Expr::StrLit(value) => value.clone(),
 		Expr::Identifier(value) => value.borrow().name.clone(),
@@ -151,5 +159,8 @@ fn gen_unaop(op: UnaOpKind) -> String {
 	match op {
 		UnaOpKind::Deref => cformat!("<red>TODO</>"),
 		UnaOpKind::AddressOf => cformat!("<red>TODO</>"),
+		UnaOpKind::Identity => "+".to_string(),
+		UnaOpKind::Negate => "-".to_string(),
+		UnaOpKind::Not => "not ".to_string(),
 	}
 }

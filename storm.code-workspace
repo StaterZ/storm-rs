@@ -15,6 +15,7 @@
 			"cformat",
 			"cprintln",
 			"peeker"
-		]
+		],
+		"git.ignoreLimitWarning": true
 	}
 }

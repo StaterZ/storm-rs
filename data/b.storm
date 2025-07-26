@@ -1,0 +1,9 @@
+let mut x = 0;
+while x < 32r1000: x = x + 1;
+let y = if x > 42 {
+	1 - 400 * 2 - 3
+} else {
+	0x100
+};
+print("yippe!");
+ret x - y;

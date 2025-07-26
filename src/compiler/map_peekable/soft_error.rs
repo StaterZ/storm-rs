@@ -18,7 +18,7 @@ pub type SoftResult<T, ES, EH> = Result<T, SoftError<ES, EH>>;
 pub type SoftResultUnit = SoftResult<(), (), ()>;
 
 pub trait SoftResultTrait<T, ES, EH> {
-	fn shed_hard_raw(self) -> Result<Result<T, ES>, EH>;
+	fn to_nested(self) -> Result<Result<T, ES>, EH>;
 	fn shed_hard(self) -> SoftResult<Result<T, ES>, ES, EH>;
 }
 pub trait SoftResultTraitSame<T, E> : SoftResultTrait<T, E, E> {
@@ -26,7 +26,7 @@ pub trait SoftResultTraitSame<T, E> : SoftResultTrait<T, E, E> {
 }
 
 impl<T, ES, EH> SoftResultTrait<T, ES, EH> for SoftResult<T, ES, EH> {
-	fn shed_hard_raw(self) -> Result<Result<T, ES>, EH> {
+	fn to_nested(self) -> Result<Result<T, ES>, EH> {
 		match self {
 			Ok(value) => Ok(Ok(value)),
 			Err(SoftError::Soft(err)) => Ok(Err(err)),
@@ -34,11 +34,7 @@ impl<T, ES, EH> SoftResultTrait<T, ES, EH> for SoftResult<T, ES, EH> {
 		}
 	}
 	fn shed_hard(self) -> SoftResult<Result<T, ES>, ES, EH> {
-		match self {
-			Ok(value) => Ok(Ok(value)),
-			Err(SoftError::Soft(err)) => Ok(Err(err)),
-			Err(SoftError::Hard(err)) => Err(SoftError::Hard(err)),
-		}
+		self.to_nested().map_err(SoftError::Hard)
 	}
 }
 

@@ -8,7 +8,8 @@
 				"run",
 				"--",
 				"--backend=llvm",
-				"-i=data/in.storm"
+				"--in-path=data/b.storm",
+				"--out-path=out/test.out"
 			],
 			"problemMatcher": [
 				"$rustc"

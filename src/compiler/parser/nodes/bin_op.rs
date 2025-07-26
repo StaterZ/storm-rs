@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{Node, Expr};
+use super::super::node_sets::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {

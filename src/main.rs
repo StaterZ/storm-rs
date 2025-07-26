@@ -54,10 +54,14 @@ fn main() {
 
 fn compile() {
 	let args = Args::parse();
-	let out_path = args.out_path.unwrap_or(args.in_path.with_extension("storm"));
+	let out_path = args.out_path.unwrap_or(args.in_path.with_extension("out"));
 
-	let Ok(src_in) = std::fs::read_to_string(&args.in_path) else {
-		return;
+	let content = match std::fs::read_to_string(&args.in_path) {
+		Ok(content) => content,
+		Err(err) => {
+			eprintln!("Failed to read input file: {}", err);
+			return;
+		}
 	};
 
 	let document = source::Document::new(
@@ -65,14 +69,14 @@ fn compile() {
 			.into_os_string()
 			.to_string_lossy()
 			.to_string(),
-		src_in
+		content
 	);
 
 	let flags = compiler::Flags {
-		show_source: false,
-		show_tokens: false,
-		show_ast_rule_path: false,
-		show_ast: false,
+		show_source: true,
+		show_tokens: true,
+		show_ast_rule_path: true,
+		show_ast: true,
 		show_sem: true,
 		show_output: true,
 	};

@@ -24,7 +24,7 @@ thiserror = "2.0.12" # error type generation
 phf = { version = "0.12.1", features = ["macros"] } # generate LUTs and other data at comptime
 string-builder = "0.2.0" # basic string builder utility
 enum-as-inner = "0.6.1" # unwarp for enum fields without needing annyong pattern mathing
-strum = { version = "0.27.1", features = ["derive"] } # get names of enum fields as strings
+strum = { version = "0.27.2", features = ["derive"] } # get names of enum fields as strings
 itertools = "0.14.0" #more iterator utlites
 streaming-iterator = "0.1.9" #streaming iterators
 more-asserts = "0.3.1" #more asserts
@@ -32,7 +32,7 @@ more-asserts = "0.3.1" #more asserts
 stopwatch = "0.0.7" #easy timer library
 
 ### LLVM ###
-inkwell = { version = "0.6.0", features = ["llvm10-0"] }
+inkwell = { version = "0.6.0", features = ["llvm18-1"] }
 #melior = "0.25.0"
 
 ### custom ###

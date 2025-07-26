@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::compiler::parser::{self, Var};
+use crate::compiler::parser::{node_sets::*, Var};
 use error::SemError;
 
 mod error;
@@ -36,8 +36,10 @@ impl SymTbl {
 	}
 }
 
-pub fn analyze(ast: &mut parser::nodes::Node<parser::nodes::Expr>) -> Result<(), Vec<SemError>> {
+pub fn analyze(ast: &mut Node<Expr>) -> Result<(), Vec<SemError>> {
 	let mut sym_tbl = SymTbl::new();
+	sym_tbl.declare(Rc::new(RefCell::new(Var { name: "print".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
+
 	let mut errors = Vec::new();
 	eval_expr(ast, &mut sym_tbl, &mut errors);
 	if errors.is_empty() {
@@ -47,32 +49,32 @@ pub fn analyze(ast: &mut parser::nodes::Node<parser::nodes::Expr>) -> Result<(),
 	}
 }
 
-fn eval_expr(node: &mut parser::nodes::Node<parser::nodes::Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>) {
+fn eval_expr(node: &mut Node<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>) {
 	match &mut node.kind {
-		parser::nodes::Expr::Assign(value) => {
+		Expr::Assign(value) => {
 			//NOTE: order is important! otherwise things can get defined after they're used.
 			eval_expr(&mut value.rhs, sym_tbl, errors);
 			eval_pattern(&mut value.lhs, sym_tbl, errors, false, false);
 		},
-		parser::nodes::Expr::Return(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
-		parser::nodes::Expr::Break(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
-		parser::nodes::Expr::Continue => { },
-		parser::nodes::Expr::Unreachable => { },
-		
-		parser::nodes::Expr::Loop(value) => {
+		Expr::Return(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
+		Expr::Break(value) => if let Some(expr) = &mut value.expr { eval_expr(expr, sym_tbl, errors) }
+		Expr::Continue => { },
+		Expr::Unreachable => { },
+		Expr::Plex(value) => todo!("{:?}", value),
+		Expr::Loop(value) => {
 			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
 			if let Some(body_else) = &mut value.body_else {
 				eval_expr(body_else, &mut sym_tbl.clone(), errors)
 			}
 		}
-		parser::nodes::Expr::While(value) => {
+		Expr::While(value) => {
 			eval_expr(&mut value.cond, sym_tbl, errors);
 			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
 			if let Some(body_else) = &mut value.body_else {
 				eval_expr(body_else, &mut sym_tbl.clone(), errors)
 			}
 		}
-		parser::nodes::Expr::For(value) => {
+		Expr::For(value) => {
 			eval_expr(&mut value.iter, sym_tbl, errors);
 			let mut body_sym_tbl = sym_tbl.clone();
 			eval_pattern(&mut value.binding, &mut body_sym_tbl, errors, true, false);
@@ -81,7 +83,7 @@ fn eval_expr(node: &mut parser::nodes::Node<parser::nodes::Expr>, sym_tbl: &mut 
 				eval_expr(body_else, &mut sym_tbl.clone(), errors)
 			}
 		}
-		parser::nodes::Expr::If(value) => {
+		Expr::If(value) => {
 			eval_expr(&mut value.cond, sym_tbl, errors);
 			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
 			if let Some(body_else) = &mut value.body_else {
@@ -89,53 +91,62 @@ fn eval_expr(node: &mut parser::nodes::Node<parser::nodes::Expr>, sym_tbl: &mut 
 			}
 		}
 
-		parser::nodes::Expr::Block(value) => {
+		Expr::Block(value) => {
 			let mut sym_tbl = sym_tbl.clone();
 			for stmt in value.stmts.iter_mut() {
 				eval_expr(stmt, &mut sym_tbl, errors);
 			}
 		},
-		parser::nodes::Expr::Stmt(value) => eval_expr(&mut value.expr, sym_tbl, errors),
-		parser::nodes::Expr::BinOp(value) => {
+		Expr::Stmt(value) => eval_expr(&mut value.expr, sym_tbl, errors),
+		Expr::BinOp(value) => {
 			eval_expr(&mut value.lhs, sym_tbl, errors);
 			eval_expr(&mut value.rhs, sym_tbl, errors);
 		},
-		parser::nodes::Expr::UnaOp(value) => eval_expr(&mut value.expr, sym_tbl, errors),
-		parser::nodes::Expr::FieldAccess(value) => eval_expr(&mut value.expr, sym_tbl, errors),
+		Expr::UnaOp(value) => eval_expr(&mut value.expr, sym_tbl, errors),
+		Expr::FieldAccess(value) => eval_expr(&mut value.expr, sym_tbl, errors),
+		Expr::Func(value) => {
+			eval_expr(&mut value.arg, sym_tbl, errors);
+			eval_expr(&mut value.body, sym_tbl, errors);
+		},
+		Expr::Call(value) => {
+			eval_expr(&mut value.func, sym_tbl, errors);
+			eval_expr(&mut value.arg, sym_tbl, errors);
+		},
 
-		parser::nodes::Expr::TupleCtor(value) => {
+		Expr::TupleCtor(value) => {
 			for item in value.items.iter_mut() {
 				eval_expr(item, sym_tbl, errors);
 			}
 		},
-		parser::nodes::Expr::IntLit(_value) => { },
-		parser::nodes::Expr::StrLit(_value) => { },
-		parser::nodes::Expr::Identifier(var) => {
+		Expr::BoolLit(_value) => { },
+		Expr::IntLit(_value) => { },
+		Expr::StrLit(_value) => { },
+		Expr::Identifier(var) => {
 			if let Err(err) = sym_tbl.get(var) { errors.push(err); return; }
 			//println!("USE:  {}", var.borrow());
 		},
 	}
 }
 
-fn eval_pattern(node: &mut parser::nodes::Node<parser::nodes::Pattern>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>, is_decl: bool, is_mut: bool) {
+fn eval_pattern(node: &mut Node<Pattern>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>, is_decl: bool, is_mut: bool) {
 	match &mut node.kind {
-		parser::nodes::Pattern::Let(value) => {
+		Pattern::Let(value) => {
 			if is_decl { errors.push(SemError::DoubleLet); return; }
 			debug_assert!(!is_mut);
 			eval_pattern(&mut value.pat, sym_tbl, errors, true, false);
 		},
-		parser::nodes::Pattern::Mut(value) => {
+		Pattern::Mut(value) => {
 			if is_mut { errors.push(SemError::DoubleMut); return; }
 			if !is_decl { errors.push(SemError::MutWithoutLet); return; }
 			eval_pattern(&mut value.pat, sym_tbl, errors, is_decl, true);
 		}
-		parser::nodes::Pattern::TupleDtor(value) => {
+		Pattern::TupleDtor(value) => {
 			for item in value.items.iter_mut() {
 				eval_pattern(item, sym_tbl, errors, is_decl, is_mut);
 			}
 		},
-		parser::nodes::Pattern::Deref(value) => eval_expr(value, sym_tbl, errors),
-		parser::nodes::Pattern::Binding(var) => {
+		Pattern::Deref(value) => eval_expr(value, sym_tbl, errors),
+		Pattern::Binding(var) => {
 			if is_decl {
 				sym_tbl.declare(var.clone(), is_mut);
 				//println!("DECL: {}, mut:{}", var.borrow(), is_mut);

@@ -191,11 +191,24 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 		if stream.next_if_eq(&'=').is_some() {
 			return Ok(TokenKind::Ne);
 		}
-
 		return Ok(TokenKind::Bang);
 	}
 
-	if let Ok(value) = stream.try_rule_sh(parse_int).shed_hard_raw()? {
+	if stream.next_if_eq(&'&').is_some() {
+		if stream.next_if_eq(&'&').is_some() {
+			return Ok(TokenKind::And);
+		}
+		return Ok(TokenKind::Ampersand);
+	}
+
+	if stream.next_if_eq(&'|').is_some() {
+		if stream.next_if_eq(&'|').is_some() {
+			return Ok(TokenKind::Or);
+		}
+		return Ok(TokenKind::Bar);
+	}
+
+	if let Ok(value) = stream.try_rule_sh(parse_int).to_nested()? {
 		return Ok(TokenKind::IntLit(value));
 	}
 
@@ -234,6 +247,8 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 			"continue" => TokenKindTag::Continue,
 			"unreachable" => TokenKindTag::Unreachable,
 			
+			"plex" => TokenKindTag::Plex,
+
 			"loop" => TokenKindTag::Loop,
 			"while" => TokenKindTag::While,
 			"for" => TokenKindTag::For,
@@ -243,6 +258,9 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 
 			"ipt" => TokenKindTag::Ipt,
 			"yield" => TokenKindTag::Yield,
+
+			"true" => TokenKindTag::True,
+			"false" => TokenKindTag::False,
 		};
 		
 		if let Some(&keyword) = KEYWORDS.get(value.as_str()) {
