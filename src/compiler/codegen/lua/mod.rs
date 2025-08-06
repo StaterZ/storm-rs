@@ -1,18 +1,20 @@
+use std::ops::Deref;
+
 use color_print::cformat;
 use itertools::Itertools;
 
-use crate::compiler::parser::{node_sets::*, nodes::*};
+use crate::compiler::{parser::{node_sets::*, nodes::*}, source::Sourced};
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {
 }
 
-pub fn generate(ast: &Node<Expr>) -> Result<Vec<u8>, GenError> {
+pub fn generate(ast: &Sourced<Expr>) -> Result<Vec<u8>, GenError> {
 	Ok(gen_expr(ast, 0).into_bytes())
 }
 
-fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {
-	match &node.kind {
+fn gen_expr(node: &Sourced<Expr>, loop_depth: usize) -> String {
+	match node.deref() {
 		Expr::Assign(value) => format!("{} = {}",
 			gen_pattern(&value.lhs),
 			gen_expr(&value.rhs, loop_depth)),
@@ -79,7 +81,7 @@ fn gen_expr(node: &Node<Expr>, loop_depth: usize) -> String {
 	}
 }
 
-fn gen_pattern(node: &Node<Pattern>) -> String {
+fn gen_pattern(node: &Sourced<Pattern>) -> String {
 	let mut meta = PatternMeta::new();
 	let pat = gen_pattern_impl(node, false, &mut meta);
 
@@ -106,8 +108,8 @@ impl PatternMeta {
 	}
 }
 
-fn gen_pattern_impl(node: &Node<Pattern>, is_let: bool, meta: &mut PatternMeta) -> String {
-	match &node.kind {
+fn gen_pattern_impl(node: &Sourced<Pattern>, is_let: bool, meta: &mut PatternMeta) -> String {
+	match node.deref() {
 		Pattern::Let(value) => gen_pattern_impl(&value.pat, true, meta),
 		Pattern::Mut(value) => gen_pattern_impl(&value.pat, is_let, meta),
 		Pattern::TupleDtor(value) => value.items

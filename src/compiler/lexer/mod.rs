@@ -1,23 +1,19 @@
-mod token;
-mod token_meta;
 mod token_kind;
 mod lexer_error;
 
 use phf::phf_map;
 
-pub use token::Token;
-pub use token_meta::TokenMeta;
 pub use token_kind::{TokenKind, TokenKindTag};
 
 use crate::compiler::{
 	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult}, map_peekable::{
 		soft_error::{SoftError, SoftResultTrait}, MapPeekable, PeekIterUtils, PeekableIterator
-	}, source
+	}, source::{self, Sourced}
 };
 
 pub trait CharStream = PeekableIterator<Item = char> + Clone;
 
-pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
+pub fn lex(document: &source::Document) -> Result<Vec<Sourced<TokenKind>>, LexerError> {
 	let mut stream = document
 		.char_positions()
 		.peekable()
@@ -46,10 +42,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Token>, LexerError> {
 				let is_eof = kind == TokenKind::Eof;
 
 				let end = get_current_source_pos(document, &mut stream);
-				tokens.push(Token{
-					kind,
-					range: source::Range { begin, end },
-				});
+				tokens.push(Sourced::new(kind, source::Range { begin, end }));
 
 				if is_eof {
 					return Ok(tokens);

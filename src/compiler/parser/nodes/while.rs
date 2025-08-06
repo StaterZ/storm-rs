@@ -1,8 +1,10 @@
+use crate::compiler::source::Sourced;
+
 use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct While {
-	pub cond: Box<Node<Expr>>,
-	pub body: Box<Node<Expr>>,
-	pub body_else: Option<Box<Node<Expr>>>,
+	pub cond: Box<Sourced<Expr>>,
+	pub body: Box<Sourced<Expr>>,
+	pub body_else: Option<Box<Sourced<Expr>>>,
 }

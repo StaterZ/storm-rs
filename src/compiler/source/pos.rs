@@ -12,7 +12,7 @@ impl Pos {
 	}
 	
 	//TODO: remove me
-	pub fn new_todo(inner: usize) -> Pos {
+	pub fn new_todo_remove_me(inner: usize) -> Pos {
 		Self(inner)
 	}
 

@@ -1,6 +1,5 @@
 use std::{
-	fmt::{Display, Debug},
-	ptr,
+	fmt::{Debug, Display}, ops::{Deref, DerefMut}, ptr
 };
 
 use super::super::*;
@@ -50,13 +49,23 @@ impl<'a> RangeMeta<'a> {
 	pub fn get_str(&self) -> &'a str {
 		&self.document.get_content()[self.get_begin().byte_index() .. self.get_end().byte_index()]
 	}
+}
 
-	fn assert_safe(&self, other: &Self) {
-		debug_assert!(ptr::eq(self.document, other.document));
+impl Deref for RangeMeta<'_> {
+	type Target = Range;
+
+	fn deref(&self) -> &Self::Target {
+		&self.range
 	}
 }
 
-impl<'a> Display for RangeMeta<'a> {
+impl DerefMut for RangeMeta<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.range
+	}
+}
+
+impl Display for RangeMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let begin = self.get_begin();
 		let end = self.get_end();
@@ -77,8 +86,17 @@ impl<'a> Display for RangeMeta<'a> {
 	}
 }
 
-impl<'a> Debug for RangeMeta<'a> {
+impl Debug for RangeMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?}", self.range)
 	}
 }
+
+impl PartialEq for RangeMeta<'_> {
+	fn eq(&self, other: &Self) -> bool {
+		debug_assert!(ptr::eq(self.document, other.document));
+		self.get_begin() == other.get_begin() && self.get_end() == other.get_end()
+	}
+}
+
+impl Eq for RangeMeta<'_> { }

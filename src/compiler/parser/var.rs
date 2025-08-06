@@ -10,6 +10,16 @@ pub struct Var {
 	pub is_mut: bool, //TODO: BAD IDEA!!! make into proof-based system later
 }
 
+impl Var {
+	pub fn new(name: String) -> Self {
+		Self {
+			name,
+			id: u64::MAX, //set to unknown state
+			is_mut: false, //arbitrary, gets set in SEM stage later
+		}
+	}
+}
+
 impl Display for Var {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if self.id == u64::MAX {

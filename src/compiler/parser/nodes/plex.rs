@@ -1,5 +1,7 @@
 use tree_printer::TreeDisplay;
 
+use crate::compiler::source::Sourced;
+
 use super::super::node_sets::*;
 
 #[derive(Debug)]
@@ -11,7 +13,7 @@ pub struct Plex {
 #[derive(Debug)]
 pub struct Field {
 	pub name: String,
-	pub r#type: Node<Expr>,
+	pub r#type: Sourced<Expr>,
 }
 
 impl TreeDisplay for Field {

@@ -1,9 +1,9 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use color_print::cformat;
 use unicode_width::UnicodeWidthStr;
 
-use crate::compiler::{lexer::Token, source, map_peekable::soft_error::SoftResult};
+use crate::compiler::{lexer::TokenKind, map_peekable::soft_error::SoftResult, source::{self, Sourced, SourcedMeta}};
 
 pub enum LexerErrorKind {
 	StreamExhausted,
@@ -59,7 +59,7 @@ pub struct LexerError {
 	pub kind: LexerErrorKind,
 	pub next_chars_window: Vec<char>,
 	pub did_next_chars_window_exhaust_stream: bool,
-	pub tokens: Vec<Token>,
+	pub tokens: Vec<Sourced<TokenKind>>,
 }
 
 impl LexerError {
@@ -100,7 +100,8 @@ impl<'a, 'b> Display for LexerErrorMeta<'a, 'b> {
 		 <yellow>           </> <cyan>{}</>\n\
 		 <yellow>tokens so far:</>\n", chars, nums))?;
 		for token in self.error.tokens.iter() {
-			writeln!(f, "{}", token.with_meta(self.document))?;
+			let token = SourcedMeta::new_with_document(token.as_ref(), self.document);
+			writeln!(f, "{} -> {:?}", token.source(), token.deref())?;
 		}
 
 		Ok(())

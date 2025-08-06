@@ -6,7 +6,7 @@ use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
 use tree_printer;
 
-use crate::Backend;
+use crate::{compiler::source::SourcedMeta, Backend};
 
 pub mod source;
 pub mod lexer;
@@ -71,7 +71,8 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 
 	if flags.show_tokens {
 		for token in tokens.iter() {
-			println!("{}", token.with_meta(&document));
+			let token = SourcedMeta::new_with_document(token.as_ref(), &document);
+			println!("{:?}", token);
 		}
 		println!();
 	}

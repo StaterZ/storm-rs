@@ -1,16 +1,16 @@
-use crate::compiler::map_peekable::soft_error::SoftResultUnit;
+use crate::compiler::{map_peekable::soft_error::SoftResultUnit, source::Sourced};
 
 use super::{
 	super::{
 		super::source,
-		Token,
+		TokenKind,
 	},
 	RuleTreeMeta,
 };
 
 pub struct RuleTree<'a> {
 	pub name: &'static str,
-	pub stream_state: Option<&'a Token>,
+	pub stream_state: Option<&'a Sourced<TokenKind>>,
 	pub result_kind: SoftResultUnit,
 	pub children: Vec<RuleTree<'a>>,
 }

@@ -1,4 +1,4 @@
-use std::{ops::Deref, ptr};
+use std::ops::Deref;
 
 use itertools::Itertools;
 use streaming_iterator::StreamingIterator;
@@ -56,14 +56,6 @@ impl<'a> DocumentMeta<'a> {
 
 	pub fn lines(&self) -> Lines<'_> {
 		Lines::new(self)
-	}
-
-	fn assert_safe_line(&'a self, line: &LineMeta<'a>) {
-		debug_assert!(ptr::eq(line.document, self));
-	}
-
-	fn assert_safe_pos(&'a self, pos: &PosMeta<'a>) {
-		debug_assert!(ptr::eq(pos.document, self));
 	}
 }
 

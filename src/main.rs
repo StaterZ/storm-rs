@@ -7,6 +7,7 @@
 #![feature(inplace_iteration)]
 #![feature(min_specialization)]
 #![feature(anonymous_lifetime_in_impl_trait)]
+#![feature(box_patterns)]
 
 mod compiler;
 

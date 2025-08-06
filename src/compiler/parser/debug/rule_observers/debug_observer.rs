@@ -1,10 +1,10 @@
 use std::debug_assert_eq;
 
-use crate::compiler::parser::{RuleResult, SoftError};
+use crate::compiler::{parser::{RuleResult, SoftError}, source::Sourced};
 
 use super::super::{
 	super::{
-		super::lexer::Token,
+		super::lexer::TokenKind,
 		RuleObserver,
 		TokStream,
 	},
@@ -12,7 +12,7 @@ use super::super::{
 };
 
 pub struct DebugSignal<'i> {
-	stream_state: Option<&'i Token>,
+	stream_state: Option<&'i Sourced<TokenKind>>,
 	rule_tree_parent_children: Vec<RuleTree<'i>>,
 }
 

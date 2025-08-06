@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::compiler::source::Sourced;
+
 use super::super::node_sets::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -164,6 +166,6 @@ impl Display for BinOpKind {
 #[derive(Debug)]
 pub struct BinOp {
 	pub op: BinOpKind,
-	pub lhs: Box<Node<Expr>>,
-	pub rhs: Box<Node<Expr>>
+	pub lhs: Box<Sourced<Expr>>,
+	pub rhs: Box<Sourced<Expr>>
 }

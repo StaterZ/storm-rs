@@ -7,7 +7,9 @@ use color_print::cformat;
 use szu::opt_own::OptOwnStr;
 use tree_printer::{make_list, TreeDisplay, TreeDisplayChild};
 
-use super::{super::{nodes::*, Var},	*};
+use crate::compiler::source::Sourced;
+
+use super::super::{nodes::*, Var};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum Expr {
@@ -39,9 +41,9 @@ pub enum Expr {
 	Identifier(Rc<RefCell<Var>>),
 }
 
-impl TreeDisplay for Node<Expr> {
+impl TreeDisplay for Sourced<Expr> {
 	fn get_text_line(&self) -> String {
-		let text: OptOwnStr = match &self.kind {
+		let text: OptOwnStr = match self.deref() {
 			Expr::Assign(_) => "".into(),
 			Expr::Return(_) => "".into(),
 			Expr::Break(_) => "".into(),
@@ -69,11 +71,11 @@ impl TreeDisplay for Node<Expr> {
 			Expr::StrLit(value) => cformat!("<cyan>{:?}</>", value).into(),
 			Expr::Identifier(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
 		};
-		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.kind.as_ref())
+		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.deref().as_ref())
 	}
 
 	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
-		match &self.kind {
+		match self.deref() {
 			Expr::Assign(value) => Some(vec![
 				("op".into(), value.op.as_ref().map_or(&"none" as &dyn TreeDisplay, |op| op as &dyn TreeDisplay).into()),
 				("lhs".into(), (value.lhs.deref() as &dyn TreeDisplay).into()),

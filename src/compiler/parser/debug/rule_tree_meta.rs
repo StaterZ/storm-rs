@@ -14,7 +14,7 @@ pub struct RuleTreeMeta<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
 	fn get_text_line(&self) -> String {
-		format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| format!("{}", state.with_meta(self.document))))
+		format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| format!("{}", state.source().with_meta(self.document))))
 			.color(self.get_scope_color())
 			.to_string()
 	}

@@ -1,6 +1,6 @@
 use std::{
 	fmt::{Debug, Display},
-	ops::Deref,
+	ops::{Deref, DerefMut},
 	ptr,
 };
 
@@ -57,13 +57,9 @@ impl<'a> PosMeta<'a> {
 	pub fn add_byte_offset(&self, offset: usize) -> Self {
 		self.pos.add_byte_offset(offset).with_meta(self.document)
 	}
-
-	fn assert_safe(self, other: &Self) {
-		debug_assert!(ptr::eq(self.document, other.document));
-	}
 }
 
-impl<'a> Deref for PosMeta<'a> {
+impl Deref for PosMeta<'_> {
 	type Target = Pos;
 
 	fn deref(&self) -> &Self::Target {
@@ -71,7 +67,13 @@ impl<'a> Deref for PosMeta<'a> {
 	}
 }
 
-impl<'a> Display for PosMeta<'a> {
+impl DerefMut for PosMeta<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.pos
+	}
+}
+
+impl Display for PosMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if *self == self.document.eof() {
 			write!(f, "EOF")
@@ -81,31 +83,31 @@ impl<'a> Display for PosMeta<'a> {
 	}
 }
 
-impl<'a> Debug for PosMeta<'a> {
+impl Debug for PosMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?}", self.pos)
 	}
 }
 
-impl<'a> Eq for PosMeta<'a> { }
-
-impl<'a> PartialEq for PosMeta<'a> {
+impl PartialEq for PosMeta<'_> {
 	fn eq(&self, other: &Self) -> bool {
-		self.assert_safe(other);
+		debug_assert!(ptr::eq(self.document, other.document));
 		self.byte_index() == other.byte_index()
 	}
 }
 
-impl<'a> PartialOrd for PosMeta<'a> {
+impl Eq for PosMeta<'_> { }
+
+impl PartialOrd for PosMeta<'_> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		self.assert_safe(other);
+		debug_assert!(ptr::eq(self.document, other.document));
 		self.byte_index().partial_cmp(&other.byte_index())
 	}
 }
 
-impl<'a> Ord for PosMeta<'a> {
+impl Ord for PosMeta<'_> {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.assert_safe(other);
+		debug_assert!(ptr::eq(self.document, other.document));
 		self.byte_index().cmp(&other.byte_index())
 	}
 }

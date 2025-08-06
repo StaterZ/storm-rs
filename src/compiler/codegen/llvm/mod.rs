@@ -1,59 +1,66 @@
-use std::{collections::HashMap, convert::identity, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, convert::identity, ops::Deref, path::PathBuf, str::FromStr};
 
 use inkwell::{
 	builder::{Builder, BuilderError},
 	context::Context,
-	llvm_sys::core::LLVMGetElementType,
 	module::{Linkage, Module},
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
-	types::{AsTypeRef, FunctionType},
-	values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
+	types::BasicType,
+	values::{BasicValue, FunctionValue},
 	AddressSpace,
 	IntPredicate
 };
 use itertools::Itertools;
 
-use crate::compiler::parser::{node_sets::*, nodes::*};
+use crate::compiler::{parser::{node_sets::*, nodes::*}, source::Sourced};
+use value::*;
+
+mod value;
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {
 	BuilderError(BuilderError)
 }
 
-pub fn generate(ast: &Node<Expr>) -> Result<Vec<u8>, GenError> {
+pub fn generate(ast: &Sourced<Expr>) -> Result<Vec<u8>, GenError> {
 	let context = Context::create();
 	let builder = context.create_builder();
 	let module = context.create_module("main");
 
 	// Create a dummy main function to emit blocks into
-	let fn_type = context.void_type().fn_type(&[], false);
+	let fn_type = context.i32_type().fn_type(&[], false);
 	let function = module.add_function("main", fn_type, None);
 	let entry = context.append_basic_block(function, "entry");
 	builder.position_at_end(entry);
 
 	let mut sym_tbl = HashMap::new();
 	let print_fn = decl_printf(&context, &builder, &module);
-	sym_tbl.insert("print".to_string(), print_fn.as_global_value().as_pointer_value()); //TODO: super temp
-
+	let print_fn_ptr = PtrValue::new(
+		print_fn.as_global_value().as_pointer_value(),
+		ValueType::Func(print_fn.get_type()),
+	);
+	let print_fn_ptr_ptr = builder.build_alloca(print_fn_ptr.clone().get_type(), "print_fn_ptr_ptr").map_err(|err| GenError::BuilderError(err))?;
+	let _ = builder.build_store(print_fn_ptr_ptr, print_fn_ptr.clone());
+	sym_tbl.insert("print".to_string(), PtrValue::new(print_fn_ptr_ptr, ValueType::Ptr(Box::new(print_fn_ptr.get_type())))); //TODO: super temp
 	gen_expr(ast, &context, &builder, &module, &mut sym_tbl).map_err(|err| GenError::BuilderError(err))?;
 
 	Ok(stupid_shit(&module))
 }
 
 fn decl_printf<'ctx>(context: &'ctx Context, _builder: &Builder<'ctx>, module: &Module<'ctx>) -> FunctionValue<'ctx> {
-    let i8ptr_type = context.ptr_type(AddressSpace::default());
-    let printf_type = context.i32_type().fn_type(&[i8ptr_type.into()], false);
-    module.add_function("puts", printf_type, Some(Linkage::External))
+	let i8ptr_type = context.ptr_type(AddressSpace::default());
+	let printf_type = context.i32_type().fn_type(&[i8ptr_type.into()], true);
+	module.add_function("printf", printf_type, None) //Some(Linkage::External)
 }
 
 fn gen_expr<'ctx>(
-	node: &Node<Expr>,
+	node: &Sourced<Expr>,
 	context: &'ctx Context,
 	builder: &Builder<'ctx>,
 	module: &Module<'ctx>,
-	sym_tbl: &mut HashMap<String, PointerValue<'ctx>>,
-) -> Result<Option<BasicValueEnum<'ctx>>, BuilderError> {
-	match &node.kind {
+	sym_tbl: &mut HashMap<String, PtrValue<'ctx>>,
+) -> Result<Option<Value<'ctx>>, BuilderError> {
+	match node.deref() {
 		Expr::Assign(value) => {
 			if value.op.is_some() { todo!(); }
 
@@ -64,12 +71,11 @@ fn gen_expr<'ctx>(
 		Expr::Return(value) => {
 			let expr_val = value.expr
 				.as_ref()
-				.map(|expr| gen_expr(expr.as_ref(), context, builder, module, sym_tbl))
-				.transpose()?
-				.map(|val| val.unwrap());
+				.map(|expr| Ok(gen_expr(expr.as_ref(), context, builder, module, sym_tbl)?.unwrap()))
+				.transpose()?;
 			builder.build_return(expr_val
 				.as_ref()
-				.map(|val| val as &dyn BasicValue))?;
+				.map(|expr_val| expr_val as &dyn BasicValue))?;
 			Ok(None)
 		},
 		Expr::Break(_value) => {
@@ -111,22 +117,22 @@ fn gen_expr<'ctx>(
 			//TODO: i ain't trusting this mess yet
 
 			let parent = builder.get_insert_block().unwrap().get_parent().unwrap();
-			let cond_lbl = context.append_basic_block(parent, "cond");
-			let body_lbl = context.append_basic_block(parent, "while_body");
-			let end_lbl = context.append_basic_block(parent, "end");
+			let cond_bb = context.append_basic_block(parent, "cond");
+			let body_bb = context.append_basic_block(parent, "while_body");
+			let end_bb = context.append_basic_block(parent, "end");
 
-			builder.build_unconditional_branch(cond_lbl)?;
-			builder.position_at_end(cond_lbl);
+			builder.build_unconditional_branch(cond_bb)?;
+			builder.position_at_end(cond_bb);
 
 			let cond = gen_expr(&value.cond, context, builder, module, sym_tbl)?.unwrap();
-			let cond = cond.into_int_value(); // assume i1 result
-			builder.build_conditional_branch(cond, body_lbl, end_lbl)?;
+			let cond = cond.into_int().unwrap(); // assume i1 result
+			builder.build_conditional_branch(cond, body_bb, end_bb)?;
 
-			builder.position_at_end(body_lbl);
+			builder.position_at_end(body_bb);
 			gen_expr(&value.body, context, builder, module, sym_tbl)?;
-			builder.build_unconditional_branch(cond_lbl)?;
+			builder.build_unconditional_branch(cond_bb)?;
 
-			builder.position_at_end(end_lbl);
+			builder.position_at_end(end_bb);
 			Ok(None)
 		},
 		Expr::For(_) => {
@@ -137,49 +143,47 @@ fn gen_expr<'ctx>(
 			//TODO: i ain't trusting this mess yet
 
 			let parent = builder.get_insert_block().unwrap().get_parent().unwrap();
-			let then_lbl = context.append_basic_block(parent, "then");
-			let else_lbl = context.append_basic_block(parent, "else");
-			let end_lbl = context.append_basic_block(parent, "end");
+			let then_bb = context.append_basic_block(parent, "then");
+			let else_bb = context.append_basic_block(parent, "else");
+			let end_bb = context.append_basic_block(parent, "end");
 
 			let cond = gen_expr(&value.cond, context, builder, module, sym_tbl)?.unwrap();
-			builder.build_conditional_branch(cond.into_int_value(), then_lbl, else_lbl)?;
+			builder.build_conditional_branch(cond.into_int().unwrap(), then_bb, else_bb)?;
 
-			builder.position_at_end(then_lbl);
+			builder.position_at_end(then_bb);
 			let then_val = gen_expr(&value.body, context, builder, module, sym_tbl)?.unwrap();
-			builder.build_unconditional_branch(end_lbl)?;
+			builder.build_unconditional_branch(end_bb)?;
 
-			builder.position_at_end(else_lbl);
+			builder.position_at_end(else_bb);
 			let else_val = value.body_else
 				.as_ref()
 				.map(|body_else| Ok(gen_expr(body_else.as_ref(), context, builder, module, sym_tbl)?.unwrap()))
 				.transpose()?;
-			builder.build_unconditional_branch(end_lbl)?;
+			builder.build_unconditional_branch(end_bb)?;
 
-			builder.position_at_end(end_lbl);
+			builder.position_at_end(end_bb);
 			let Some(else_val) = else_val else { return Ok(None); };
 
 			let phi = builder.build_phi(context.i64_type(), "iftmp")?;
-			phi.add_incoming(&[(&then_val, then_lbl), (&else_val, else_lbl)]);
-			Ok(Some(phi.as_basic_value()))
+			phi.add_incoming(&[(&then_val, then_bb), (&else_val, else_bb)]);
+			Ok(Some(Value::Phi(phi)))
 		},
 
 		Expr::Block(value) => {
-			let len = value.stmts.len();
-			for stmt in &value.stmts[..len.saturating_sub(1)] {
-				let stmt_val = gen_expr(stmt, context, builder, module, sym_tbl)?;
-				debug_assert!(stmt_val.is_none());
+			for stmt in value.stmts.iter() {
+				gen_expr(stmt, context, builder, module, sym_tbl)?.unwrap();
 			}
-			let expr = value.stmts
-				.last()
-				.map(|stmt| gen_expr(stmt, context, builder, module, sym_tbl))
+			let expr = value.expr
+				.as_ref()
+				.map(|expr| gen_expr(expr, context, builder, module, sym_tbl))
 				.transpose()?
 				.and_then(identity);
 			Ok(expr)
 		},
 		Expr::Stmt(value) => gen_expr(&value.expr, context, builder, module, sym_tbl),
 		Expr::BinOp(value) => {
-			let lhs = gen_expr(&value.lhs, context, builder, module, sym_tbl)?.unwrap().into_int_value();
-			let rhs = gen_expr(&value.rhs, context, builder, module, sym_tbl)?.unwrap().into_int_value();
+			let lhs = gen_expr(&value.lhs, context, builder, module, sym_tbl)?.unwrap().into_int().unwrap();
+			let rhs = gen_expr(&value.rhs, context, builder, module, sym_tbl)?.unwrap().into_int().unwrap();
 			let is_signed = true;
 			
 			let result = match value.op {
@@ -190,7 +194,7 @@ fn gen_expr<'ctx>(
 					ArithBinOpKind::Div => if is_signed { builder.build_int_signed_div(lhs, rhs, "divtmp")? } else { builder.build_int_unsigned_div(lhs, rhs, "divtmp")? },
 					ArithBinOpKind::Mod => if is_signed {
 						let rem = builder.build_int_signed_rem(lhs, rhs, "remtmp")?;
-
+						
 						//TODO: performance?
 						let zero = lhs.get_type().const_zero();
 						let is_negative = builder.build_int_compare(IntPredicate::SLT, rem, zero, "rem_is_negative")?;
@@ -217,26 +221,24 @@ fn gen_expr<'ctx>(
 					LogicBinOpKind::Or => builder.build_or(lhs, rhs, "bortmp")?,
 				},
 			};
-			Ok(Some(result.into()))
+			Ok(Some(Value::Int(result)))
 		},
 		Expr::UnaOp(value) => {
 			let expr_val = gen_expr(&value.expr, context, builder, module, sym_tbl)?.unwrap();
 			let result = match value.op {
 				UnaOpKind::Deref => {
-					//TODO: check correctness
-					let ptr = expr_val.into_pointer_value();
-					let t = context.i64_type();
-					builder.build_load(t, ptr, "deref")?
+					let ptr = expr_val.into_ptr().unwrap();
+					builder.build_load(ptr.get_pointee_type().clone(), *ptr, "deref")?.into()
 				},
 				UnaOpKind::AddressOf => todo!(),
 				UnaOpKind::Identity => expr_val,
 				UnaOpKind::Negate => {
-					let expr_val = expr_val.into_int_value();
-					builder.build_int_neg(expr_val, "negtmp")?.as_basic_value_enum()
+					let expr_val = expr_val.into_int().unwrap();
+					Value::Int(builder.build_int_neg(expr_val, "negtmp")?)
 				},
 				UnaOpKind::Not => {
-					let int_val = expr_val.into_int_value();
-					builder.build_not(int_val, "nottmp")?.as_basic_value_enum()
+					let int_val = expr_val.into_int().unwrap();
+					Value::Int(builder.build_not(int_val, "nottmp")?)
 				},
 			};
 			Ok(Some(result))
@@ -244,17 +246,16 @@ fn gen_expr<'ctx>(
 		Expr::FieldAccess(_) => todo!(),
 		Expr::Func(_) => todo!(),
 		Expr::Call(value) => {
-			let func = gen_expr(&value.func, context, builder, module, sym_tbl)?.unwrap();
-			let func_type = unsafe { FunctionType::new(LLVMGetElementType(func.into_pointer_value().get_type().as_type_ref())) };
+			let func = gen_expr(&value.func, context, builder, module, sym_tbl)?.unwrap().into_ptr().unwrap();
 			let arg = gen_expr(&value.arg, context, builder, module, sym_tbl)?.unwrap();
 
 			let call_site = builder.build_indirect_call(
-				func_type,
-				func.into_pointer_value(),
+				func.get_pointee_type().clone().into_func().unwrap(),
+				*func,
 				&[arg.into()],
 				"call",
 			)?;
-			Ok(Some(call_site.try_as_basic_value().left().unwrap()))
+			Ok(Some(call_site.try_as_basic_value().left().unwrap().into()))
 		},
 
 		Expr::TupleCtor(value) => {
@@ -268,83 +269,84 @@ fn gen_expr<'ctx>(
 			let tuple_type = context.struct_type(
 				&item_values
 					.iter()
-					.map(|v| v.get_type())
+					.map(|v| v.clone().get_type().as_basic_type_enum())
 					.collect::<Vec<_>>(),
 				false,
 			);
 			let tuple_alloca = builder.build_alloca(tuple_type, "tuple")?;
 
-			for (i, value) in item_values.iter().enumerate() {
+			for (i, value) in item_values.into_iter().enumerate() {
 				let gep = builder.build_struct_gep(
 					tuple_type,
 					tuple_alloca,
 					i as u32,
 					&format!("tuple_elem_{}", i)
 				)?;
-				builder.build_store(gep, *value)?;
+				builder.build_store(gep, value)?;
 			}
 
-			Ok(Some(tuple_alloca.into()))
+			Ok(Some(Value::Ptr(PtrValue::new(tuple_alloca, ValueType::Struct(tuple_type)))))
 		},
-		Expr::BoolLit(value) => Ok(Some(context.bool_type().const_int(*value as u64, false).into())),
-		Expr::IntLit(value) => Ok(Some(context.i64_type().const_int(*value, false).into())),
+		Expr::BoolLit(value) => Ok(Some(Value::Int(context.bool_type().const_int(*value as u64, false)))),
+		Expr::IntLit(value) => Ok(Some(Value::Int(context.i64_type().const_int(*value, false)))),
 		Expr::StrLit(value) => {
-			let str_const = context.const_string(value.as_bytes(), false);
+			let str_const = context.const_string(value.as_bytes(), true); //false
 			let global = module.add_global(str_const.get_type(), None, "str");
 			global.set_initializer(&str_const);
-			Ok(Some(global.as_pointer_value().into()))
+			Ok(Some(Value::Ptr(PtrValue::new(global.as_pointer_value(), ValueType::Array(str_const.get_type())))))
 		},
 		Expr::Identifier(value) => {
 			let binding = &value.borrow().name;
-			let ptr = sym_tbl[binding.as_str()];
-			let val = builder.build_load(context.i64_type(), ptr, binding.as_str())?;
-			Ok(Some(val))
+			let sym = sym_tbl[binding.as_str()].clone();
+			let val = builder.build_load(sym.get_pointee_type().clone(), *sym, binding.as_str())?;
+			Ok(Some(Value::new(val, sym.get_pointee_type().clone())))
 		}
 	}
 }
 
 fn gen_pattern<'ctx>(
-	node: &Node<Pattern>,
-	rhs: BasicValueEnum,
+	node: &Sourced<Pattern>,
+	rhs: Value<'ctx>,
 	context: &'ctx Context,
 	builder: &Builder<'ctx>,
 	module: &Module<'ctx>,
-	sym_tbl: &mut HashMap<String, PointerValue<'ctx>>,
+	sym_tbl: &mut HashMap<String, PtrValue<'ctx>>,
 ) -> Result<(), BuilderError> {
 	gen_pattern_impl(node, rhs, false, context, builder, module, sym_tbl)
 }
 fn gen_pattern_impl<'ctx>(
-	node: &Node<Pattern>,
-	rhs: BasicValueEnum,
+	node: &Sourced<Pattern>,
+	rhs: Value<'ctx>,
 	is_let: bool, 
 	context: &'ctx Context,
 	builder: &Builder<'ctx>,
 	module: &Module<'ctx>,
-	sym_tbl: &mut HashMap<String, PointerValue<'ctx>>,
+	sym_tbl: &mut HashMap<String, PtrValue<'ctx>>,
 ) -> Result<(), BuilderError> {
-	match &node.kind {
+	match node.deref() {
 		Pattern::Let(value) => gen_pattern_impl(&value.pat, rhs, true, context, builder, module, sym_tbl),
 		Pattern::Mut(value) => gen_pattern_impl(&value.pat, rhs, is_let, context, builder, module, sym_tbl),
 		Pattern::TupleDtor(value) => {
-			let fields = rhs.into_struct_value().get_fields();
+			let fields = rhs.into_struct().unwrap().get_fields();
 			for (lhs_item, rhs_item) in value.items.iter().zip_eq(fields) {
-				gen_pattern_impl(lhs_item, rhs_item, is_let, context, builder, module, sym_tbl)?;
+				gen_pattern_impl(lhs_item, rhs_item.into(), is_let, context, builder, module, sym_tbl)?;
 			}
 			Ok(())
 		},
 		Pattern::Deref(value) => {
-			let ptr = gen_expr(value, context, builder, module, sym_tbl)?.unwrap().into_pointer_value();
-			builder.build_store(ptr, rhs)?;
+			let ptr = gen_expr(value, context, builder, module, sym_tbl)?.unwrap().into_ptr().unwrap();
+			builder.build_store(*ptr, rhs)?;
 			Ok(())
 		},
 		Pattern::Binding(value) => {
 			let binding = value.borrow().name.clone();
 			let ptr = if is_let {
-				let ptr = builder.build_alloca(context.i64_type(), binding.as_str())?;
-				sym_tbl.insert(binding, ptr);
+				let r#type = rhs.clone().get_type();
+				let ptr = builder.build_alloca(r#type.clone(), binding.as_str())?;
+				sym_tbl.insert(binding, PtrValue::new(ptr, r#type));
 				ptr
 			} else {
-				sym_tbl[binding.as_str()]
+				sym_tbl[binding.as_str()].deref().clone()
 			};
 
 			builder.build_store(ptr, rhs)?;
@@ -365,7 +367,6 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>) -> Vec<u8> {
 	let ir_path = out_dir_path.join("test.ll");
 	module.print_to_file(&ir_path).unwrap();
 	
-	println!("Spinning up triplet engine...");
 	Target::initialize_all(&Default::default());
 	let target_triple = TargetMachine::get_default_triple();
 	let target = Target::from_triple(&target_triple).unwrap();
@@ -400,12 +401,11 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>) -> Vec<u8> {
 	}
 
 	{
-		println!("EXE ready");
+		println!("Executable is running...");
 		let mut exe = std::process::Command::new(&exe_path);
 		let proc = exe.spawn().unwrap();
 		let output = proc.wait_with_output().unwrap();
 		let code = output.status.code().unwrap();
-		println!("Stupid shit has concluded!");
 		println!("Exit code was: {}", code);
 		Vec::new()
 	}

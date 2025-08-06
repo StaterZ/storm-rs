@@ -28,15 +28,35 @@ impl Display for Column {
 	}
 }
 
+impl PartialEq for Column {
+	fn eq(&self, other: &Self) -> bool {
+		self.index() == other.index()
+	}
+}
+
 impl PartialEq<usize> for Column {
 	fn eq(&self, other: &usize) -> bool {
 		self.index() == *other
 	}
 }
 
+impl Eq for Column { }
+
+impl PartialOrd for Column {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		self.index().partial_cmp(&other.index())
+	}
+}
+
 impl PartialOrd<usize> for Column {
 	fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
 		self.index().partial_cmp(other)
+	}
+}
+
+impl Ord for Column {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		self.index().cmp(&other.index())
 	}
 }
 

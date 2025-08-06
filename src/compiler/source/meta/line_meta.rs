@@ -1,6 +1,6 @@
 use std::{
 	fmt::{Debug, Display},
-	ops::{Add, Deref, Sub},
+	ops::{Add, Deref, DerefMut, Sub},
 	ptr,
 };
 
@@ -36,13 +36,9 @@ impl<'a> LineMeta<'a> {
 	fn get_line_begin(&self) -> super::PosMeta<'_> {
 		self.document.lines_begin[self.index()].with_meta(self.document)
 	}
-
-	fn assert_safe(&self, other: &Self) {
-		debug_assert!(ptr::eq(self.document, other.document));
-	}
 }
 
-impl<'a> Deref for LineMeta<'a> {
+impl Deref for LineMeta<'_> {
 	type Target = Line;
 
 	fn deref(&self) -> &Self::Target {
@@ -50,45 +46,60 @@ impl<'a> Deref for LineMeta<'a> {
 	}
 }
 
-impl<'a> Display for LineMeta<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		Display::fmt(&self.line, f)
+impl DerefMut for LineMeta<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.line
 	}
 }
 
-impl<'a> Debug for LineMeta<'a> {
+impl Display for LineMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		Debug::fmt(&self.line, f)
+		write!(f, "{}", self.line)
 	}
 }
 
-impl<'a> PartialEq for LineMeta<'a> {
+impl Debug for LineMeta<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self.line)
+	}
+}
+
+impl PartialEq for LineMeta<'_> {
 	fn eq(&self, other: &Self) -> bool {
-		self.assert_safe(other);
-		self.line.index() == other.line.index()
+		debug_assert!(ptr::eq(self.document, other.document));
+		self.index() == other.index()
 	}
 }
 
-impl<'a> PartialEq<usize> for LineMeta<'a> {
+impl PartialEq<usize> for LineMeta<'_> {
 	fn eq(&self, other: &usize) -> bool {
-		self.line.index() == *other
+		self.index() == *other
 	}
 }
 
-impl<'a> PartialOrd for LineMeta<'a> {
+impl Eq for LineMeta<'_> { }
+
+impl PartialOrd for LineMeta<'_> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		self.assert_safe(other);
-		self.line.index().partial_cmp(&other.line.index())
+		debug_assert!(ptr::eq(self.document, other.document));
+		self.index().partial_cmp(&other.index())
 	}
 }
 
-impl<'a> PartialOrd<usize> for LineMeta<'a> {
+impl PartialOrd<usize> for LineMeta<'_> {
 	fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
-		self.line.index().partial_cmp(other)
+		self.index().partial_cmp(other)
 	}
 }
 
-impl<'a> Add<usize> for LineMeta<'a> {
+impl Ord for LineMeta<'_> {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		debug_assert!(ptr::eq(self.document, other.document));
+		self.index().cmp(&other.index())
+	}
+}
+
+impl Add<usize> for LineMeta<'_> {
 	type Output = Self;
 
 	fn add(self, rhs: usize) -> Self::Output {
@@ -96,16 +107,16 @@ impl<'a> Add<usize> for LineMeta<'a> {
 	}
 }
 
-impl<'a> Sub for LineMeta<'a> {
+impl Sub for LineMeta<'_> {
 	type Output = usize;
 
 	fn sub(self, rhs: Self) -> Self::Output {
-		self.assert_safe(&rhs);
-		self.line.index() - rhs.line.index()
+		debug_assert!(ptr::eq(self.document, rhs.document));
+		self.index() - rhs.index()
 	}
 }
 
-impl<'a> Sub<usize> for LineMeta<'a> {
+impl Sub<usize> for LineMeta<'_> {
 	type Output = Self;
 
 	fn sub(self, rhs: usize) -> Self::Output {

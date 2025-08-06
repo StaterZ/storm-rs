@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::DerefMut, rc::Rc};
 
-use crate::compiler::parser::{node_sets::*, Var};
+use crate::compiler::{parser::{node_sets::*, Var}, source::Sourced};
 use error::SemError;
 
 mod error;
@@ -36,7 +36,7 @@ impl SymTbl {
 	}
 }
 
-pub fn analyze(ast: &mut Node<Expr>) -> Result<(), Vec<SemError>> {
+pub fn analyze(ast: &mut Sourced<Expr>) -> Result<(), Vec<SemError>> {
 	let mut sym_tbl = SymTbl::new();
 	sym_tbl.declare(Rc::new(RefCell::new(Var { name: "print".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
 
@@ -49,8 +49,8 @@ pub fn analyze(ast: &mut Node<Expr>) -> Result<(), Vec<SemError>> {
 	}
 }
 
-fn eval_expr(node: &mut Node<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>) {
-	match &mut node.kind {
+fn eval_expr(node: &mut Sourced<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>) {
+	match node.deref_mut() {
 		Expr::Assign(value) => {
 			//NOTE: order is important! otherwise things can get defined after they're used.
 			eval_expr(&mut value.rhs, sym_tbl, errors);
@@ -128,8 +128,8 @@ fn eval_expr(node: &mut Node<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemEr
 	}
 }
 
-fn eval_pattern(node: &mut Node<Pattern>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>, is_decl: bool, is_mut: bool) {
-	match &mut node.kind {
+fn eval_pattern(node: &mut Sourced<Pattern>, sym_tbl: &mut SymTbl, errors: &mut Vec<SemError>, is_decl: bool, is_mut: bool) {
+	match node.deref_mut() {
 		Pattern::Let(value) => {
 			if is_decl { errors.push(SemError::DoubleLet); return; }
 			debug_assert!(!is_mut);

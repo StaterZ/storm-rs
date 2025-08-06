@@ -4,7 +4,7 @@ pub mod debug;
 mod var;
 mod rule_error;
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use node_sets::*;
 use nodes::*;
@@ -12,28 +12,28 @@ use nodes::*;
 pub use var::Var;
 pub use rule_error::{RuleErrorKind, RuleError, RuleResult, CreateOrPass, RuleResultCreateOrPass};
 use crate::compiler::{
-	lexer::{Token, TokenKind, TokenKindTag}, map_peekable::{
+	lexer::{TokenKind, TokenKindTag}, map_peekable::{
 		soft_error::{SoftError, SoftResult, SoftResultTrait, SoftResultTraitSame},
 		PeekIterUtils,
 		PeekableIterator,
 		PeekableNextIfError
 	},
-	source::{self, Pos},
+	source::{self, Pos, Sourced},
 };
 
 use debug::rule_observers::Observer as RuleObserver;
 
-pub trait TokStream<'i> = PeekableIterator<Item = &'i Token> + Clone;
+pub trait TokStream<'i> = PeekableIterator<Item = &'i Sourced<TokenKind>> + Clone;
 
-fn next_if_eq<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Option<&'i Token> {
-	stream.next_if(|t| Into::<TokenKindTag>::into(&t.kind) == expected)
+fn next_if_eq<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Option<&'i Sourced<TokenKind>> {
+	stream.next_if(|t| Into::<TokenKindTag>::into(&***t) == expected)
 }
 
-fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Result<&'i Token, RuleErrorKind> {
-	stream.next_if_err(|t| if Into::<TokenKindTag>::into(&t.kind) == expected {
+fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Result<&'i Sourced<TokenKind>, RuleErrorKind> {
+	stream.next_if_err(|t| if Into::<TokenKindTag>::into(&***t) == expected {
 		Ok(())
 	} else {
-		Err((&t.kind).into())
+		Err((&***t).into())
 	}).map_err(|err| match err {
 		PeekableNextIfError::StreamExhausted => RuleErrorKind::StreamExhausted,
 		PeekableNextIfError::PredicateError(found) => RuleErrorKind::ExpectedToken { expected, found },
@@ -42,7 +42,7 @@ fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTa
 
 fn create_unreachable_error<'a, 'i>(stream: &mut impl TokStream<'i>) -> RuleErrorKind {
 	match stream.peek() {
-		Some(token) => RuleErrorKind::UnexpectedToken((&token.kind).into()),
+		Some(token) => RuleErrorKind::UnexpectedToken((&***token).into()),
 		None => RuleErrorKind::StreamExhausted,
 	}
 }
@@ -64,39 +64,33 @@ fn create_node<'i, T, I: TokStream<'i>>(
 	stream: &mut I,
 	f: impl FnOnce(&mut I) -> SoftResult<T, RuleErrorKind, RuleErrorKind>
 ) -> RuleResult<T> {
-	let begin = stream.peek().unwrap().range.begin; //TODO: unsafe unwrap!!!
+	let begin = stream.peek().unwrap().source().begin; //TODO: unsafe unwrap!!!
 	let kind = f(stream)?;
-	let end = stream.peek().map_or(Pos::new_todo(0), |t| t.range.begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
-	Ok(Node {
-		kind,
-		range: source::Range {
-			begin,
-			end,
-		},
-	})
+	let end = stream.peek().map_or(Pos::new_todo_remove_me(0), |t| t.source().begin); //TODO: unsafe unwrap!!! //NOTE: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
+	Ok(Sourced::new(kind, source::Range {
+		begin,
+		end,
+	}))
 }
 
 fn create_node_or_pass<'i, T, I: TokStream<'i>>(
 	stream: &mut I,
 	f: impl FnOnce(&mut I) -> RuleResultCreateOrPass<T>
 ) -> RuleResult<T> {
-	let begin = stream.peek().ok_or(SoftError::Soft(RuleErrorKind::StreamExhausted))?.range.begin;
+	let begin = stream.peek().ok_or(SoftError::Soft(RuleErrorKind::StreamExhausted))?.source().begin;
 	let kind = match f(stream)? {
 		CreateOrPass::Create(kind) => kind,
 		CreateOrPass::Pass(node) => return Ok(node),
 	};
-	let end = stream.peek().map_or_else(|| todo!(), |t| t.range.begin); //TODO: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
-	Ok(Node {
-		kind,
-		range: source::Range {
-			begin,
-			end,
-		},
-	})
+	let end = stream.peek().map_or_else(|| todo!(), |t| t.source().begin); //TODO: this should be end of the last node, not begin of the node after the last, so this is a bad approximation. fix me later
+	Ok(Sourced::new(kind, source::Range {
+		begin,
+		end,
+	}))
 }
 
-fn is_space(token: &Token) -> bool {
-	matches!(token.kind,
+fn is_space(token: &Sourced<TokenKind>) -> bool {
+	matches!(**token,
 		| TokenKind::Space
 		| TokenKind::NewLine
 		| TokenKind::Comment
@@ -104,9 +98,9 @@ fn is_space(token: &Token) -> bool {
 }
 
 pub fn parse<'a, 'i>(
-	tokens: &'i Vec<Token>,
+	tokens: &'i Vec<Sourced<TokenKind>>,
 	observer: &'a mut impl RuleObserver<'i>,
-) -> Result<Node<Expr>, RuleError> {
+) -> Result<Sourced<Expr>, RuleError> {
 	let mut stream = tokens
 		.iter()
 		.filter(|t| !is_space(t))
@@ -122,7 +116,7 @@ pub fn parse<'a, 'i>(
 			kind: err.value(),
 			source_range: stream
 				.peek()
-				.map(|t| t.range),
+				.map(|t| *t.source()),
 		}),
 	}
 }
@@ -261,8 +255,16 @@ fn parse_block<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 			}
 			
 			if let Ok(stmt) = try_rule("stmt", stream, observer, parse_stmt).shed_hard()? {
-				stmts.push(stmt);
-				continue;
+				if stmt.is_stmt() {
+					stmts.push(stmt);
+					continue;
+				}
+
+				next_if_eq_err(stream, TokenKindTag::RBrace).map_err(|err| SoftError::Hard(err))?;
+				return Ok(Expr::Block(Block {
+					stmts,
+					expr: Some(Box::new(stmt)),
+				}));
 			}
 
 			return Err(SoftError::Soft(create_unreachable_error(stream)));
@@ -332,7 +334,7 @@ fn parse_plex<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 			}
 			
 			let name = next_if_eq_err(stream, TokenKindTag::Identifier).map_err(|err| SoftError::Hard(err))?;
-			let name = name.kind
+			let name = name
 				.as_identifier()
 				.unwrap()
 				.clone();
@@ -481,22 +483,27 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 			Some(op) => {
 				let mut rhs = parse_expr(stream, observer).force_hard()?;
 
-				if let Expr::BinOp(rhs_bin_op) = &rhs.kind {
+				if let Expr::BinOp(rhs_bin_op) = rhs.deref() {
 					if rhs_bin_op.op.precedence() > op.precedence() {
-						let mut rhs_bin_op = rhs.kind.into_bin_op().unwrap(); //safe due to if-let above.
+						let mut rhs_bin_op = rhs.inner().into_bin_op().unwrap(); //safe due to if-let above.
 
-						rhs_bin_op.lhs = Box::new(Node {
-							range: source::Range { begin: lhs.range.begin, end: rhs_bin_op.lhs.range.end },
-							kind: Expr::BinOp(BinOp {
+						let range_lhs = source::Range {
+							begin: lhs.source().begin,
+							end: rhs_bin_op.lhs.source().end,
+						};
+						rhs_bin_op.lhs = Box::new(Sourced::new(
+							Expr::BinOp(BinOp {
 								op,
 								lhs: Box::new(lhs),
 								rhs: rhs_bin_op.lhs,
 							}),
-						});
-						rhs = Node {
-							range: source::Range { begin: rhs_bin_op.lhs.range.begin, end: rhs_bin_op.rhs.range.end },
-							kind: Expr::BinOp(rhs_bin_op),
+							range_lhs,
+						));
+						let range_outer = source::Range {
+							begin: rhs_bin_op.lhs.source().begin,
+							end: rhs_bin_op.rhs.source().end
 						};
+						rhs = Sourced::new(Expr::BinOp(rhs_bin_op), range_outer);
 
 						Ok(CreateOrPass::Pass(rhs))
 					} else {
@@ -519,7 +526,7 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 }
 
 fn parse_bin_op(stream: &mut impl TokStream<'_>) -> Option<BinOpKind> {
-	match stream.next()?.kind {
+	match stream.next()?.deref() {
 		TokenKind::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
 		TokenKind::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
 		TokenKind::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
@@ -552,7 +559,7 @@ fn parse_expr_una_post<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut i
 			return Ok(CreateOrPass::Pass(expr));
 		};
 
-		Ok(CreateOrPass::Create(match &token.kind {
+		Ok(CreateOrPass::Create(match token.deref() {
 			TokenKind::Hash => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
 			TokenKind::Ampersand => Expr::UnaOp(UnaOp { op: UnaOpKind::AddressOf, expr: Box::new(expr) }),
 			TokenKind::Dot => {
@@ -574,7 +581,7 @@ fn parse_expr_una_post<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut i
 
 fn parse_expr_una_pre<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node_or_pass(stream, |stream| {
-		let op = stream.next_if_map(|t| match t.kind {
+		let op = stream.next_if_map(|t| match &***t {
 			TokenKind::Plus => Some(UnaOpKind::Identity),
 			TokenKind::Dash => Some(UnaOpKind::Negate),
 			TokenKind::Bang => Some(UnaOpKind::Not),
@@ -599,17 +606,13 @@ fn parse_expr_atom<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut im
 		Err(SoftError::Soft(_err)) => {},
 	}
 	create_node(stream, |stream| stream.try_rule_sh(|stream| match stream.next() {
-		Some(token) => match &token.kind {
+		Some(token) => match token.deref() {
 			TokenKind::True => Ok(Expr::BoolLit(true)),
 			TokenKind::False => Ok(Expr::BoolLit(false)),
 			TokenKind::IntLit(value) => Ok(Expr::IntLit(value.clone())),
 			TokenKind::StrLit(value) => Ok(Expr::StrLit(value.clone())),
-			TokenKind::Identifier(value) => Ok(Expr::Identifier(Rc::new(RefCell::new(Var {
-				name: value.clone(),
-				id: u64::MAX,
-				is_mut: false, //arbitrary, gets set in SEM stage later
-			})))),
-			_ => Err(SoftError::Soft(RuleErrorKind::UnexpectedToken((&token.kind).into()))),
+			TokenKind::Identifier(value) => Ok(Expr::Identifier(Rc::new(RefCell::new(Var::new(value.clone()))))),
+			_ => Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(token.deref().into()))),
 		},
 		None => Err(SoftError::Soft(RuleErrorKind::StreamExhausted)),
 	}))
@@ -623,11 +626,7 @@ fn parse_identifier<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut 
 	let ident = next_if_eq_err(stream, TokenKindTag::Identifier)
 		.map_err(|err| SoftError::Soft(err))?;
 
-	Ok(Rc::new(RefCell::new(Var {
-		name: ident.kind.as_identifier().unwrap().clone(), //unwrap safe due to guard above
-		id: u64::MAX,
-		is_mut: false, //arbitrary, gets set in SEM stage later
-	})))
+	Ok(Rc::new(RefCell::new(Var::new(ident.as_identifier().unwrap().clone())))) //unwrap safe due to guard above
 }
 
 //TODO: this is a whole new level of incompetence...
@@ -635,11 +634,7 @@ fn parse_identifier_without_crying_myself_to_sleep<'a, 'i>(stream: &mut impl Tok
 	let ident = next_if_eq_err(stream, TokenKindTag::Identifier)
 		.map_err(|err| SoftError::Soft(err))?;
 
-	Ok(Rc::new(Var {
-		name: ident.kind.as_identifier().unwrap().clone(), //unwrap safe due to guard above
-		id: u64::MAX,
-		is_mut: false, //arbitrary, gets set in SEM stage later
-	}))
+	Ok(Rc::new(Var::new(ident.as_identifier().unwrap().clone()))) //unwrap safe due to guard above
 }
 
 fn parse_parenthesis<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Expr> {

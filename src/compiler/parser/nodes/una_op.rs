@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::compiler::source::Sourced;
+
 use super::super::node_sets::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -26,5 +28,5 @@ impl Display for UnaOpKind {
 #[derive(Debug)]
 pub struct UnaOp {
 	pub op: UnaOpKind,
-	pub expr: Box<Node<Expr>>,
+	pub expr: Box<Sourced<Expr>>,
 }

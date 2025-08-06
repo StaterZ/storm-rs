@@ -14,6 +14,9 @@ pub use meta::LineMeta;
 pub use column::Column;
 pub use meta::ColumnMeta;
 
+pub use sourced::Sourced;
+pub use meta::SourcedMeta;
+
 pub mod error_gen;
 
 mod document;
@@ -24,3 +27,4 @@ mod pos;
 mod range;
 mod line;
 mod column;
+mod sourced;

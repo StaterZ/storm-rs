@@ -8,6 +8,8 @@ use color_print::cformat;
 use szu::opt_own::OptOwnStr;
 use tree_printer::{TreeDisplay, TreeDisplayChild, make_list};
 
+use crate::compiler::source::Sourced;
+
 use super::{super::{nodes::*, Var}, *};
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
@@ -15,24 +17,24 @@ pub enum Pattern {
 	Let(Let),
 	Mut(Mut),
 	TupleDtor(TupleDtor),
-	Deref(Box<Node<Expr>>),
+	Deref(Box<Sourced<Expr>>),
 	Binding(Rc<RefCell<Var>>),
 }
 
-impl TreeDisplay for Node<Pattern> {
+impl TreeDisplay for Sourced<Pattern> {
 	fn get_text_line(&self) -> String {
-		let text: OptOwnStr = match &self.kind {
+		let text: OptOwnStr = match self.deref() {
 			Pattern::Let(_) => "".into(),
 			Pattern::Mut(_) => "".into(),
 			Pattern::Deref(_) => "".into(),
 			Pattern::TupleDtor(_) => "".into(),
 			Pattern::Binding(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
 		};
-		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.kind.as_ref())
+		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.deref().as_ref())
 	}
 
 	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
-		match &self.kind {
+		match self.deref() {
 			Pattern::Let(value) => Some(vec![
 				("expr".into(), (value.pat.deref() as &dyn TreeDisplay).into()),
 			]),
