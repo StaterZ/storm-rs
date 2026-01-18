@@ -7,24 +7,26 @@ edition = "2021"
 
 [dependencies]
 ### terminal stuff ###
-clap = { version = "4.5.42", features= ["derive"] } # command line parser
-owo-colors = "4.2.2" # ansi color formatter (good for dynamic colors)
+clap = { version = "4.5.54", features= ["derive"] } # command line parser
+owo-colors = "4.2.3" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
 colors-transform = "0.2.11" #helps with HSV conversions in some temporary debug printing
 #prettytable-rs = "0.10.0"
-unicode-width = "0.2.1"
+unicode-width = "0.2.2"
 
 ### error handling ###
-thiserror = "2.0.12" # error type generation
-#error-stack = "0.5.0" # good error handling
+thiserror = "2.0.17" # error type generation
+#error-stack = "0.6.0" # good error handling
 #anyhow = { version = "1.0.82", features = ["backtrace"] } # simple error handling
+
+
+### enums ###
+strum = { version = "0.27.2", features = ["derive"] } # get names of enum fields as strings
+enum-as-inner = "0.6.1" # unwarp for enum fields without needing annoying pattern matching
 
 ### misc ###
 #lazy_static = "1.4.0" #init statics at runtime
-phf = { version = "0.12.1", features = ["macros"] } # generate LUTs and other data at comptime
-#string-builder = "0.2.0" # basic string builder utility
-enum-as-inner = "0.6.1" # unwarp for enum fields without needing annyong pattern mathing
-strum = { version = "0.27.2", features = ["derive"] } # get names of enum fields as strings
+phf = { version = "0.13.1", features = ["macros"] } # generate LUTs and other data at comptime
 itertools = "0.14.0" #more iterator utlites
 streaming-iterator = "0.1.9" #streaming iterators
 more-asserts = "0.3.1" #more asserts
@@ -32,9 +34,14 @@ more-asserts = "0.3.1" #more asserts
 stopwatch = "0.0.7" #easy timer library
 
 ### LLVM ###
-inkwell = { version = "0.6.0", features = ["llvm18-1"] }
-#melior = "0.25.0"
+inkwell = { version = "0.8.0", features = ["llvm18-1"] }
+#melior = { version = "0.25.0", features = ["ods-dialects", "helpers"] }
+#llvm-sys = "201.0.0"
+#mlir-sys = "0.4.1"
 
 ### custom ###
 szu = { version = "0.2.1", path = "../szu" }
 tree_printer = { version = "0.1.0", path = "../tree_printer" }
+
+[profile.release]
+lto = true

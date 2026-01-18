@@ -115,7 +115,7 @@ fn gen_expr<'a, 'ctx>(
 		Expr::Return(value) => {
 			let expr_val = value.expr
 				.as_ref()
-				.map(|expr| Ok(gen_expr(expr, context, builder, module, sym_tbl, func_tbl)?.unwrap()))
+				.map(|expr| Ok::<_, BuilderError>(gen_expr(expr, context, builder, module, sym_tbl, func_tbl)?.unwrap()))
 				.transpose()?;
 
 			builder.build_return(expr_val
@@ -203,7 +203,7 @@ fn gen_expr<'a, 'ctx>(
 			builder.position_at_end(else_bb);
 			let else_val = value.body_else
 				.as_ref()
-				.map(|body_else| Ok(gen_expr(body_else.as_ref(), context, builder, module, sym_tbl, func_tbl)?.unwrap()))
+				.map(|body_else| Ok::<_, BuilderError>(gen_expr(body_else.as_ref(), context, builder, module, sym_tbl, func_tbl)?.unwrap()))
 				.transpose()?;
 			builder.build_unconditional_branch(end_bb)?;
 
@@ -336,7 +336,7 @@ fn gen_expr<'a, 'ctx>(
 						let field_ptr = builder.build_struct_gep(arg.get_pointee_type().clone(), *arg, i as u32, "call_arg_ptr")?;
 						builder.build_load(ty, field_ptr, "call_arg")?.into()
 					}))
-					.collect::<Result<Vec<_>, _>>()?
+					.collect::<Result<Vec<_>, BuilderError>>()?
 			} else {
 				vec![arg.into()]
 			};
@@ -346,14 +346,14 @@ fn gen_expr<'a, 'ctx>(
 				&args,
 				"call",
 			)?;
-			Ok(Some(call_site.try_as_basic_value().left().unwrap().into()))
+			Ok(Some(call_site.try_as_basic_value().unwrap_basic().into()))
 		},
 
 		Expr::TupleCtor(value) => {
 			let item_values = value.items
 				.iter()
 				.map(|item| Ok(gen_expr(item, context, builder, module, sym_tbl, func_tbl)?.unwrap()))
-				.collect::<Result<Vec<_>, _>>()?;
+				.collect::<Result<Vec<_>, BuilderError>>()?;
 
 			let tuple_type = context.struct_type(
 				&item_values
@@ -447,7 +447,7 @@ fn gen_pattern_type<'ctx>(
 			let field_types = value.items
 				.iter()
 				.map(|item| Ok(gen_pattern_type(item, context)?.into()))
-				.collect::<Result<Vec<BasicTypeEnum>, _>>()?;
+				.collect::<Result<Vec<BasicTypeEnum>, BuilderError>>()?;
 
 			Ok(ValueType::Struct(context.struct_type(field_types.as_slice(), false)))
 		},
