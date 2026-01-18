@@ -8,15 +8,15 @@
 				"run",
 				"--",
 				"--backend=llvm",
-				"--in-path=data/b.storm",
+				"--in-path=data/test.storm",
 				"--out-path=out/test.out"
 			],
 			"problemMatcher": [
 				"$rustc"
 			],
-			"env": {
-				//"RUST_BACKTRACE": "1"
-			},
+			// "env": {
+			// 	"RUST_BACKTRACE": "1"
+			// },
 			"group": {
 				"kind": "build",
 				"isDefault": true

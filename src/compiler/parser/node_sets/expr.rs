@@ -113,7 +113,11 @@ impl TreeDisplay for Sourced<Expr> {
 				("else".into(), value.body_else.as_ref().map_or(&"none" as &dyn TreeDisplay, |body_else| body_else.deref() as &dyn TreeDisplay).into()),
 			]),
 			
-			Expr::Block(value) => Some(make_list(value.stmts.iter())),
+			Expr::Block(value) => Some({
+				let mut fields = make_list(value.stmts.iter());
+				fields.push(("expr".into(), value.expr.as_ref().map_or(&"none" as &dyn TreeDisplay, |expr| expr.deref() as &dyn TreeDisplay).into()));
+				fields
+			}),
 			Expr::Stmt(value) => Some(vec![
 				("expr".into(), (value.expr.deref() as &dyn TreeDisplay).into()),
 			]),
@@ -131,7 +135,7 @@ impl TreeDisplay for Sourced<Expr> {
 				("expr".into(), (value.expr.deref() as &dyn TreeDisplay).into()),
 			]),
 			Expr::Func(value) => Some(vec![
-				("arg".into(), (value.arg.deref() as &dyn TreeDisplay).into()),
+				("binding".into(), (value.binding.deref() as &dyn TreeDisplay).into()),
 				("body".into(), (value.body.deref() as &dyn TreeDisplay).into()),
 			]),
 			Expr::Call(value) => Some(vec![

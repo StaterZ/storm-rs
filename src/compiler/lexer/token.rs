@@ -4,8 +4,8 @@ use szu::tag_enum;
 
 tag_enum!(
 	pub enum (
-		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr, enum_as_inner::EnumAsInner)] TokenKind,
-		#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::AsRefStr)] TokenKindTag,
+		#[derive(Debug, PartialEq, Eq, Clone, strum::AsRefStr, enum_as_inner::EnumAsInner)] Token,
+		#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::AsRefStr)] TokenTag,
 	) {
 		Space,
 		NewLine,
@@ -48,6 +48,7 @@ tag_enum!(
 
 		Let,
 		Mut,
+		Discard,
 
 		Return,
 		Break,
@@ -56,6 +57,7 @@ tag_enum!(
 
 		Plex,
 
+		Fn,
 		Loop,
 		While,
 		For,
@@ -76,8 +78,8 @@ tag_enum!(
 	}
 );
 
-impl Display for TokenKindTag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_ref())
-    }
+impl Display for TokenTag {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.as_ref())
+	}
 }

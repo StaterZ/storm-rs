@@ -74,12 +74,12 @@ fn compile() {
 	);
 
 	let flags = compiler::Flags {
-		show_source: true,
-		show_tokens: true,
+		show_source: false,
+		show_tokens: false,
 		show_ast_rule_path: true,
-		show_ast: true,
+		show_ast: false,
 		show_sem: true,
-		show_output: true,
+		show_output: false,
 	};
 
 	let mut timer = Stopwatch::start_new();

@@ -4,7 +4,7 @@ use crate::compiler::{parser::{RuleResult, SoftError}, source::Sourced};
 
 use super::super::{
 	super::{
-		super::lexer::TokenKind,
+		super::lexer::Token,
 		RuleObserver,
 		TokStream,
 	},
@@ -12,7 +12,7 @@ use super::super::{
 };
 
 pub struct DebugSignal<'i> {
-	stream_state: Option<&'i Sourced<TokenKind>>,
+	stream_state: Option<&'i Sourced<Token>>,
 	rule_tree_parent_children: Vec<RuleTree<'i>>,
 }
 

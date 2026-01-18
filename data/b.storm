@@ -1,9 +1,10 @@
-let mut x = 0;
-while x < 32r1000: x = x + 1;
-let y = if x > 42 {
-	1 - 400 * 2 - 3
-} else {
-	0x100
-};
-print("yippe!");
-ret x - y;
+// let mut x = 0;
+// while x < 32r1000: x = x + 1;
+// let y = if x > 42 {
+// 	1 - 400 * 2 - 3
+// } else {
+// 	0x100
+// };
+let _ = printf("yippe! %i\n", 34);
+//ret x - y;
+ret 1;

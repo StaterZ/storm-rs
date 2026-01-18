@@ -1,14 +1,14 @@
 use std::{error::Error, fmt::Display};
 
-use crate::compiler::lexer::TokenKindTag;
+use crate::compiler::lexer::TokenTag;
 
 #[derive(Debug)]
 pub enum RuleErrorKind {
 	StreamExhausted,
-	UnexpectedToken(TokenKindTag),
+	UnexpectedToken(TokenTag),
 	ExpectedToken {
-		expected: TokenKindTag,
-		found: TokenKindTag,
+		expected: TokenTag,
+		found: TokenTag,
 	},
 }
 

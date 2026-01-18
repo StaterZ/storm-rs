@@ -25,6 +25,13 @@ impl Range {
 		}
 	}
 
+	pub fn new_zero() -> Self {
+		Self {
+			begin: Pos::new(0),
+			end: Pos::new(0),
+		}
+	}
+
 	pub fn with_meta<'a>(self, document: &'a DocumentMeta<'a>) -> RangeMeta<'a> {
 		RangeMeta::new_with_document(self, document)
 	}

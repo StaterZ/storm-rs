@@ -1,9 +1,9 @@
-mod token_kind;
+mod token;
 mod lexer_error;
 
 use phf::phf_map;
 
-pub use token_kind::{TokenKind, TokenKindTag};
+pub use token::{Token, TokenTag};
 
 use crate::compiler::{
 	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult}, map_peekable::{
@@ -13,7 +13,7 @@ use crate::compiler::{
 
 pub trait CharStream = PeekableIterator<Item = char> + Clone;
 
-pub fn lex(document: &source::Document) -> Result<Vec<Sourced<TokenKind>>, LexerError> {
+pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerError> {
 	let mut stream = document
 		.char_positions()
 		.peekable()
@@ -37,12 +37,12 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<TokenKind>>, Lexer
 	let mut tokens = Vec::new();
 	let mut begin = get_current_source_pos(document, &mut stream);
 	loop {
-		match next_token_kind(&mut stream) {
-			Ok(kind) => {
-				let is_eof = kind == TokenKind::Eof;
+		match next_token(&mut stream) {
+			Ok(token) => {
+				let is_eof = token == Token::Eof;
 
 				let end = get_current_source_pos(document, &mut stream);
-				tokens.push(Sourced::new(kind, source::Range { begin, end }));
+				tokens.push(Sourced::new(token, source::Range { begin, end }));
 
 				if is_eof {
 					return Ok(tokens);
@@ -64,12 +64,12 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<TokenKind>>, Lexer
 	}
 }
 
-fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerErrorKind> {
+fn next_token(stream: &mut impl CharStream) -> Result<Token, LexerErrorKind> {
 	{
 		fn is_space(c: &char) -> bool { matches!(*c, ' ' | '\t') }
 		if stream.next_if(is_space).is_some() {
 			while stream.next_if(is_space).is_some() { }
-			return Ok(TokenKind::Space);
+			return Ok(Token::Space);
 		}
 	}
 
@@ -77,55 +77,55 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 		let r = stream.next_if_eq(&'\r').is_some();
 		let n = stream.next_if_eq(&'\n').is_some();
 		if r || n {
-			return Ok(TokenKind::NewLine);
+			return Ok(Token::NewLine);
 		}
 	}
 
 	if stream.next_if_eq(&'.').is_some() {
-		return Ok(TokenKind::Dot);
+		return Ok(Token::Dot);
 	}
 	if stream.next_if_eq(&',').is_some() {
-		return Ok(TokenKind::Comma);
+		return Ok(Token::Comma);
 	}
 	if stream.next_if_eq(&':').is_some() {
-		return Ok(TokenKind::Colon);
+		return Ok(Token::Colon);
 	}
 	if stream.next_if_eq(&';').is_some() {
-		return Ok(TokenKind::Semicolon);
+		return Ok(Token::Semicolon);
 	}
 	
 	if stream.next_if_eq(&'(').is_some() {
-		return Ok(TokenKind::LParen);
+		return Ok(Token::LParen);
 	}
 	if stream.next_if_eq(&')').is_some() {
-		return Ok(TokenKind::RParen);
+		return Ok(Token::RParen);
 	}
 	if stream.next_if_eq(&'[').is_some() {
-		return Ok(TokenKind::LBracket);
+		return Ok(Token::LBracket);
 	}
 	if stream.next_if_eq(&']').is_some() {
-		return Ok(TokenKind::RBracket);
+		return Ok(Token::RBracket);
 	}
 	if stream.next_if_eq(&'{').is_some() {
-		return Ok(TokenKind::LBrace);
+		return Ok(Token::LBrace);
 	}
 	if stream.next_if_eq(&'}').is_some() {
-		return Ok(TokenKind::RBrace);
+		return Ok(Token::RBrace);
 	}
 
 	if stream.next_if_eq(&'+').is_some() {
-		return Ok(TokenKind::Plus);
+		return Ok(Token::Plus);
 	}
 	if stream.next_if_eq(&'-').is_some() {
-		return Ok(TokenKind::Dash);
+		return Ok(Token::Dash);
 	}
 	if stream.next_if_eq(&'*').is_some() {
-		return Ok(TokenKind::Star);
+		return Ok(Token::Star);
 	}
 	if stream.next_if_eq(&'/').is_some() {
 		if stream.next_if_eq(&'/').is_some() {
 			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
-			return Ok(TokenKind::Comment);
+			return Ok(Token::Comment);
 		}
 		if stream.next_if_eq(&'*').is_some() {
 			let mut indent = 1usize;
@@ -140,69 +140,69 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 				}
 			}
 			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
-			return Ok(TokenKind::MultilineComment);
+			return Ok(Token::MultilineComment);
 		}
 		
-		return Ok(TokenKind::Slash);
+		return Ok(Token::Slash);
 	}
 	if stream.next_if_eq(&'%').is_some() {
-		return Ok(TokenKind::Percent);
+		return Ok(Token::Percent);
 	}
 	if stream.next_if_eq(&'#').is_some() {
-		return Ok(TokenKind::Hash);
+		return Ok(Token::Hash);
 	}
 	if stream.next_if_eq(&'<').is_some() {
 		if stream.next_if_eq(&'<').is_some() {
-			return Ok(TokenKind::LShift);
+			return Ok(Token::LShift);
 		}
 		if stream.next_if_eq(&'=').is_some() {
-			return Ok(TokenKind::Le);
+			return Ok(Token::Le);
 		}
 
-		return Ok(TokenKind::Lt);
+		return Ok(Token::Lt);
 	}
 	if stream.next_if_eq(&'>').is_some() {
 		if stream.next_if_eq(&'>').is_some() {
-			return Ok(TokenKind::RShift);
+			return Ok(Token::RShift);
 		}
 		if stream.next_if_eq(&'=').is_some() {
-			return Ok(TokenKind::Ge);
+			return Ok(Token::Ge);
 		}
 
-		return Ok(TokenKind::Gt);
+		return Ok(Token::Gt);
 	}
 
 	if stream.next_if_eq(&'=').is_some() {
 		if stream.next_if_eq(&'=').is_some() {
-			return Ok(TokenKind::Eq);
+			return Ok(Token::Eq);
 		}
 
-		return Ok(TokenKind::Equals);
+		return Ok(Token::Equals);
 	}
 
 	if stream.next_if_eq(&'!').is_some() {
 		if stream.next_if_eq(&'=').is_some() {
-			return Ok(TokenKind::Ne);
+			return Ok(Token::Ne);
 		}
-		return Ok(TokenKind::Bang);
+		return Ok(Token::Bang);
 	}
 
 	if stream.next_if_eq(&'&').is_some() {
 		if stream.next_if_eq(&'&').is_some() {
-			return Ok(TokenKind::And);
+			return Ok(Token::And);
 		}
-		return Ok(TokenKind::Ampersand);
+		return Ok(Token::Ampersand);
 	}
 
 	if stream.next_if_eq(&'|').is_some() {
 		if stream.next_if_eq(&'|').is_some() {
-			return Ok(TokenKind::Or);
+			return Ok(Token::Or);
 		}
-		return Ok(TokenKind::Bar);
+		return Ok(Token::Bar);
 	}
 
 	if let Ok(value) = stream.try_rule_sh(parse_int).to_nested()? {
-		return Ok(TokenKind::IntLit(value));
+		return Ok(Token::IntLit(value));
 	}
 
 	{
@@ -210,17 +210,35 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 		if stream.next_if_eq(&'\"').is_some() {
 			let mut value = String::new();
 			while stream.next_if_eq(&'\"').is_none() {
-				stream.next_if_eq(&'\\');
-				match stream.next() {
-					Some(c) => value.push(c),
-					None => return Err(LexerErrorKind::StringDelimiterNotClosed),
+				if stream.next_if_eq(&'\\').is_some() {
+					static ESCAPE_CODES: phf::Map<char, char> = phf_map! {
+						// 'b' => '\b',
+						// 'e' => '\e',
+						// 'f' => '\f',
+						'r' => '\r',
+						't' => '\t',
+						// 'v' => '\v',
+						'n' => '\n',
+						'"' => '"',
+						'\\' => '\\',
+					};
+					
+					let c = stream.next().ok_or(LexerErrorKind::StringDelimiterNotClosed)?;
+					let Some(&escaped) = ESCAPE_CODES.get(&c) else {
+						return Err(LexerErrorKind::InvalidEscapeSequence(c));
+					};
+					value.push(escaped);
+					continue;
 				}
+
+				let c = stream.next().ok_or(LexerErrorKind::StringDelimiterNotClosed)?;
+				value.push(c);
 			}
 
 			return Ok(if ident_str {
-				TokenKind::Identifier(value)
+				Token::Identifier(value)
 			} else {
-				TokenKind::StrLit(value)
+				Token::StrLit(value)
 			});
 		}
 	}
@@ -231,40 +249,42 @@ fn next_token_kind(stream: &mut impl CharStream) -> Result<TokenKind, LexerError
 			value.push(ident);
 		}
 
-		static KEYWORDS: phf::Map<&'static str, TokenKindTag> = phf_map! {
-			"let" => TokenKindTag::Let,
-			"mut" => TokenKindTag::Mut,
+		static KEYWORDS: phf::Map<&'static str, TokenTag> = phf_map! {
+			"let" => TokenTag::Let,
+			"mut" => TokenTag::Mut,
+			"_" => TokenTag::Discard,
 			
-			"ret" => TokenKindTag::Return,
-			"break" => TokenKindTag::Break,
-			"continue" => TokenKindTag::Continue,
-			"unreachable" => TokenKindTag::Unreachable,
+			"ret" => TokenTag::Return,
+			"break" => TokenTag::Break,
+			"continue" => TokenTag::Continue,
+			"unreachable" => TokenTag::Unreachable,
 			
-			"plex" => TokenKindTag::Plex,
+			"plex" => TokenTag::Plex,
 
-			"loop" => TokenKindTag::Loop,
-			"while" => TokenKindTag::While,
-			"for" => TokenKindTag::For,
-			"in" => TokenKindTag::In,
-			"if" => TokenKindTag::If,
-			"else" => TokenKindTag::Else,
+			"fn" => TokenTag::Fn,
+			"loop" => TokenTag::Loop,
+			"while" => TokenTag::While,
+			"for" => TokenTag::For,
+			"in" => TokenTag::In,
+			"if" => TokenTag::If,
+			"else" => TokenTag::Else,
 
-			"ipt" => TokenKindTag::Ipt,
-			"yield" => TokenKindTag::Yield,
+			"ipt" => TokenTag::Ipt,
+			"yield" => TokenTag::Yield,
 
-			"true" => TokenKindTag::True,
-			"false" => TokenKindTag::False,
+			"true" => TokenTag::True,
+			"false" => TokenTag::False,
 		};
 		
 		if let Some(&keyword) = KEYWORDS.get(value.as_str()) {
 			return Ok(keyword.try_into().unwrap()); //unwrap here is safe since the KEYWORDS list will never list a type with a value
 		}
 		
-		return Ok(TokenKind::Identifier(value));
+		return Ok(Token::Identifier(value));
 	}
 
 	if stream.peek().is_none() {
-		return Ok(TokenKind::Eof);
+		return Ok(Token::Eof);
 	}
 
 	return Err(LexerErrorKind::NoTokenMatchingStream);
@@ -317,11 +337,7 @@ fn parse_radix_symbol(stream: &mut impl CharStream) -> LexerResult<u64> {
 				stream.next();
 				Ok(radix)
 			},
-			None => if matches!(c, 'a'..='z' | 'A'..='Z') {
-				Err(SoftError::Hard(LexerErrorKind::InvalidRadixSymbol(*c)))
-			} else {
-				Err(SoftError::Soft(LexerErrorKind::InvalidRadixSymbol(*c)))
-			}
+			None => Err(SoftError::new(LexerErrorKind::InvalidRadixSymbol(*c), matches!(c, 'a'..='z' | 'A'..='Z')))
 		},
 		None => Err(SoftError::Soft(LexerErrorKind::StreamExhausted)),
 	}
@@ -331,7 +347,7 @@ fn parse_radix_symbol(stream: &mut impl CharStream) -> LexerResult<u64> {
 fn parse_digits(
 	stream: &mut impl CharStream,
 	radix: u64,
-	mut is_match: bool,
+	mut has_consumed: bool,
 	allow_radix_end: bool,
 ) -> LexerResult<u64> {
 	let mut has_trailing_underscore = false;
@@ -340,7 +356,7 @@ fn parse_digits(
 	while let Some(&c) = stream.peek() {
 		if c == '_' {
 			if i == 0 {
-				return Err(SoftError::Hard(LexerErrorKind::DigitsHaveLeadingUnderscore));
+				return Err(SoftError::new(LexerErrorKind::DigitsHaveLeadingUnderscore, has_consumed));
 			}
 
 			has_trailing_underscore = true;
@@ -350,26 +366,18 @@ fn parse_digits(
 					let digit_value = digit_value as u64;
 					
 					if digit_value >= radix {
-						if allow_radix_end && c == 'r' {
-							break;
-						}
+						if allow_radix_end && c == 'r' { break; }
 
-						let error = LexerErrorKind::InvalidDigitForRadix {
+						return Err(SoftError::new(LexerErrorKind::InvalidDigitForRadix {
 							digit_symbol: c,
 							digit_value,
 							radix
-						};
-
-						return if is_match {
-							Err(SoftError::Hard(error))
-						} else {
-							Err(SoftError::Soft(error))
-						};
+						}, has_consumed));
 					}
 					value *= radix;
 					value += digit_value;
 		
-					is_match = true;
+					has_consumed = true;
 					has_trailing_underscore = false;
 				},
 				None => break,
@@ -381,7 +389,7 @@ fn parse_digits(
 	}
 	
 	
-	if !is_match {
+	if !has_consumed {
 		return Err(SoftError::Soft(LexerErrorKind::IntHasNoMatch));
 	}
 	

@@ -2,9 +2,7 @@ use std::ops::Deref;
 
 use enum_as_inner::EnumAsInner;
 use inkwell::{
-	llvm_sys::prelude::{LLVMTypeRef, LLVMValueRef},
-	types::{AnyType, ArrayType, AsTypeRef, BasicType, FloatType, FunctionType, IntType, PointerType, StructType},
-	values::{AnyValue, ArrayValue, AsValueRef, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PhiValue, PointerValue, StructValue}
+	llvm_sys::prelude::{LLVMTypeRef, LLVMValueRef}, module::Linkage, types::{AnyType, ArrayType, AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FloatType, FunctionType, IntType, PointerType, StructType}, values::{AnyValue, ArrayValue, AsValueRef, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PhiValue, PointerValue, StructValue}
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -78,7 +76,7 @@ impl<'ctx> Value<'ctx> {
 			Value::Int(value) => ValueType::Int(value.get_type()),
 			Value::Flt(value) => ValueType::Flt(value.get_type()),
 			Value::Phi(_value) => todo!(),
-			Value::Func(value) => ValueType::Func(value.get_type()),
+			Value::Func(value) => ValueType::Func(FuncType::new(value)),
 			Value::Struct(value) => ValueType::Struct(value.get_type()),
 			Value::Array(value) => ValueType::Array(value.get_type()),
 		}
@@ -95,6 +93,19 @@ impl<'ctx> From<BasicValueEnum<'ctx>> for Value<'ctx> {
 			BasicValueEnum::StructValue(value) => Self::Struct(value),
 			BasicValueEnum::VectorValue(_value) => todo!(),
 			BasicValueEnum::ScalableVectorValue(_value) => todo!(),
+		}
+	}
+}
+impl<'ctx> Into<BasicValueEnum<'ctx>> for Value<'ctx> {
+	fn into(self) -> BasicValueEnum<'ctx> {
+		match self {
+			Value::Ptr(value) => BasicValueEnum::PointerValue(value.value),
+			Value::Int(value) => BasicValueEnum::IntValue(value),
+			Value::Flt(value) => BasicValueEnum::FloatValue(value),
+			Value::Phi(_value) => todo!(),
+			Value::Func(_value) => todo!(),
+			Value::Struct(value) => BasicValueEnum::StructValue(value),
+			Value::Array(value) => BasicValueEnum::ArrayValue(value),
 		}
 	}
 }
@@ -146,14 +157,86 @@ unsafe impl<'ctx> AnyType<'ctx> for PtrValueType<'ctx> {
 unsafe impl<'ctx> BasicType<'ctx> for PtrValueType<'ctx> {
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FuncType<'ctx> {
+	value: FunctionType<'ctx>,
+	linkage: Linkage,
+}
+impl<'ctx> FuncType<'ctx> {
+	pub fn new(func: FunctionValue<'ctx>) -> Self {
+		Self {
+			value: func.get_type(),
+			linkage: func.get_linkage(),
+		}
+	}
+	
+	pub fn get_linkage(&self) -> Linkage {
+		self.linkage
+	}
+}
+
+impl<'ctx> Into<FunctionType<'ctx>> for FuncType<'ctx> {
+	fn into(self) -> FunctionType<'ctx> {
+		self.value
+	}
+}
+
+unsafe impl<'ctx> AsTypeRef for FuncType<'ctx> {
+	fn as_type_ref(&self) -> LLVMTypeRef {
+		self.value.as_type_ref()
+	}
+}
+unsafe impl<'ctx> AnyType<'ctx> for FuncType<'ctx> {
+}
+unsafe impl<'ctx> BasicType<'ctx> for FuncType<'ctx> {
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, EnumAsInner)]
 pub enum ValueType<'ctx> {
 	Ptr(Box<PtrValueType<'ctx>>),
 	Int(IntType<'ctx>),
 	Flt(FloatType<'ctx>),
-	Func(FunctionType<'ctx>),
+	Func(FuncType<'ctx>),
 	Struct(StructType<'ctx>),
 	Array(ArrayType<'ctx>),
+}
+
+impl<'ctx> From<BasicTypeEnum<'ctx>> for ValueType<'ctx> {
+	fn from(value: BasicTypeEnum<'ctx>) -> Self {
+		match value {
+			BasicTypeEnum::ArrayType(value) => Self::Array(value),
+			BasicTypeEnum::IntType(value) => Self::Int(value),
+			BasicTypeEnum::FloatType(value) => Self::Flt(value),
+			BasicTypeEnum::PointerType(_value) => todo!(),
+			BasicTypeEnum::StructType(value) => Self::Struct(value),
+			BasicTypeEnum::VectorType(_value) => todo!(),
+			BasicTypeEnum::ScalableVectorType(_value) => todo!(),
+		}
+	}
+}
+impl<'ctx> Into<BasicTypeEnum<'ctx>> for ValueType<'ctx> {
+	fn into(self) -> BasicTypeEnum<'ctx> {
+		match self {
+			ValueType::Ptr(value) => BasicTypeEnum::PointerType(value.value),
+			ValueType::Int(value) => BasicTypeEnum::IntType(value),
+			ValueType::Flt(value) => BasicTypeEnum::FloatType(value),
+			ValueType::Func(_value) => todo!(),
+			ValueType::Struct(value) => BasicTypeEnum::StructType(value),
+			ValueType::Array(value) => BasicTypeEnum::ArrayType(value),
+		}
+	}
+}
+impl<'ctx> Into<BasicMetadataTypeEnum<'ctx>> for ValueType<'ctx> {
+	fn into(self) -> BasicMetadataTypeEnum<'ctx> {
+		match self {
+			ValueType::Ptr(value) => BasicMetadataTypeEnum::PointerType(value.value),
+			ValueType::Int(value) => BasicMetadataTypeEnum::IntType(value),
+			ValueType::Flt(value) => BasicMetadataTypeEnum::FloatType(value),
+			ValueType::Func(_value) => todo!(),
+			ValueType::Struct(value) => BasicMetadataTypeEnum::StructType(value),
+			ValueType::Array(value) => BasicMetadataTypeEnum::ArrayType(value),
+		}
+	}
 }
 
 unsafe impl<'ctx> AsTypeRef for ValueType<'ctx> {

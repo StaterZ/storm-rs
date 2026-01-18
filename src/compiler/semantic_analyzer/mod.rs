@@ -38,7 +38,8 @@ impl SymTbl {
 
 pub fn analyze(ast: &mut Sourced<Expr>) -> Result<(), Vec<SemError>> {
 	let mut sym_tbl = SymTbl::new();
-	sym_tbl.declare(Rc::new(RefCell::new(Var { name: "print".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
+	sym_tbl.declare(Rc::new(RefCell::new(Var { name: "printf".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
+	sym_tbl.declare(Rc::new(RefCell::new(Var { name: "scanf".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
 
 	let mut errors = Vec::new();
 	eval_expr(ast, &mut sym_tbl, &mut errors);
@@ -105,8 +106,12 @@ fn eval_expr(node: &mut Sourced<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<Se
 		Expr::UnaOp(value) => eval_expr(&mut value.expr, sym_tbl, errors),
 		Expr::FieldAccess(value) => eval_expr(&mut value.expr, sym_tbl, errors),
 		Expr::Func(value) => {
-			eval_expr(&mut value.arg, sym_tbl, errors);
-			eval_expr(&mut value.body, sym_tbl, errors);
+			let mut sym_tbl = SymTbl::new();
+			sym_tbl.declare(Rc::new(RefCell::new(Var { name: "printf".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
+			sym_tbl.declare(Rc::new(RefCell::new(Var { name: "scanf".to_string(), id: 0, is_mut: false })), false); //TODO: remove temp func
+			
+			eval_pattern(&mut value.binding, &mut sym_tbl, errors, true, false);
+			eval_expr(&mut value.body, &mut sym_tbl, errors);
 		},
 		Expr::Call(value) => {
 			eval_expr(&mut value.func, sym_tbl, errors);
@@ -156,5 +161,6 @@ fn eval_pattern(node: &mut Sourced<Pattern>, sym_tbl: &mut SymTbl, errors: &mut 
 				//println!("SET:  {}", var.borrow());
 			}
 		},
+		Pattern::Discard => {},
 	}
 }

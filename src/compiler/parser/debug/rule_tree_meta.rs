@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use owo_colors::{AnsiColors, DynColors, OwoColorize};
+use color_print::cformat;
 use szu::opt_own::OptOwnStr;
 use tree_printer::{TreeDisplay, TreeDisplayChild};
 
@@ -14,7 +15,10 @@ pub struct RuleTreeMeta<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
 	fn get_text_line(&self) -> String {
-		format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| format!("{}", state.source().with_meta(self.document))))
+		format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| {
+			let range = state.source().with_meta(self.document);
+			cformat!("{} <cyan>{}</>", range, range.get_str())
+		}))
 			.color(self.get_scope_color())
 			.to_string()
 	}

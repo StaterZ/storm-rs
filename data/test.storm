@@ -1,0 +1,7 @@
+let times_three = fn(x,): x*3;
+
+let mut i = 0;
+let _ = scanf("%d", i&);
+let o = times_three(i,);
+let _ = printf("hello world! %i\n", i);
+ret 42;

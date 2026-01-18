@@ -2,7 +2,6 @@ use std::{cell::RefCell, rc::Rc};
 use std::ops::Deref;
 
 use enum_as_inner::EnumAsInner;
-use owo_colors::{AnsiColors, DynColors};
 use strum::AsRefStr;
 use color_print::cformat;
 use szu::opt_own::OptOwnStr;
@@ -19,6 +18,7 @@ pub enum Pattern {
 	TupleDtor(TupleDtor),
 	Deref(Box<Sourced<Expr>>),
 	Binding(Rc<RefCell<Var>>),
+	Discard,
 }
 
 impl TreeDisplay for Sourced<Pattern> {
@@ -29,6 +29,7 @@ impl TreeDisplay for Sourced<Pattern> {
 			Pattern::Deref(_) => "".into(),
 			Pattern::TupleDtor(_) => "".into(),
 			Pattern::Binding(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
+			Pattern::Discard => "".into(),
 		};
 		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.deref().as_ref())
 	}
@@ -46,10 +47,7 @@ impl TreeDisplay for Sourced<Pattern> {
 			]),
 			Pattern::TupleDtor(value) => Some(make_list(value.items.iter())),
 			Pattern::Binding(_) => None,
+			Pattern::Discard => None,
 		}
-	}
-	
-	fn get_scope_color(&self) -> DynColors {
-		DynColors::Ansi(AnsiColors::Magenta)
 	}
 }

@@ -67,7 +67,7 @@ fn gen_expr(node: &Sourced<Expr>, loop_depth: usize) -> String {
 		Expr::BinOp(value) => format!("{}{}{}", gen_expr(&value.lhs, loop_depth), gen_binop(value.op), gen_expr(&value.rhs, loop_depth)),
 		Expr::UnaOp(value) => format!("{}{}", gen_unaop(value.op), gen_expr(&value.expr, loop_depth)),
 		Expr::FieldAccess(value) => format!("{}.{}", gen_expr(&value.expr, loop_depth), &value.ident.name),
-		Expr::Func(value) => format!("function({}) \n{} \nend\n", gen_expr(&value.arg, loop_depth), gen_expr(&value.body, loop_depth)),
+		Expr::Func(value) => format!("function({}) \n{} \nend\n", gen_pattern(&value.binding), gen_expr(&value.body, loop_depth)),
 		Expr::Call(value) => format!("{}({})", gen_expr(&value.func, loop_depth), gen_expr(&value.arg, loop_depth)),
 
 		Expr::TupleCtor(value) => value.items
@@ -126,6 +126,7 @@ fn gen_pattern_impl(node: &Sourced<Pattern>, is_let: bool, meta: &mut PatternMet
 			}
 			binding
 		},
+		Pattern::Discard => "_".to_string(),
 	}
 }
 

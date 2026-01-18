@@ -21,7 +21,7 @@
 			},
 			"args": [
 				"--backend=llvm",
-				"--in-path=data/b.storm",
+				"--in-path=data/test.storm",
 				"--out-path=out/test.out"
 			],
 			"cwd": "${workspaceFolder}"
@@ -44,7 +44,7 @@
 			},
 			"args": [
 				"--backend=llvm",
-				"--in-path=data/b.storm",
+				"--in-path=data/test.storm",
 				"--out-path=out/test.out"
 			],
 			"cwd": "${workspaceFolder}"
@@ -56,7 +56,7 @@
 			"program": "${workspaceRoot}/target/debug/storm.exe",
 			"args": [
 				"--backend=llvm",
-				"--in-path=data/b.storm",
+				"--in-path=data/test.storm",
 				"--out-path=out/test.out"
 			],
 			"cwd": "${workspaceFolder}",

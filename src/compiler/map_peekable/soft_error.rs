@@ -6,6 +6,13 @@ pub enum SoftError<S, H> {
 }
 
 impl<E> SoftError<E, E> {
+	pub fn new(err: E, is_unrecoverable: bool) -> Self {
+		match is_unrecoverable {
+			true => Self::Hard(err),
+			false => Self::Soft(err),
+		}
+	}
+
 	pub fn value(self) -> E {
 		match self {
 			SoftError::Hard(err) => err,

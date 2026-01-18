@@ -12,7 +12,7 @@ use nodes::*;
 pub use var::Var;
 pub use rule_error::{RuleErrorKind, RuleError, RuleResult, CreateOrPass, RuleResultCreateOrPass};
 use crate::compiler::{
-	lexer::{TokenKind, TokenKindTag}, map_peekable::{
+	lexer::{Token, TokenTag}, map_peekable::{
 		soft_error::{SoftError, SoftResult, SoftResultTrait, SoftResultTraitSame},
 		PeekIterUtils,
 		PeekableIterator,
@@ -23,14 +23,14 @@ use crate::compiler::{
 
 use debug::rule_observers::Observer as RuleObserver;
 
-pub trait TokStream<'i> = PeekableIterator<Item = &'i Sourced<TokenKind>> + Clone;
+pub trait TokStream<'i> = PeekableIterator<Item = &'i Sourced<Token>> + Clone;
 
-fn next_if_eq<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Option<&'i Sourced<TokenKind>> {
-	stream.next_if(|t| Into::<TokenKindTag>::into(&***t) == expected)
+fn next_if_eq<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenTag) -> Option<&'i Sourced<Token>> {
+	stream.next_if(|t| Into::<TokenTag>::into(&***t) == expected)
 }
 
-fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenKindTag) -> Result<&'i Sourced<TokenKind>, RuleErrorKind> {
-	stream.next_if_err(|t| if Into::<TokenKindTag>::into(&***t) == expected {
+fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenTag) -> Result<&'i Sourced<Token>, RuleErrorKind> {
+	stream.next_if_err(|t| if Into::<TokenTag>::into(&***t) == expected {
 		Ok(())
 	} else {
 		Err((&***t).into())
@@ -89,16 +89,16 @@ fn create_node_or_pass<'i, T, I: TokStream<'i>>(
 	}))
 }
 
-fn is_space(token: &Sourced<TokenKind>) -> bool {
+fn is_space(token: &Sourced<Token>) -> bool {
 	matches!(**token,
-		| TokenKind::Space
-		| TokenKind::NewLine
-		| TokenKind::Comment
-		| TokenKind::MultilineComment)
+		| Token::Space
+		| Token::NewLine
+		| Token::Comment
+		| Token::MultilineComment)
 }
 
 pub fn parse<'a, 'i>(
-	tokens: &'i Vec<Sourced<TokenKind>>,
+	tokens: &'i Vec<Sourced<Token>>,
 	observer: &'a mut impl RuleObserver<'i>,
 ) -> Result<Sourced<Expr>, RuleError> {
 	let mut stream = tokens
@@ -125,7 +125,7 @@ fn parse_file<'a, 'i>(stream: &'a mut impl TokStream<'i>, observer: &'a mut impl
 	create_node(stream, |stream| {
 		let mut stmts = Vec::new();
 		loop {
-			if next_if_eq(stream, TokenKindTag::Eof).is_some() {
+			if next_if_eq(stream, TokenTag::Eof).is_some() {
 				return Ok(Expr::Block(Block { stmts, expr: None }));
 			}
 			
@@ -159,7 +159,7 @@ fn parse_stmt<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl Ru
 
 		match expr {
 			Some(expr) => {
-				match next_if_eq(stream, TokenKindTag::Semicolon) {
+				match next_if_eq(stream, TokenTag::Semicolon) {
 					Some(_) => Ok(CreateOrPass::Create(Expr::Stmt(Stmt {
 						expr: Box::new(expr),
 					}))),
@@ -176,7 +176,7 @@ fn parse_assign<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rul
 		let lhs = try_rule("lhs:pattern", stream, observer, parse_pattern)?;
 		let op = stream.try_rule_opt(parse_bin_op);
 
-		if let Err(err) = next_if_eq_err(stream, TokenKindTag::Equals) {
+		if let Err(err) = next_if_eq_err(stream, TokenTag::Equals) {
 			return Err(SoftError::Soft(err));
 		};
 		
@@ -214,7 +214,7 @@ fn parse_deref<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 	create_node(stream, |stream| {
 		let expr = try_rule("expr_atom", stream, observer, parse_expr_atom)?;
 
-		next_if_eq_err(stream, TokenKindTag::Hash).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Hash).map_err(|err| SoftError::Soft(err))?;
 
 		Ok(Pattern::Deref(Box::new(expr)))
 	})
@@ -222,7 +222,7 @@ fn parse_deref<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 
 fn parse_let<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Pattern> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Let).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Let).map_err(|err| SoftError::Soft(err))?;
 
 		let pat = try_rule("pattern", stream, observer, parse_pattern).force_hard()?;
 		
@@ -232,7 +232,7 @@ fn parse_let<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleOb
 
 fn parse_mut<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Pattern> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Mut).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Mut).map_err(|err| SoftError::Soft(err))?;
 
 		let pat = try_rule("pattern", stream, observer, parse_pattern).force_hard()?;
 		
@@ -242,12 +242,12 @@ fn parse_mut<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleOb
 
 fn parse_block<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::LBrace).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::LBrace).map_err(|err| SoftError::Soft(err))?;
 		
 		let mut stmts = Vec::new();
 		loop {
 
-			if next_if_eq(stream, TokenKindTag::RBrace).is_some() {
+			if next_if_eq(stream, TokenTag::RBrace).is_some() {
 				return Ok(Expr::Block(Block {
 					stmts,
 					expr: None,
@@ -260,7 +260,7 @@ fn parse_block<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 					continue;
 				}
 
-				next_if_eq_err(stream, TokenKindTag::RBrace).map_err(|err| SoftError::Hard(err))?;
+				next_if_eq_err(stream, TokenTag::RBrace).map_err(|err| SoftError::Hard(err))?;
 				return Ok(Expr::Block(Block {
 					stmts,
 					expr: Some(Box::new(stmt)),
@@ -274,7 +274,7 @@ fn parse_block<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 
 fn parse_return<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Return).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Return).map_err(|err| SoftError::Soft(err))?;
 
 		let expr = try_rule("expr", stream, observer, parse_expr).shed_hard()?;
 		Ok(Expr::Return(Return {
@@ -285,7 +285,7 @@ fn parse_return<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rul
 
 fn parse_break<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Break).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Break).map_err(|err| SoftError::Soft(err))?;
 		
 		let expr = if let Ok(expr) = try_rule("break", stream, observer, parse_break).shed_hard()? {
 			Some(expr)
@@ -305,41 +305,41 @@ fn parse_break<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 
 fn parse_continue<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Continue).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Continue).map_err(|err| SoftError::Soft(err))?;
 		Ok(Expr::Continue)
 	})
 }
 
 fn parse_unreachable<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Unreachable).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Unreachable).map_err(|err| SoftError::Soft(err))?;
 		Ok(Expr::Unreachable)
 	})
 }
 
 fn parse_plex<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Plex).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Plex).map_err(|err| SoftError::Soft(err))?;
 		//let name = next_if_eq_err(stream, TokenKindTag::Identifier(_)).map_err(|err| SoftError::Hard(err))?.kind.into_identifier().unwrap();
-		next_if_eq_err(stream, TokenKindTag::LBrace).map_err(|err| SoftError::Hard(err))?;
+		next_if_eq_err(stream, TokenTag::LBrace).map_err(|err| SoftError::Hard(err))?;
 		
 		let mut fields = Vec::new();
 		loop {
 
-			if next_if_eq(stream, TokenKindTag::RBrace).is_some() {
+			if next_if_eq(stream, TokenTag::RBrace).is_some() {
 				return Ok(Expr::Plex(Plex {
 					name: "unnamed plex".to_string(), //TODO: names?
 					fields,
 				}));
 			}
 			
-			let name = next_if_eq_err(stream, TokenKindTag::Identifier).map_err(|err| SoftError::Hard(err))?;
+			let name = next_if_eq_err(stream, TokenTag::Identifier).map_err(|err| SoftError::Hard(err))?;
 			let name = name
 				.as_identifier()
 				.unwrap()
 				.clone();
 			
-			next_if_eq_err(stream, TokenKindTag::Colon).map_err(|err| SoftError::Hard(err))?;
+			next_if_eq_err(stream, TokenTag::Colon).map_err(|err| SoftError::Hard(err))?;
 
 			if let Ok(r#type) = try_rule("field:expr", stream, observer, parse_expr).shed_hard()? { //ultra temp
 				fields.push(Field { name, r#type });
@@ -353,16 +353,16 @@ fn parse_plex<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 
 fn parse_if<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::If).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::If).map_err(|err| SoftError::Soft(err))?;
 		
 		let cond = try_rule("cond:expr", stream, observer, parse_expr).force_hard()?;
 
-		let body = match next_if_eq(stream, TokenKindTag::Colon) {
+		let body = match next_if_eq(stream, TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenKindTag::Else).map(|_| {
+		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -376,11 +376,11 @@ fn parse_if<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObs
 
 fn parse_loop<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::Loop).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Loop).map_err(|err| SoftError::Soft(err))?;
 
 		let body = try_rule("body:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body_else = next_if_eq(stream, TokenKindTag::Else).map(|_| {
+		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -393,16 +393,16 @@ fn parse_loop<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 
 fn parse_while<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::While).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::While).map_err(|err| SoftError::Soft(err))?;
 
 		let cond = try_rule("cond:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body = match next_if_eq(stream, TokenKindTag::Colon) {
+		let body = match next_if_eq(stream, TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenKindTag::Else).map(|_| {
+		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -416,20 +416,20 @@ fn parse_while<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 
 fn parse_for<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::For).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::For).map_err(|err| SoftError::Soft(err))?;
 
 		let binding = try_rule("binding:pattern", stream, observer, parse_pattern).force_hard()?;
 
-		next_if_eq_err(stream, TokenKindTag::In).map_err(|err| SoftError::Hard(err))?;
+		next_if_eq_err(stream, TokenTag::In).map_err(|err| SoftError::Hard(err))?;
 
 		let iter = try_rule("iter:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body = match next_if_eq(stream, TokenKindTag::Colon) {
+		let body = match next_if_eq(stream, TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenKindTag::Else).map(|_| {
+		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -438,6 +438,24 @@ fn parse_for<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleOb
 			iter: Box::new(iter),
 			body: Box::new(body),
 			body_else: body_else.map(|body_else| Box::new(body_else)),
+		}))
+	})
+}
+
+fn parse_func<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
+	create_node(stream, |stream| {
+		next_if_eq_err(stream, TokenTag::Fn).map_err(|err| SoftError::Soft(err))?;
+
+		let binding = try_rule("binding:pattern", stream, observer, parse_pattern).force_hard()?;
+		
+		let body = match next_if_eq(stream, TokenTag::Colon) {
+			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
+			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
+		};
+
+		Ok(Expr::Func(Func {
+			binding: Box::new(binding),
+			body: Box::new(body),
 		}))
 	})
 }
@@ -459,6 +477,9 @@ fn parse_expr<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 		return Ok(expr);
 	}
 	if let Ok(expr) = try_rule("for", stream, observer, parse_for).shed_hard()? {
+		return Ok(expr);
+	}
+	if let Ok(expr) = try_rule("func", stream, observer, parse_func).shed_hard()? {
 		return Ok(expr);
 	}
 	if let Ok(expr) = try_rule("expr_bin", stream, observer, parse_expr_bin).shed_hard()? {
@@ -527,24 +548,24 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 
 fn parse_bin_op(stream: &mut impl TokStream<'_>) -> Option<BinOpKind> {
 	match stream.next()?.deref() {
-		TokenKind::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
-		TokenKind::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
-		TokenKind::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
-		TokenKind::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: next_if_eq(stream, TokenKindTag::Percent).is_some() })),
-		TokenKind::Percent => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false })), //TODO: allow_wrap is not a thing for mod, change data structure?
+		Token::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
+		Token::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
+		Token::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
+		Token::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
+		Token::Percent => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false })), //TODO: allow_wrap is not a thing for mod, change data structure?
 
-		TokenKind::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
-		TokenKind::RShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shr)),
+		Token::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
+		Token::RShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shr)),
 		
-		TokenKind::Eq => Some(BinOpKind::Cmp(CmpBinOpKind::Eq)),
-		TokenKind::Ne => Some(BinOpKind::Cmp(CmpBinOpKind::Ne)),
-		TokenKind::Lt => Some(BinOpKind::Cmp(CmpBinOpKind::Lt)),
-		TokenKind::Le => Some(BinOpKind::Cmp(CmpBinOpKind::Le)),
-		TokenKind::Gt => Some(BinOpKind::Cmp(CmpBinOpKind::Gt)),
-		TokenKind::Ge => Some(BinOpKind::Cmp(CmpBinOpKind::Ge)),
+		Token::Eq => Some(BinOpKind::Cmp(CmpBinOpKind::Eq)),
+		Token::Ne => Some(BinOpKind::Cmp(CmpBinOpKind::Ne)),
+		Token::Lt => Some(BinOpKind::Cmp(CmpBinOpKind::Lt)),
+		Token::Le => Some(BinOpKind::Cmp(CmpBinOpKind::Le)),
+		Token::Gt => Some(BinOpKind::Cmp(CmpBinOpKind::Gt)),
+		Token::Ge => Some(BinOpKind::Cmp(CmpBinOpKind::Ge)),
 
-		TokenKind::And => Some(BinOpKind::Logic(LogicBinOpKind::And)),
-		TokenKind::Or => Some(BinOpKind::Logic(LogicBinOpKind::Or)),
+		Token::And => Some(BinOpKind::Logic(LogicBinOpKind::And)),
+		Token::Or => Some(BinOpKind::Logic(LogicBinOpKind::Or)),
 
 		_ => None,
 	}
@@ -554,22 +575,21 @@ fn parse_expr_una_post<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut i
 	create_node_or_pass(stream, |stream| {
 		let expr = try_rule("expr_una_pre", stream, observer, parse_expr_una_pre)?;
 
+		if let Ok(arg) = try_rule("arg:tuple_ctor", stream, observer, parse_tuple_ctor).shed_hard()? {
+			return Ok(CreateOrPass::Create(Expr::Call(Call { func: Box::new(expr), arg: Box::new(arg) })));
+		};
+
 		let stream_recover_state = stream.clone();
 		let Some(token) = stream.next() else {
 			return Ok(CreateOrPass::Pass(expr));
 		};
 
 		Ok(CreateOrPass::Create(match token.deref() {
-			TokenKind::Hash => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
-			TokenKind::Ampersand => Expr::UnaOp(UnaOp { op: UnaOpKind::AddressOf, expr: Box::new(expr) }),
-			TokenKind::Dot => {
+			Token::Hash => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
+			Token::Ampersand => Expr::UnaOp(UnaOp { op: UnaOpKind::AddressOf, expr: Box::new(expr) }),
+			Token::Dot => {
 				let ident = parse_identifier_without_crying_myself_to_sleep(stream, observer).force_hard()?;
 				Expr::FieldAccess(FieldAccess { expr: Box::new(expr), ident })
-			},
-			TokenKind::LParen => {
-				let arg = try_rule("arg:expr", stream, observer, parse_expr)?;
-				next_if_eq_err(stream, TokenKindTag::RParen).map_err(|err| SoftError::Soft(err))?;
-				Expr::Call(Call { func: Box::new(expr), arg: Box::new(arg) })
 			},
 			_ => {
 				*stream = stream_recover_state;
@@ -582,9 +602,9 @@ fn parse_expr_una_post<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut i
 fn parse_expr_una_pre<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node_or_pass(stream, |stream| {
 		let op = stream.next_if_map(|t| match &***t {
-			TokenKind::Plus => Some(UnaOpKind::Identity),
-			TokenKind::Dash => Some(UnaOpKind::Negate),
-			TokenKind::Bang => Some(UnaOpKind::Not),
+			Token::Plus => Some(UnaOpKind::Identity),
+			Token::Dash => Some(UnaOpKind::Negate),
+			Token::Bang => Some(UnaOpKind::Not),
 			_ => None,
 		});
 		let expr = try_rule("atom", stream, observer, parse_expr_atom)?;
@@ -607,11 +627,11 @@ fn parse_expr_atom<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut im
 	}
 	create_node(stream, |stream| stream.try_rule_sh(|stream| match stream.next() {
 		Some(token) => match token.deref() {
-			TokenKind::True => Ok(Expr::BoolLit(true)),
-			TokenKind::False => Ok(Expr::BoolLit(false)),
-			TokenKind::IntLit(value) => Ok(Expr::IntLit(value.clone())),
-			TokenKind::StrLit(value) => Ok(Expr::StrLit(value.clone())),
-			TokenKind::Identifier(value) => Ok(Expr::Identifier(Rc::new(RefCell::new(Var::new(value.clone()))))),
+			Token::True => Ok(Expr::BoolLit(true)),
+			Token::False => Ok(Expr::BoolLit(false)),
+			Token::IntLit(value) => Ok(Expr::IntLit(value.clone())),
+			Token::StrLit(value) => Ok(Expr::StrLit(value.clone())),
+			Token::Identifier(value) => Ok(Expr::Identifier(Rc::new(RefCell::new(Var::new(value.clone()))))),
 			_ => Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(token.deref().into()))),
 		},
 		None => Err(SoftError::Soft(RuleErrorKind::StreamExhausted)),
@@ -619,11 +639,17 @@ fn parse_expr_atom<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut im
 }
 
 fn parse_binding<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Pattern> {
-	create_node(stream, |stream| Ok(Pattern::Binding(parse_identifier(stream, observer)?)))
+	create_node(stream, |stream| Ok({
+		if next_if_eq(stream, TokenTag::Discard).is_some() {
+			Pattern::Discard
+		} else {
+			Pattern::Binding(parse_identifier(stream, observer)?)
+		}
+	}))
 }
 
 fn parse_identifier<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut impl RuleObserver<'i>) -> SoftResult<Rc<RefCell<Var>>, RuleErrorKind, RuleErrorKind> {
-	let ident = next_if_eq_err(stream, TokenKindTag::Identifier)
+	let ident = next_if_eq_err(stream, TokenTag::Identifier)
 		.map_err(|err| SoftError::Soft(err))?;
 
 	Ok(Rc::new(RefCell::new(Var::new(ident.as_identifier().unwrap().clone())))) //unwrap safe due to guard above
@@ -631,18 +657,18 @@ fn parse_identifier<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut 
 
 //TODO: this is a whole new level of incompetence...
 fn parse_identifier_without_crying_myself_to_sleep<'a, 'i>(stream: &mut impl TokStream<'i>, _observer: &'a mut impl RuleObserver<'i>) -> SoftResult<Rc<Var>, RuleErrorKind, RuleErrorKind> {
-	let ident = next_if_eq_err(stream, TokenKindTag::Identifier)
+	let ident = next_if_eq_err(stream, TokenTag::Identifier)
 		.map_err(|err| SoftError::Soft(err))?;
 
 	Ok(Rc::new(Var::new(ident.as_identifier().unwrap().clone()))) //unwrap safe due to guard above
 }
 
 fn parse_parenthesis<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Expr> {
-	next_if_eq_err(stream, TokenKindTag::LParen).map_err(|err| SoftError::Soft(err))?;
+	next_if_eq_err(stream, TokenTag::LParen).map_err(|err| SoftError::Soft(err))?;
 
 	let expr = try_rule("expr", stream, observer, parse_expr).force_hard()?;
 	
-	next_if_eq_err(stream, TokenKindTag::RParen)
+	next_if_eq_err(stream, TokenTag::RParen)
 		.map_err(|err| SoftError::Hard(err))?;
 
 	Ok(expr)
@@ -650,20 +676,20 @@ fn parse_parenthesis<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut 
 
 fn parse_tuple_ctor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Expr> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::LParen).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::LParen).map_err(|err| SoftError::Soft(err))?;
 
 		let mut items = Vec::new();
-		while next_if_eq(stream, TokenKindTag::RParen).is_none() {
+		while next_if_eq(stream, TokenTag::RParen).is_none() {
 			let item = try_rule("item:expr", stream, observer, parse_expr);
 			let item = if items.is_empty() { item? } else { item.force_hard()? };
 			items.push(item);
 
-			if next_if_eq(stream, TokenKindTag::Comma).is_none() {
-				if let Err(err) = next_if_eq_err(stream, TokenKindTag::RParen) {
+			if next_if_eq(stream, TokenTag::Comma).is_none() {
+				if let Err(err) = next_if_eq_err(stream, TokenTag::RParen) {
 					return Err(SoftError::Hard(err));
 				}
 				if items.len() == 1 {
-					return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenKindTag::RParen)));
+					return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenTag::RParen)));
 				}
 				break;
 			}
@@ -675,20 +701,20 @@ fn parse_tuple_ctor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut i
 
 fn parse_tuple_dtor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Pattern> {
 	create_node(stream, |stream| {
-		next_if_eq_err(stream, TokenKindTag::LParen).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::LParen).map_err(|err| SoftError::Soft(err))?;
 
 		let mut items = Vec::new();
-		while next_if_eq(stream, TokenKindTag::RParen).is_none() {
+		while next_if_eq(stream, TokenTag::RParen).is_none() {
 			let item = try_rule("pattern:arg", stream, observer, parse_pattern);
 			let item = if items.is_empty() { item? } else { item.force_hard()? };
 			items.push(item);
 
-			if next_if_eq(stream, TokenKindTag::Comma).is_none() {
-				if let Err(err) = next_if_eq_err(stream, TokenKindTag::RParen) {
+			if next_if_eq(stream, TokenTag::Comma).is_none() {
+				if let Err(err) = next_if_eq_err(stream, TokenTag::RParen) {
 					return Err(SoftError::Hard(err));
 				}
 				if items.len() == 1 {
-					return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenKindTag::RParen)));
+					return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenTag::RParen)));
 				}
 				break;
 			}

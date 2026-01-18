@@ -37,12 +37,12 @@ impl<'a, T> DerefMut for SourcedMeta<'a, T> {
 
 impl<'a, T: Display> Display for SourcedMeta<'a, T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}| {}", self.source(), self.sourced.deref())
+		write!(f, "{} | {}", self.source(), self.sourced.deref())
 	}
 }
 
 impl<'a, T: Debug> Debug for SourcedMeta<'a, T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}| {:?}", self.source(), self.sourced.deref())
+		write!(f, "{} | {:?}", self.source(), self.sourced.deref())
 	}
 }

@@ -49,7 +49,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		println!("=== Source ===");
 		let width = ilog10ceil(document.get_num_lines());
 		for line in document.lines() {
-			cprintln!("<cyan>{:>width$} |</> {:?}", line.index(), line.range().get_str());
+			cprintln!("<cyan>{:>width$} |</> {:?}", line, line.range().get_str());
 		}
 		println!();
 	}

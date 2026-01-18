@@ -3,63 +3,54 @@ use std::{fmt::Display, ops::Deref};
 use color_print::cformat;
 use unicode_width::UnicodeWidthStr;
 
-use crate::compiler::{lexer::TokenKind, map_peekable::soft_error::SoftResult, source::{self, Sourced, SourcedMeta}};
+use crate::compiler::{lexer::Token, map_peekable::soft_error::SoftResult, source::{self, Sourced, SourcedMeta}};
 
+#[derive(Debug, thiserror::Error)]
 pub enum LexerErrorKind {
+	#[error("Stream was exhausted")]
 	StreamExhausted,
 
+	#[error("Radix expected a leading zero")]
 	RadixSymbolExpectedLeadingZero,
+	#[error("Invalid radix symbol '{0}'")]
 	InvalidRadixSymbol(char),
 
+	#[error("Int literal has leading underscore, this is not allowed")]
 	DigitsHaveLeadingUnderscore,
+	#[error("Invalid digit \'{}\'({}) for radix {}", digit_symbol, digit_value, radix)]
 	InvalidDigitForRadix {
 		digit_symbol: char,
 		digit_value: u64,
 		radix: u64,
 	},
+	#[error("Int literal needs at least one digit")]
 	IntHasNoDigits,
+	#[error("Trailing underscore, this is not allowed")]
 	IntHasTrailingUnderscore,
+	#[error("Int has no match")]
 	IntHasNoMatch,
 
+	#[error("The radix '{0}' is larger than 36. The allowed symbols [0-9a-z] can't encode a radix this large")]
 	IntRadixTooLarge(u64),
+	#[error("Found unexpected radix in digits")]
 	IntFoundRadixInDigits,
 
+	#[error("Multi-line comment not closed")]
 	MultilineCommentDelimiterNotClosed,
+	#[error("String literal not closed")]
 	StringDelimiterNotClosed,
+	#[error("Invalid escape sequence '{0}'")]
+	InvalidEscapeSequence(char),
 
+	#[error("No token matching stream")]
 	NoTokenMatchingStream,
-}
-
-impl Display for LexerErrorKind {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			LexerErrorKind::StreamExhausted => write!(f, "Stream was exhausted"),
-			
-			LexerErrorKind::RadixSymbolExpectedLeadingZero => write!(f, "Radix expected a leading zero"),
-			LexerErrorKind::InvalidRadixSymbol(c) => write!(f, "Invalid radix symbol '{}'", c),
-			
-			LexerErrorKind::DigitsHaveLeadingUnderscore => write!(f, "Int literal has leading underscore, this is not allowed"),
-			LexerErrorKind::InvalidDigitForRadix { digit_symbol, digit_value, radix } => write!(f, "Invalid digit \'{}\'({}) for radix {}", digit_symbol, digit_value, radix),
-			LexerErrorKind::IntHasNoDigits => write!(f, "Int literal needs at least one digit"),
-			LexerErrorKind::IntHasTrailingUnderscore => write!(f, "Trailing underscore, this is not allowed"),
-			LexerErrorKind::IntHasNoMatch => write!(f, "Int has no match"),
-			
-			LexerErrorKind::IntRadixTooLarge(radix) => write!(f, "The radix '{}' is larger than 36. The allowed symbols [0-9a-z] can't encode a radix this large", radix),
-			LexerErrorKind::IntFoundRadixInDigits => write!(f, "Found unexpected radix in digits"),
-			
-			LexerErrorKind::MultilineCommentDelimiterNotClosed => write!(f, "Multi-line comment not closed"),
-			LexerErrorKind::StringDelimiterNotClosed => write!(f, "String literal not closed"),
-			
-			LexerErrorKind::NoTokenMatchingStream => write!(f, "No token matching stream"),
-		}
-	}
 }
 
 pub struct LexerError {
 	pub kind: LexerErrorKind,
 	pub next_chars_window: Vec<char>,
 	pub did_next_chars_window_exhaust_stream: bool,
-	pub tokens: Vec<Sourced<TokenKind>>,
+	pub tokens: Vec<Sourced<Token>>,
 }
 
 impl LexerError {
