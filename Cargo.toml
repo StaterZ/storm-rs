@@ -7,45 +7,51 @@ edition = "2021"
 
 [dependencies]
 ### terminal stuff ###
-clap = { version = "4.5.32", features= ["derive"] }
-owo-colors = "4.2.0" # ansi color formatter (good for dynamic colors)
+clap = { version = "4.5.54", features= ["derive"] } # command line parser
+owo-colors = "4.2.3" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
-unicode-width = "0.2.0"
+colors-transform = "0.2.11" #helps with HSV conversions in some temporary debug printing
+#prettytable-rs = "0.10.0"
+unicode-width = "0.2.2"
 
 ### error handling ###
-thiserror = "2.0.12"
-anyhow = { version = "1.0.82", features = ["backtrace"] } 
+thiserror = "2.0.17" # error type generation
+#error-stack = "0.6.0" # good error handling
+#anyhow = { version = "1.0.82", features = ["backtrace"] } # simple error handling
+
 
 ### enums ###
-enum-display = "0.1.4"
-strum = { version = "0.27.1", features = ["derive"] }
-enum-as-inner = "0.6.1"
+strum = { version = "0.27.2", features = ["derive"] } # get names of enum fields as strings
+enum-as-inner = "0.6.1" # unwarp for enum fields without needing annoying pattern matching
 
 ### misc ###
-phf = { version = "0.11.3", features = ["macros"] }
-string-builder = "0.2.0"
-itertools = "0.14.0"
-more-asserts = "0.3.1"
-stopwatch = "0.0.7"
+#lazy_static = "1.4.0" #init statics at runtime
+phf = { version = "0.13.1", features = ["macros"] } # generate LUTs and other data at comptime
+itertools = "0.14.0" #more iterator utlites
+streaming-iterator = "0.1.9" #streaming iterators
+more-asserts = "0.3.1" #more asserts
+#anymap = "0.12.1" #type map
+stopwatch = "0.0.7" #easy timer library
 
 ### compiler ###
-logos = "0.15.0"
+logos = "0.16.0"
 logos-display = "0.1.3"
-ariadne = { version = "0.5.1", features = ["auto-color"] }
-lalrpop-util = { version = "0.22.1", features = ["lexer", "unicode"] }
-unescaper = "0.1.5"
+ariadne = { version = "0.6.0", features = ["auto-color"] }
+lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
+unescaper = "0.1.8"
 
 ### LLVM ###
-#melior = { version = "0.22.0", features = ["ods-dialects", "helpers"] }
+#inkwell = { version = "0.8.0", features = ["llvm18-1"] }
+#melior = { version = "0.25.0", features = ["ods-dialects", "helpers"] }
 #llvm-sys = "201.0.0"
 #mlir-sys = "0.4.1"
-#inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm18-0"] }
 
 ### custom ###
 szu = { version = "0.2.1", path = "../szu" }
+tree_printer = { version = "0.1.0", path = "../tree_printer" }
 
 [build-dependencies]
-lalrpop = "0.22.0"
+lalrpop = "0.22.2"
 
 [profile.release]
 lto = true
