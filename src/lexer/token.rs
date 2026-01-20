@@ -48,15 +48,17 @@ pub enum Token {
 	// Modern way of allowing identifiers, read: https://unicode.org/reports/tr31/
 	#[regex(r"[\p{XID_Start}_]\p{XID_Continue}*", |lex| lex.slice().to_string())]
 	Identifier(String),
-	#[regex(r"\d+", |lex| lex.slice().parse::<u64>().map_err(|err| LexicalErrorKind::BadInteger(err)), priority = 2)]
-	Integer(u64),
 	#[regex(r#""(?:[^"]|\\")*""#, |lex| {
 		let slice = lex.slice();
 		let len = slice.len();
 		unescaper::unescape(&slice[1..(len-1)]).map_err(|_err| LexicalErrorKind::BadString)
 	})]
 	String(String),
-	
+	#[regex(r"\d+", |lex| lex.slice().parse::<u64>().map_err(|err| LexicalErrorKind::BadInteger(err)), priority = 2)]
+	Integer(u64),
+	#[regex(r"\d+\.\d+", |lex| lex.slice().parse::<u64>().map_err(|err| LexicalErrorKind::BadInteger(err)), priority = 2)]
+	Real(u64),
+
 	#[token("(")]
 	LParen,
 	#[token(")")]

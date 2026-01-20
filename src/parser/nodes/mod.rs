@@ -36,5 +36,3 @@ mod r#for;
 mod bin_op;
 mod una_op;
 mod tuple_ctor;
-
-mod impl_tree_display;

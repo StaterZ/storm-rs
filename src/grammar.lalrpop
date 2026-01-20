@@ -19,28 +19,48 @@ Tier<Op,NextTier>: Node = {
 };
 
 pub Top: Node = {
-	<body:Body> => Node::Block(Block { <> }),
+	<body:Stmt*> => Node::Block(Block { <>, expr: None }),
 };
-Body = Delimit<Stmt, ";">;
+SimpleStmt: Node = {
+	<Let> ";" => Node::Let(<>),
+	<Assign> ";" => Node::Assign(<>),
+	<Ret> ";" => Node::Return(<>),
+	<Break> ";" => Node::Break(<>),
+	<Continue> ";",
+};
 Stmt: Node = {
-	Let => Node::Let(<>),
-	Assign => Node::Assign(<>),
-	Ret => Node::Return(<>),
-	Break => Node::Break(<>),
-	Continue,
-	Unreachable,
-	Expr,
+	SimpleStmt,
+	Block => Node::Block(<>),
+	Loop<Stmt> => Node::Loop(<>),
+	While => Node::While(<>),
+	For => Node::For(<>),
+	If => Node::IfElse(<>),
+};
+StmtElse: Node = {
+	SimpleStmt,
+	BlockExpr => Node::Block(<>),
+	Loop<StmtElse> => Node::Loop(<>),
+	WhileElse<StmtElse, Block, StmtElse> => Node::While(<>),
+	ForElse<StmtElse, Block, StmtElse> => Node::For(<>),
+	IfElse<StmtElse, Block, StmtElse> => Node::IfElse(<>),
 };
 Lit: Literal = {
 	"identifier" => Literal::Identifier(<>),
+	"string" => Literal::String(<>),
 	"integer" => Literal::Integer(<>),
-	// "real" => Literal::Float(<>),
-	// "string" => Literal::String(<>),
+	"real" => Literal::Real(<>),
 };
 Atom: Node = {
 	Lit => Node::Literal(<>),
-	Block => Node::Block(<>),
+	BlockExpr => Node::Block(<>),
 	"(" <Expr> ")",
+	// "(" ")" => Node::TupleCtor(TupleCtor { items: Vec::new() }),
+	// "(" <head:Expr> "," <trailing:Delimit<Expr, ",">> ")" => {
+	// 	let mut items = trailing;
+	// 	items.insert(0, head);
+	// 	Node::TupleCtor(TupleCtor { items })
+	// },
+	Unreachable,
 };
 Expr: Node = {
 	#[precedence(level="0")] Atom,
@@ -50,12 +70,27 @@ Expr: Node = {
 	#[precedence(level="4")] #[assoc(side="left")] <lhs:Expr> <op:BinOp2> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	#[precedence(level="5")] #[assoc(side="left")] <lhs:Expr> <op:BinOp3> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	#[precedence(level="6")] #[assoc(side="left")] <lhs:Expr> <op:BinOp4> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="7")] #[assoc(side="left")]
-	//Loop => Node::Loop(<>),
-	//While => Node::While(<>),
-	//For => Node::For(<>),
-	If => Node::IfElse(<>),
+	#[precedence(level="7")]
+	Loop<Stmt> => Node::Loop(<>),
+	WhileElse<ExprElse, BlockExpr, Expr> => Node::While(<>),
+	ForElse<ExprElse, BlockExpr, Expr> => Node::For(<>),
+	IfElse<ExprElse, BlockExpr, Expr> => Node::IfElse(<>),
 };
+ExprElse: Node = {
+	#[precedence(level="0")] Atom,
+	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:ExprElse> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
+	#[precedence(level="2")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp0> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="3")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp1> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="4")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp2> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="5")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp3> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="6")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp4> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="7")]
+	Loop<StmtElse> => Node::Loop(<>),
+	WhileElse<ExprElse, BlockExpr, ExprElse> => Node::While(<>),
+	ForElse<ExprElse, BlockExpr, ExprElse> => Node::For(<>),
+	IfElse<ExprElse, BlockExpr, ExprElse> => Node::IfElse(<>),
+};
+
 UnaOp: UnaOpKind = {
 	"+" => UnaOpKind::Identity,
 	"-" => UnaOpKind::Negate,
@@ -84,7 +119,8 @@ BinOp4: BinOpKind = {
 	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
 }
 
-Block: Block = "{" <body:Body> "}" => Block { <> };
+Block: Block = "{" <body:Stmt*> "}" => Block { body, expr: None };
+BlockExpr: Block = "{" <body:Stmt*> <expr:Expr> "}" => Block { body, expr: Some(Box::new(expr)) };
 Let: Let = {
 	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
 };
@@ -97,56 +133,101 @@ Ret: Return = {
 };
 Break: Break = {
 	"break" <expr:Expr?> => Break { expr: expr.map(|expr| Box::new(expr)) },
-	"break" <expr:Continue> => Break { expr: Some(Box::new(<>)) },
+	"break" <Continue> => Break { expr: Some(Box::new(<>)) },
+	"break" <Break> => Break { expr: Some(Box::new(Node::Break(<>))) },
 };
 Continue: Node = "continue" => Node::Continue;
 Unreachable: Node = "unreachable" => Node::Unreachable;
-Loop: Loop = {
-	"loop" <body:Expr> => Loop { body: Box::new(body) },
+
+Loop<TBody>: Loop = {
+	"loop" <body:TBody> => Loop { body: Box::new(body) },
 };
+
 While: While = {
-	"while" <cond:Expr> <body:Block> <body_else:("else" <Expr>)?> => While {
+	"while" <cond:Expr> <body:Block> => While {
 		cond: Box::new(cond),
 		body: Box::new(Node::Block(body)),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: None,
 	},
-	"while" <cond:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => While {
+	"while" <cond:Expr> ":" <body:Stmt> => While {
 		cond: Box::new(cond),
 		body: Box::new(body),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: None,
+	},
+	WhileElse<StmtElse, Block, Stmt>,
+};
+WhileElse<TBody, TBlock, TElse>: While = {
+	"while" <cond:Expr> <body:TBlock> "else" <body_else:TElse> => While {
+		cond: Box::new(cond),
+		body: Box::new(Node::Block(body)),
+		body_else: Some(Box::new(body_else)),
+	},
+	"while" <cond:Expr> ":" <body:TBody> "else" <body_else:TElse> => While {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
 	},
 };
+
 For: For = {
-	"for" <bind:Pat> "in" <iter:Expr> <body:Block> <body_else:("else" <Expr>)?> => For {
+	"for" <bind:Pat> "in" <iter:Expr> <body:Block> => For {
 		bind: Box::new(bind),
 		iter: Box::new(iter),
 		body: Box::new(Node::Block(body)),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: None,
 	},
-	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => For {
+	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Stmt> => For {
 		bind: Box::new(bind),
 		iter: Box::new(iter),
 		body: Box::new(body),
-		body_else: body_else.map(|body_else| Box::new(body_else)),
+		body_else: None,
+	},
+	ForElse<StmtElse, Block, Stmt>,
+};
+ForElse<TBody, TBlock, TElse>: For = {
+	"for" <bind:Pat> "in" <iter:Expr> <body:TBlock> "else" <body_else:TElse> => For {
+		bind: Box::new(bind),
+		iter: Box::new(iter),
+		body: Box::new(Node::Block(body)),
+		body_else: Some(Box::new(body_else)),
+	},
+	"for" <bind:Pat> "in" <iter:Expr> ":" <body:TBody> "else" <body_else:TElse> => For {
+		bind: Box::new(bind),
+		iter: Box::new(iter),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
 	},
 };
+
 If: IfElse = {
-	"if" <cond:Expr> <body:Block> <body_else:("else" <Expr>)?> => IfElse {
+	"if" <cond:Expr> <body:Block> => IfElse {
 		cond: Box::new(cond),
 		body: Box::new(Node::Block(body)),
-		body_else: Box::new(body_else),
+		body_else: None,
 	},
-	"if" <cond:Expr> ":" <body:Expr> <body_else:("else" <Expr>)?> => IfElse {
+	"if" <cond:Expr> ":" <body:Stmt> => IfElse {
 		cond: Box::new(cond),
 		body: Box::new(body),
-		body_else: Box::new(body_else),
+		body_else: None,
+	},
+	IfElse<StmtElse, Block, Stmt>,
+};
+IfElse<TBody, TBlock, TElse>: IfElse = {
+	"if" <cond:Expr> <body:TBlock> "else" <body_else:TElse> => IfElse {
+		cond: Box::new(cond),
+		body: Box::new(Node::Block(body)),
+		body_else: Some(Box::new(body_else)),
+	},
+	"if" <cond:Expr> ":" <body:TBody> "else" <body_else:TElse> => IfElse {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
 	},
 };
 
 Pat: Node = {
 	"identifier" => Node::Literal(Literal::Identifier(<>)),
 };
-
 
 extern {
 	type Location = usize;
@@ -173,8 +254,9 @@ extern {
 		// "fn" => Token::Fn,
 
 		"identifier" => Token::Identifier(<String>),
-		"integer" => Token::Integer(<u64>),
 		"string" => Token::String(<String>),
+		"integer" => Token::Integer(<u64>),
+		"real" => Token::Real(<u64>),
 		
 		"(" => Token::LParen,
 		")" => Token::RParen,

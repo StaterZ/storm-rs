@@ -12,22 +12,25 @@ loop {
 
 	if a { ret; }
 	if a: ret;
-	if a { b } else c;
-	if a: b else c;
+	let x = if a { b } else c;
+	let x = if a: b else c;
 
-	loop a;
-	loop { a };
-	loop { a } else b;
+	loop ret;
+	loop { ret; }
+	let x = loop break a;;
+	let x = loop { break a; };
 
-	while a { b; }
-	while a: b;
-	while a { b; } else c;
-	while a: b else c;
+	while a { ret; }
+	while a: ret;
+	let x = while a { b } else c;
+	let x = while a: b else c;
 
-	if a: while b: c else d //else should bind to while
+	let x = if a: while b: c else d else e; //else should bind to while
 
-	for a in b { c; }
-	for a in b: c;
+	for a in b { ret; }
+	for a in b: ret;
+	let x = for a in b { c } else d;
+	let x = for a in b: c else d;
 
 	let a = (1); //paren
 	let a = (); //tuple unit

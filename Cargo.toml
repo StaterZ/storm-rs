@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[build-dependencies]
+lalrpop = "0.22.2"
+
 [dependencies]
 ### terminal stuff ###
 clap = { version = "4.5.54", features= ["derive"] } # command line parser
@@ -17,7 +20,7 @@ unicode-width = "0.2.2"
 ### error handling ###
 thiserror = "2.0.17" # error type generation
 #error-stack = "0.6.0" # good error handling
-#anyhow = { version = "1.0.82", features = ["backtrace"] } # simple error handling
+anyhow = { version = "1.0.100", features = ["backtrace"] } # simple error handling
 
 
 ### enums ###
@@ -49,9 +52,6 @@ unescaper = "0.1.8"
 ### custom ###
 szu = { version = "0.2.1", path = "../szu" }
 tree_printer = { version = "0.1.0", path = "../tree_printer" }
-
-[build-dependencies]
-lalrpop = "0.22.2"
 
 [profile.release]
 lto = true

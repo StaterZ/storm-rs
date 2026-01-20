@@ -3,8 +3,7 @@ use clap::Parser;
 use anyhow::Result;
 use color_print::cformat;
 use stopwatch::Stopwatch;
-
-use crate::tree_printer::print_tree;
+use tree_printer::print_tree;
 
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]

@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../szu"
+		},
+		{
+			"path": "../tree_printer"
 		}
 	],
 	"settings": {

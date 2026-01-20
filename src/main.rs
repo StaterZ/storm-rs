@@ -7,7 +7,6 @@
 
 use std::error::Error;
 
-mod tree_printer;
 mod driver;
 mod lexer;
 mod parser;

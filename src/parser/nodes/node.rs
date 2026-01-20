@@ -4,9 +4,9 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use strum::AsRefStr;
 use color_print::cformat;
-use szu::{opt_own::OptOwnStr, ternary};
+use szu::opt_own::OptOwnStr;
+use tree_printer::{TreeDisplay, TreeDisplayChild};
 
-use crate::tree_printer::{TreeDisplay, TreeDisplayChild};
 use super::*;
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
@@ -31,9 +31,10 @@ pub enum Node {
 
 #[derive(Debug, AsRefStr, EnumAsInner)]
 pub enum Literal {
-	Integer(u64),
-	String(String),
 	Identifier(String),
+	String(String),
+	Integer(u64),
+	Real(u64),
 	TupleCtor(TupleCtor),
 }
 
@@ -54,15 +55,16 @@ impl TreeDisplay for Node {
 			Node::While(_) => "".into(),
 			Node::For(_) => "".into(),
 			Node::BinOp(value) => format!("{}", value.op).into(),
-			Node::UnaOp(value) => format!("{}", value.op).into(),
+			Node::UnaOp(value) => format!("{}", value.op.as_ref()).into(),
 			Node::Literal(value) => match value {
-				Literal::Integer(value) => cformat!("<cyan>{}</>", value).into(),
-				Literal::String(value) => cformat!("<cyan>{:?}</>", value).into(),
 				Literal::Identifier(value) => cformat!("<cyan>{}</>", value).into(),
+				Literal::String(value) => cformat!("<cyan>{:?}</>", value).into(),
+				Literal::Integer(value) => cformat!("<cyan>{}</>", value).into(),
+				Literal::Real(value) => cformat!("<cyan>{}</>", value).into(),
 				Literal::TupleCtor(_) => "".into(),
 			},
 		};
-		format!("{}{}({})", text.deref(), ternary!(text.len() > 0 => " ", ""), self.as_ref())
+		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.as_ref())
 	}
 
 	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
@@ -123,9 +125,10 @@ impl TreeDisplay for Node {
 				("expr".into(), (value.expr.deref() as &dyn TreeDisplay).into()),
 			]),
 			Node::Literal(value) => match value {
-				Literal::Integer(_) => None,
-				Literal::String(_) => None,
 				Literal::Identifier(_) => None,
+				Literal::String(_) => None,
+				Literal::Integer(_) => None,
+				Literal::Real(_) => None,
 				Literal::TupleCtor(value) => Some(
 					value.items
 						.iter()

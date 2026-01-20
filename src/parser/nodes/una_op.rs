@@ -1,5 +1,3 @@
-use enum_display::EnumDisplay;
-
 use super::Node;
 
 #[derive(Debug)]
@@ -8,7 +6,7 @@ pub struct UnaOp {
 	pub expr: Box<Node>,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, EnumDisplay)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, strum::AsRefStr)]
 pub enum UnaOpKind {
 	Identity,
 	Negate,
