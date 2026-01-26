@@ -2,7 +2,7 @@ use logos::Logos;
 
 use super::LexicalErrorKind;
 
-#[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Clone)]
+#[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Eq, Clone)]
 #[logos(
 	error = LexicalErrorKind,
 	skip r"[ \t\r\n\f]+",
@@ -10,8 +10,93 @@ use super::LexicalErrorKind;
 	skip r"/\*(?:[^*]|\*[^/])*\*/",
 )]
 pub enum Token {
+	#[token(".")]
+	Dot,
+	#[token(",")]
+	Comma,
+	#[token(":")]
+	Colon,
+	#[token(";")]
+	Semicolon,
+	
+	#[token("(")]
+	LParen,
+	#[token(")")]
+	RParen,
+	#[token("[")]
+	LBracket,
+	#[token("]")]
+	RBracket,
+	#[token("{")]
+	LBrace,
+	#[token("}")]
+	RBrace,
+
+	#[token("+")]
+	Plus,
+	#[token("-")]
+	Dash,
+	#[token("*")]
+	Star,
+	#[token("/")]
+	Slash,
+	#[token("%")]
+	Percent,
+	#[token("#")]
+	Hash,
+	#[token("<<")]
+	LShift,
+	#[token(">>")]
+	RShift,
+	#[token("&")]
+	Ampersand,
+	#[token("|")]
+	Bar,
+
+	#[token("=")]
+	Equals,
+	#[token("==")]
+	Eq,
+	#[token("!=")]
+	Ne,
+	#[token("<")]
+	Lt,
+	#[token("<=")]
+	Le,
+	#[token(">")]
+	Gt,
+	#[token(">=")]
+	Ge,
+	#[token("&&")]
+	And,
+	#[token("||")]
+	Or,
+	#[token("!")]
+	Bang,
+
 	#[token("let")]
 	Let,
+	#[token("mut")]
+	Mut,
+	#[token("_", priority = 3)]
+	Discard,
+
+	#[token("ret")]
+	Return,
+	#[token("break")]
+	Break,
+	#[token("continue")]
+	Continue,
+	#[token("unreachable")]
+	Unreachable,
+
+	#[token("plex")]
+	Plex,
+	#[token("fn")]
+	Fn,
+	#[token("pub")]
+	Pub,
+
 	#[token("loop")]
 	Loop,
 	#[token("while")]
@@ -27,27 +112,10 @@ pub enum Token {
 	#[token("match")]
 	Match,
 
-	#[token("ret")]
-	Ret,
-	#[token("break")]
-	Break,
-	#[token("continue")]
-	Continue,
-	#[token("unreachable")]
-	Unreachable,
-
-	// #[token("pub")]
-	// Pub,
-	// #[token("mut")]
-	// Mut,
-	// #[token("struct")]
-	// Struct,
-	// #[token("fn")]
-	// Fn,
-
-	// Modern way of allowing identifiers, read: https://unicode.org/reports/tr31/
-	#[regex(r"[\p{XID_Start}_]\p{XID_Continue}*", |lex| lex.slice().to_string())]
-	Identifier(String),
+	#[token("true")]
+	True,
+	#[token("false")]
+	False,
 	#[regex(r#""(?:[^"]|\\")*""#, |lex| {
 		let slice = lex.slice();
 		let len = slice.len();
@@ -58,58 +126,6 @@ pub enum Token {
 	Integer(u64),
 	#[regex(r"\d+\.\d+", |lex| lex.slice().parse::<u64>().map_err(|err| LexicalErrorKind::BadInteger(err)), priority = 2)]
 	Real(u64),
-
-	#[token("(")]
-	LParen,
-	#[token(")")]
-	RParen,
-	#[token("{")]
-	LBrace,
-	#[token("}")]
-	RBrace,
-	#[token("[")]
-	LBracket,
-	#[token("]")]
-	RBracket,
-
-	#[token("=")]
-	Assign,
-	#[token(";")]
-	Semicolon,
-	#[token(":")]
-	Colon,
-	#[token(",")]
-	Comma,
-	#[token(".")]
-	Dot,
-
-	#[token("==")]
-	Eq,
-	#[token("!=")]
-	Ne,
-	#[token("<")]
-	Lt,
-	#[token("<=")]
-	Le,
-	#[token(">")]
-	Gt,
-	#[token(">=")]
-	Ge,
-
-	#[token("+")]
-	Add,
-	#[token("-")]
-	Sub,
-	#[token("*")]
-	Mul,
-	#[token("/")]
-	Div,
-	// #[token("%")]
-	// Rem,
-	#[token("&&")]
-	And,
-	#[token("||")]
-	Or,
-	#[token("!")]
-	Not,
+	#[regex(r"[\p{XID_Start}_]\p{XID_Continue}*", |lex| lex.slice().to_string())] // Modern way of allowing identifiers, read: https://unicode.org/reports/tr31/
+	Identifier(String),
 }

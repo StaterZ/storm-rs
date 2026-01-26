@@ -120,7 +120,7 @@ BinOp4: BinOpKind = {
 }
 
 Block: Block = "{" <body:Stmt*> "}" => Block { body, expr: None };
-BlockExpr: Block = "{" <body:Stmt*> <expr:Expr> "}" => Block { body, expr: Some(Box::new(expr)) };
+BlockExpr: Block = "{" <body:Stmt*> "||" <expr:Expr> "}" => Block { body, expr: Some(Box::new(expr)) };
 Let: Let = {
 	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
 };
@@ -234,7 +234,53 @@ extern {
 	type Error = LexicalError;
 
 	enum Token {
+		";" => Token::Semicolon,
+		":" => Token::Colon,
+		"," => Token::Comma,
+		"." => Token::Dot,
+
+		"(" => Token::LParen,
+		")" => Token::RParen,
+		"[" => Token::LBracket,
+		"]" => Token::RBracket,
+		"{" => Token::LBrace,
+		"}" => Token::RBrace,
+
+		"+" => Token::Plus,
+		"-" => Token::Dash,
+		"*" => Token::Star,
+		"/" => Token::Slash,
+		"%" => Token::Percent,
+		"#" => Token::Hash,
+		"<<" => Token::LShift,
+		">>" => Token::RShift,
+		"&" => Token::Ampersand,
+		"|" => Token::Bar,
+
+		"=" => Token::Equals,
+		"==" => Token::Eq,
+		"!=" => Token::Ne,
+		"<" => Token::Lt,
+		"<=" => Token::Le,
+		">" => Token::Gt,
+		">=" => Token::Ge,
+		"&&" => Token::And,
+		"||" => Token::Or,
+		"!" => Token::Bang,
+
 		"let" => Token::Let,
+		"mut" => Token::Mut,
+		"_" => Token::Discard,
+
+		"ret" => Token::Return,
+		"break" => Token::Break,
+		"continue" => Token::Continue,
+		"unreachable" => Token::Unreachable,
+
+		"plex" => Token::Plex,
+		"fn" => Token::Fn,
+		"pub" => Token::Pub,
+
 		"loop" => Token::Loop,
 		"while" => Token::While,
 		"for" => Token::For,
@@ -243,48 +289,11 @@ extern {
 		"else" => Token::Else,
 		"match" => Token::Match,
 
-		"ret" => Token::Ret,
-		"break" => Token::Break,
-		"continue" => Token::Continue,
-		"unreachable" => Token::Unreachable,
-
-		// "pub" => Token::Pub,
-		// "mut" => Token::Mut,
-		// "struct" => Token::Struct,
-		// "fn" => Token::Fn,
-
-		"identifier" => Token::Identifier(<String>),
+		"true" => Token::True,
+		"false" => Token::False,
 		"string" => Token::String(<String>),
 		"integer" => Token::Integer(<u64>),
 		"real" => Token::Real(<u64>),
-		
-		"(" => Token::LParen,
-		")" => Token::RParen,
-		"{" => Token::LBrace,
-		"}" => Token::RBrace,
-		"[" => Token::LBracket,
-		"]" => Token::RBracket,
-
-		"=" => Token::Assign,
-		";" => Token::Semicolon,
-		":" => Token::Colon,
-		"," => Token::Comma,
-		"." => Token::Dot,
-
-		"==" => Token::Eq,
-		"!=" => Token::Ne,
-		"<" => Token::Lt,
-		"<=" => Token::Le,
-		">" => Token::Gt,
-		">=" => Token::Ge,
-
-		"+" => Token::Add,
-		"-" => Token::Sub,
-		"*" => Token::Mul,
-		"/" => Token::Div,
-		//"%" => Token::Rem,
-		"&&" => Token::And,
-		"||" => Token::Or,
-		"!" => Token::Not,
+		"identifier" => Token::Identifier(<String>),
 	}
 }
