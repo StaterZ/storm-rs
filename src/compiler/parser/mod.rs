@@ -380,13 +380,8 @@ fn parse_loop<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 
 		let body = try_rule("body:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
-			try_rule("else:expr", stream, observer, parse_expr)
-		}).transpose().force_hard()?;
-
 		Ok(Expr::Loop(Loop {
 			body: Box::new(body),
-			body_else: body_else.map(|body_else| Box::new(body_else)),
 		}))
 	})
 }

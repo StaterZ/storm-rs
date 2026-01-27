@@ -27,11 +27,7 @@ fn gen_expr(node: &Sourced<Expr>, loop_depth: usize) -> String {
 
 		Expr::Plex(_) => todo!(),
 
-		Expr::Loop(value) => value.body_else.as_ref().map_or(
-			format!("while true do \n{} \nend", gen_expr(&value.body, loop_depth + 1)),
-			|body_else| format!("local __val;\nwhile true do \n{} \n::__cont{loop_depth}:: end \n__val={};::__brk{loop_depth}::",
-				gen_expr(&value.body, loop_depth + 1),
-				gen_expr(&body_else, loop_depth))),
+		Expr::Loop(value) => format!("while true do \n{} \nend", gen_expr(&value.body, loop_depth + 1)),
 		Expr::While(value) => value.body_else.as_ref().map_or(
 			format!("while {} do \n{} \nend \n::__brk{loop_depth}::",
 				gen_expr(&value.cond, loop_depth),

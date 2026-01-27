@@ -94,7 +94,6 @@ impl TreeDisplay for Sourced<Expr> {
 
 			Expr::Loop(value) => Some(vec![
 				("body".into(), (value.body.deref() as &dyn TreeDisplay).into()),
-				("else".into(), value.body_else.as_ref().map_or(&"none" as &dyn TreeDisplay, |body_else| body_else.deref() as &dyn TreeDisplay).into()),
 			]),
 			Expr::While(value) => Some(vec![
 				("cond".into(), (value.cond.deref() as &dyn TreeDisplay).into()),

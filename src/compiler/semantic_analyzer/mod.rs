@@ -64,9 +64,6 @@ fn eval_expr(node: &mut Sourced<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<Se
 		Expr::Plex(value) => todo!("{:?}", value),
 		Expr::Loop(value) => {
 			eval_expr(&mut value.body, &mut sym_tbl.clone(), errors);
-			if let Some(body_else) = &mut value.body_else {
-				eval_expr(body_else, &mut sym_tbl.clone(), errors)
-			}
 		}
 		Expr::While(value) => {
 			eval_expr(&mut value.cond, sym_tbl, errors);
