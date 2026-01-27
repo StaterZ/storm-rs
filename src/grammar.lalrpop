@@ -22,92 +22,88 @@ Delimit1<T, S>: Vec<T> = {
 	}
 };
 
-Tier<Op,NextTier>: Node = {
-	<lhs:Tier<Op,NextTier>> <op:Op> <rhs:NextTier> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+Tier<Op,NextTier>: Expr = {
+	<lhs:Tier<Op,NextTier>> <op:Op> <rhs:NextTier> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	NextTier
 };
 
-pub Top: Node = {
-	<body:Stmt*> => Node::Block(Block { <>, expr: None }),
+pub Top: Expr = {
+	<stmts:Stmt*> => Expr::Block(Block { <>, expr: None }),
 };
-SimpleStmt: Node = {
-	<Let> ";" => Node::Let(<>),
-	<Assign> ";" => Node::Assign(<>),
-	<Ret> ";" => Node::Return(<>),
-	<Break> ";" => Node::Break(<>),
+SimpleStmt: Expr = {
+	<Assign> ";" => Expr::Assign(<>),
+	<Ret> ";" => Expr::Return(<>),
+	<Break> ";" => Expr::Break(<>),
 	<Continue> ";",
 };
-Stmt: Node = {
+Stmt: Expr = {
 	SimpleStmt,
-	Block => Node::Block(<>),
-	Loop<Stmt> => Node::Loop(<>),
-	While => Node::While(<>),
-	For => Node::For(<>),
-	If => Node::IfElse(<>),
+	Block => Expr::Block(<>),
+	Loop<Stmt> => Expr::Loop(<>),
+	While => Expr::While(<>),
+	For => Expr::For(<>),
+	If => Expr::If(<>),
 };
-StmtElse: Node = {
+StmtElse: Expr = {
 	SimpleStmt,
-	BlockExpr => Node::Block(<>),
-	Loop<StmtElse> => Node::Loop(<>),
-	WhileElse<StmtElse, Block, StmtElse> => Node::While(<>),
-	ForElse<StmtElse, Block, StmtElse> => Node::For(<>),
-	IfElse<StmtElse, Block, StmtElse> => Node::IfElse(<>),
+	BlockExpr => Expr::Block(<>),
+	Loop<StmtElse> => Expr::Loop(<>),
+	WhileElse<StmtElse, Block, StmtElse> => Expr::While(<>),
+	ForElse<StmtElse, Block, StmtElse> => Expr::For(<>),
+	IfElse<StmtElse, Block, StmtElse> => Expr::If(<>),
 };
-Lit: Literal = {
-	"identifier" => Literal::Identifier(<>),
-	"string" => Literal::String(<>),
-	"integer" => Literal::Integer(<>),
-	"real" => Literal::Real(<>),
-};
-Atom: Node = {
-	Lit => Node::Literal(<>),
-	BlockExpr => Node::Block(<>),
+Atom: Expr = {
+	"identifier" => Expr::Identifier(<>),
+	"string" => Expr::StrLit(<>),
+	"integer" => Expr::IntLit(<>),
+	//"real" => Expr::Real(<>),
+	BlockExpr => Expr::Block(<>),
 	"(" <Expr> ")",
-	"(" ")" => Node::TupleCtor(TupleCtor { items: Vec::new() }),
-	"(" <items:Delimit1<Expr, ",">> ")" => Node::TupleCtor(TupleCtor { <> }),
+	"(" ")" => Expr::TupleCtor(TupleCtor { items: Vec::new() }),
+	"(" <items:Delimit1<Expr, ",">> ")" => Expr::TupleCtor(TupleCtor { <> }),
 	Unreachable,
 };
-Expr: Node = {
+Expr: Expr = {
 	#[precedence(level="0")] Atom,
-	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:Expr> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
-	#[precedence(level="2")] #[assoc(side="left")] <lhs:Expr> <op:BinOp0> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="3")] #[assoc(side="left")] <lhs:Expr> <op:BinOp1> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="4")] #[assoc(side="left")] <lhs:Expr> <op:BinOp2> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="5")] #[assoc(side="left")] <lhs:Expr> <op:BinOp3> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="6")] #[assoc(side="left")] <lhs:Expr> <op:BinOp4> <rhs:Expr> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:Expr> => Expr::UnaOp(UnaOp { op, expr: Box::new(expr) }),
+	#[precedence(level="2")] #[assoc(side="left")] <lhs:Expr> <op:BinOp0> <rhs:Expr> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="3")] #[assoc(side="left")] <lhs:Expr> <op:BinOp1> <rhs:Expr> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="4")] #[assoc(side="left")] <lhs:Expr> <op:BinOp2> <rhs:Expr> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="5")] #[assoc(side="left")] <lhs:Expr> <op:BinOp3> <rhs:Expr> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="6")] #[assoc(side="left")] <lhs:Expr> <op:BinOp4> <rhs:Expr> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	#[precedence(level="7")]
-	Loop<Stmt> => Node::Loop(<>),
-	WhileElse<ExprElse, BlockExpr, Expr> => Node::While(<>),
-	ForElse<ExprElse, BlockExpr, Expr> => Node::For(<>),
-	IfElse<ExprElse, BlockExpr, Expr> => Node::IfElse(<>),
+	Loop<Stmt> => Expr::Loop(<>),
+	WhileElse<ExprElse, BlockExpr, Expr> => Expr::While(<>),
+	ForElse<ExprElse, BlockExpr, Expr> => Expr::For(<>),
+	IfElse<ExprElse, BlockExpr, Expr> => Expr::If(<>),
 };
-ExprElse: Node = {
+ExprElse: Expr = {
 	#[precedence(level="0")] Atom,
-	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:ExprElse> => Node::UnaOp(UnaOp { op, expr: Box::new(expr) }),
-	#[precedence(level="2")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp0> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="3")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp1> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="4")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp2> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="5")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp3> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
-	#[precedence(level="6")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp4> <rhs:ExprElse> => Node::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="1")] #[assoc(side="left")] <op:UnaOp> <expr:ExprElse> => Expr::UnaOp(UnaOp { op, expr: Box::new(expr) }),
+	#[precedence(level="2")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp0> <rhs:ExprElse> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="3")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp1> <rhs:ExprElse> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="4")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp2> <rhs:ExprElse> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="5")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp3> <rhs:ExprElse> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
+	#[precedence(level="6")] #[assoc(side="left")] <lhs:ExprElse> <op:BinOp4> <rhs:ExprElse> => Expr::BinOp(BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) }),
 	#[precedence(level="7")]
-	Loop<StmtElse> => Node::Loop(<>),
-	WhileElse<ExprElse, BlockExpr, ExprElse> => Node::While(<>),
-	ForElse<ExprElse, BlockExpr, ExprElse> => Node::For(<>),
-	IfElse<ExprElse, BlockExpr, ExprElse> => Node::IfElse(<>),
+	Loop<StmtElse> => Expr::Loop(<>),
+	WhileElse<ExprElse, BlockExpr, ExprElse> => Expr::While(<>),
+	ForElse<ExprElse, BlockExpr, ExprElse> => Expr::For(<>),
+	IfElse<ExprElse, BlockExpr, ExprElse> => Expr::If(<>),
 };
 
 UnaOp: UnaOpKind = {
 	"+" => UnaOpKind::Identity,
 	"-" => UnaOpKind::Negate,
-	"!" => UnaOpKind::Invert,
+	"!" => UnaOpKind::Not,
 };
 BinOp0: BinOpKind = {
-	"*" => BinOpKind::Arith(ArithBinOpKind::Mul),
-	"/" => BinOpKind::Arith(ArithBinOpKind::Div),
+	"*" => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: false }),
+	"/" => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: false }),
 };
 BinOp1: BinOpKind = {
-	"+" => BinOpKind::Arith(ArithBinOpKind::Add),
-	"-" => BinOpKind::Arith(ArithBinOpKind::Sub),
+	"+" => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: false }),
+	"-" => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: false }),
 };
 BinOp2: BinOpKind = {
 	"==" => BinOpKind::Cmp(CmpBinOpKind::Eq),
@@ -124,25 +120,19 @@ BinOp4: BinOpKind = {
 	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
 }
 
-Block: Block = "{" <body:Stmt*> "}" => Block { body, expr: None };
-BlockExpr: Block = "{" <body:Stmt*> "||" <expr:Expr> "}" => Block { body, expr: Some(Box::new(expr)) };
-Let: Let = {
-	"let" <bind:Pat> "=" <expr:Expr> => Let { bind: Box::new(bind), expr: Box::new(expr) },
-};
-Assign: Assign = {
-	//<lhs:Expr> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
-	<lhs:Pat> "=" <rhs:Expr> => Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) },
-};
+Block: Block = "{" <stmts:Stmt*> "}" => Block { stmts, expr: None };
+BlockExpr: Block = "{" <stmts:Stmt*> "||" <expr:Expr> "}" => Block { stmts, expr: Some(Box::new(expr)) };
+Assign: Assign = <lhs:Pat> "=" <rhs:Expr> => Assign { op: None, lhs: Box::new(lhs), rhs: Box::new(rhs) };
 Ret: Return = {
 	"ret" <expr:Expr?> => Return { expr: expr.map(|expr| Box::new(expr)) },
 };
 Break: Break = {
 	"break" <expr:Expr?> => Break { expr: expr.map(|expr| Box::new(expr)) },
 	"break" <Continue> => Break { expr: Some(Box::new(<>)) },
-	"break" <Break> => Break { expr: Some(Box::new(Node::Break(<>))) },
+	"break" <Break> => Break { expr: Some(Box::new(Expr::Break(<>))) },
 };
-Continue: Node = "continue" => Node::Continue;
-Unreachable: Node = "unreachable" => Node::Unreachable;
+Continue: Expr = "continue" => Expr::Continue;
+Unreachable: Expr = "unreachable" => Expr::Unreachable;
 
 Loop<TBody>: Loop = {
 	"loop" <body:TBody> => Loop { body: Box::new(body) },
@@ -151,7 +141,7 @@ Loop<TBody>: Loop = {
 While: While = {
 	"while" <cond:Expr> <body:Block> => While {
 		cond: Box::new(cond),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: None,
 	},
 	"while" <cond:Expr> ":" <body:Stmt> => While {
@@ -164,7 +154,7 @@ While: While = {
 WhileElse<TBody, TBlock, TElse>: While = {
 	"while" <cond:Expr> <body:TBlock> "else" <body_else:TElse> => While {
 		cond: Box::new(cond),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: Some(Box::new(body_else)),
 	},
 	"while" <cond:Expr> ":" <body:TBody> "else" <body_else:TElse> => While {
@@ -175,14 +165,14 @@ WhileElse<TBody, TBlock, TElse>: While = {
 };
 
 For: For = {
-	"for" <bind:Pat> "in" <iter:Expr> <body:Block> => For {
-		bind: Box::new(bind),
+	"for" <binding:Pat> "in" <iter:Expr> <body:Block> => For {
+		binding: Box::new(binding),
 		iter: Box::new(iter),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: None,
 	},
-	"for" <bind:Pat> "in" <iter:Expr> ":" <body:Stmt> => For {
-		bind: Box::new(bind),
+	"for" <binding:Pat> "in" <iter:Expr> ":" <body:Stmt> => For {
+		binding: Box::new(binding),
 		iter: Box::new(iter),
 		body: Box::new(body),
 		body_else: None,
@@ -190,48 +180,53 @@ For: For = {
 	ForElse<StmtElse, Block, Stmt>,
 };
 ForElse<TBody, TBlock, TElse>: For = {
-	"for" <bind:Pat> "in" <iter:Expr> <body:TBlock> "else" <body_else:TElse> => For {
-		bind: Box::new(bind),
+	"for" <binding:Pat> "in" <iter:Expr> <body:TBlock> "else" <body_else:TElse> => For {
+		binding: Box::new(binding),
 		iter: Box::new(iter),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: Some(Box::new(body_else)),
 	},
-	"for" <bind:Pat> "in" <iter:Expr> ":" <body:TBody> "else" <body_else:TElse> => For {
-		bind: Box::new(bind),
+	"for" <binding:Pat> "in" <iter:Expr> ":" <body:TBody> "else" <body_else:TElse> => For {
+		binding: Box::new(binding),
 		iter: Box::new(iter),
 		body: Box::new(body),
 		body_else: Some(Box::new(body_else)),
 	},
 };
 
-If: IfElse = {
-	"if" <cond:Expr> <body:Block> => IfElse {
+If: If = {
+	"if" <cond:Expr> <body:Block> => If {
 		cond: Box::new(cond),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: None,
 	},
-	"if" <cond:Expr> ":" <body:Stmt> => IfElse {
+	"if" <cond:Expr> ":" <body:Stmt> => If {
 		cond: Box::new(cond),
 		body: Box::new(body),
 		body_else: None,
 	},
 	IfElse<StmtElse, Block, Stmt>,
 };
-IfElse<TBody, TBlock, TElse>: IfElse = {
-	"if" <cond:Expr> <body:TBlock> "else" <body_else:TElse> => IfElse {
+IfElse<TBody, TBlock, TElse>: If = {
+	"if" <cond:Expr> <body:TBlock> "else" <body_else:TElse> => If {
 		cond: Box::new(cond),
-		body: Box::new(Node::Block(body)),
+		body: Box::new(Expr::Block(body)),
 		body_else: Some(Box::new(body_else)),
 	},
-	"if" <cond:Expr> ":" <body:TBody> "else" <body_else:TElse> => IfElse {
+	"if" <cond:Expr> ":" <body:TBody> "else" <body_else:TElse> => If {
 		cond: Box::new(cond),
 		body: Box::new(body),
 		body_else: Some(Box::new(body_else)),
 	},
 };
 
-Pat: Node = {
-	"identifier" => Node::Literal(Literal::Identifier(<>)),
+Pat: Pattern = {
+	"let" <Pat> => Pattern::Let(Let { pat: Box::new(<>) }),
+	"mut" <Pat> => Pattern::Mut(Mut { pat: Box::new(<>) }),
+	// <Expr> "*" => Pattern::Deref(Box::new(<>)),
+	// Delimit0<Pat, ","> => Pattern::TupleDtor(TupleDtor { items: <> }),
+	"identifier" => Pattern::Binding(<>),
+	// "_" => Pattern::Discard,
 };
 
 extern {

@@ -1,7 +1,6 @@
-use super::Node;
+use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct Let {
-	pub bind: Box<Node>,
-	pub expr: Box<Node>,
+	pub pat: Box<Pattern>,
 }

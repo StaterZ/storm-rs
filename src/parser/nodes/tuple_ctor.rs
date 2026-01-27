@@ -1,12 +1,6 @@
-use super::Node;
+use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct TupleCtor {
-	pub items: Vec<Node>,
-}
-
-impl TupleCtor {
-	pub fn new() -> Self {
-		Self { items: Vec::new() }
-	}
+	pub items: Vec<Expr>,
 }

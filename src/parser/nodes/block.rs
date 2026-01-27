@@ -1,7 +1,7 @@
-use super::Node;
+use super::super::node_sets::*;
 
 #[derive(Debug)]
 pub struct Block {
-	pub body: Vec<Node>,
-	pub expr: Option<Box<Node>>,
+	pub stmts: Vec<Expr>,
+	pub expr: Option<Box<Expr>>,
 }

@@ -1,9 +1,7 @@
 use super::super::node_sets::*;
 
 #[derive(Debug)]
-pub struct For {
+pub struct Func {
 	pub binding: Box<Pattern>,
-	pub iter: Box<Expr>,
 	pub body: Box<Expr>,
-	pub body_else: Option<Box<Expr>>,
 }

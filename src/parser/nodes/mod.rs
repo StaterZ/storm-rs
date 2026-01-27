@@ -1,38 +1,59 @@
-pub use node::{Node, Literal};
-pub use block::Block;
-pub use stmt::Stmt;
 pub use r#let::Let;
+pub use r#mut::Mut;
 pub use assign::Assign;
 pub use r#return::Return;
 pub use r#break::Break;
-pub use r#if_else::IfElse;
+
+pub use plex::{Plex, Field};
+
 pub use r#loop::Loop;
 pub use r#while::While;
 pub use r#for::For;
-pub use tuple_ctor::TupleCtor;
+pub use r#if::If;
+
+pub use block::Block;
+pub use stmt::Stmt;
 pub use bin_op::{
+	PrecedenceOrd,
 	BinOp,
 	BinOpKind,
 	ArithBinOpKind,
-	LogicBinOpKind,
+	ArithBinOp,
+	BitwiseBinOpKind,
 	CmpBinOpKind,
+	LogicBinOpKind,
 };
 pub use una_op::{
 	UnaOp,
 	UnaOpKind,
 };
+pub use field_access::FieldAccess;
+pub use func::Func;
+pub use call::Call;
 
-mod node;
-mod block;
-mod stmt;
+pub use tuple_ctor::TupleCtor;
+pub use tuple_dtor::TupleDtor;
+
 mod r#let;
+mod r#mut;
 mod assign;
 mod r#return;
 mod r#break;
-mod r#if_else;
+
+mod plex;
+
 mod r#loop;
 mod r#while;
 mod r#for;
+mod r#if;
+
+mod block;
+mod stmt;
 mod bin_op;
 mod una_op;
+mod field_access;
+mod func;
+mod call;
+
 mod tuple_ctor;
+mod tuple_dtor;

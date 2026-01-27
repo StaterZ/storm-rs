@@ -4,6 +4,8 @@ use ariadne::{ColorGenerator, Label, Report, ReportKind};
 use itertools::Itertools;
 use lalrpop_util::{lalrpop_mod, ErrorRecovery, ParseError};
 
+mod node_sets;
+use node_sets::*;
 mod nodes;
 use nodes::*;
 
@@ -57,7 +59,7 @@ pub fn parse(src_in: &str) -> Output {
 }
 
 pub struct Output {
-	pub ast: Node,
+	pub ast: Expr,
 	pub errors: Vec<ErrorRecovery<usize, Token, AstError>>,
 }
 

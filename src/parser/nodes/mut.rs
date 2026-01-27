@@ -1,6 +1,6 @@
 use super::super::node_sets::*;
 
 #[derive(Debug)]
-pub struct Stmt {
-	pub expr: Box<Expr>,
+pub struct Mut {
+	pub pat: Box<Pattern>,
 }
