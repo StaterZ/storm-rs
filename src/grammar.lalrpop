@@ -4,8 +4,17 @@ use crate::parser::*;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token, AstError>>);
 
-Delimit<T, S>: Vec<T> = {
+Delimit0<T, S>: Vec<T> = {
 	<mut v:(<T> S)*> <e:T?> => {
+		if let Some(e) = e {
+			v.push(e);
+		}
+		v
+	}
+};
+
+Delimit1<T, S>: Vec<T> = {
+	<mut v:(<T> S)+> <e:T?> => {
 		if let Some(e) = e {
 			v.push(e);
 		}
@@ -54,12 +63,8 @@ Atom: Node = {
 	Lit => Node::Literal(<>),
 	BlockExpr => Node::Block(<>),
 	"(" <Expr> ")",
-	// "(" ")" => Node::TupleCtor(TupleCtor { items: Vec::new() }),
-	// "(" <head:Expr> "," <trailing:Delimit<Expr, ",">> ")" => {
-	// 	let mut items = trailing;
-	// 	items.insert(0, head);
-	// 	Node::TupleCtor(TupleCtor { items })
-	// },
+	"(" ")" => Node::TupleCtor(TupleCtor { items: Vec::new() }),
+	"(" <items:Delimit1<Expr, ",">> ")" => Node::TupleCtor(TupleCtor { <> }),
 	Unreachable,
 };
 Expr: Node = {
