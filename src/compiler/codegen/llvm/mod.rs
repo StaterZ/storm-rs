@@ -362,14 +362,14 @@ fn gen_expr<'a, 'ctx>(
 					.collect::<Vec<_>>(),
 				false,
 			);
-			let tuple_alloca = builder.build_alloca(tuple_type, "tuple")?;
+			let tuple_alloca = builder.build_alloca(tuple_type, "tuple_ctor")?;
 
 			for (i, value) in item_values.into_iter().enumerate() {
 				let gep = builder.build_struct_gep(
 					tuple_type,
 					tuple_alloca,
 					i as u32,
-					&format!("tuple_elem_{}", i)
+					"tuple_ctor_elem"
 				)?;
 				builder.build_store(gep, value)?;
 			}
@@ -407,10 +407,12 @@ fn gen_pattern<'a, 'ctx>(
 		Pattern::Let(value) => gen_pattern(&value.pat, rhs, true, context, builder, module, sym_tbl, func_tbl),
 		Pattern::Mut(value) => gen_pattern(&value.pat, rhs, is_let, context, builder, module, sym_tbl, func_tbl),
 		Pattern::TupleDtor(value) => {
-			let fields = rhs.into_struct().unwrap().get_fields();
-
+			let rhs = rhs.into_struct().unwrap();
+			let n = rhs.get_type().get_field_types().len();
+			let fields = (0..n).map(|i| builder.build_extract_value(rhs, i as u32, "tuple_dtor_elem"));
+			
 			for (lhs_item, rhs_item) in value.items.iter().zip_eq(fields) {
-				gen_pattern(lhs_item, rhs_item.into(), is_let, context, builder, module, sym_tbl, func_tbl)?;
+				gen_pattern(lhs_item, rhs_item?.into(), is_let, context, builder, module, sym_tbl, func_tbl)?;
 			}
 			Ok(())
 		},
@@ -458,7 +460,7 @@ fn gen_pattern_type<'ctx>(
 		Pattern::Binding(_value) => {
 			Ok(ValueType::Int(context.i64_type())) //TODO: types, self evident really...
 		},
-		Pattern::Discard => todo!("yikes!"),
+		Pattern::Discard => todo!("yikes! use of discard in declaration"),
 	}
 }
 
