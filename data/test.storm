@@ -1,6 +1,15 @@
-let times_three = fn(x,): x*3;
+let times_three = fn(x): x*3;
+
+let str_cmp = fn(mut a, mut b) {
+	while a# != 0 && a# == b# {
+		a += 1;
+		b += 1;
+	};
+	a# - b#
+};
 
 let mut i = 0;
+let _ = printf("give number: ",);
 let _ = scanf("%d", i&);
 let o = times_three(i,);
 let _ = printf("hello world! %i\n", o);

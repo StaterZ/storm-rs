@@ -37,7 +37,7 @@ loop {
 	while a { b; } else c;
 	while a: b else c;
 
-	if a: while b: c else d //else should bind to while
+	if a: while b: c else d //else should bind to while (always innermost nesting)
 
 	for a in b { c; }
 	for a in b: c;

@@ -1,9 +1,13 @@
 use super::soft_error::{SoftError, SoftResult};
-use super::PeekableIterator;
+use szu::iter::PeekableIterator;
 
 pub enum PeekableNextIfError<T> {
 	StreamExhausted,
 	PredicateError(T),
+}
+pub enum PeekableNextIfEqError<T, U> {
+	StreamExhausted,
+	ExpectedToken { expected: T, found: U },
 }
 
 pub trait PeekIterUtils: PeekableIterator {
@@ -21,12 +25,13 @@ pub trait PeekIterUtils: PeekableIterator {
 		&mut self,
 		pred: impl FnOnce(&Self::Item) -> Result<(), E>
 	) -> Result<Self::Item, PeekableNextIfError<E>> {
-		match self.peek() {
-			Some(item) => match pred(item) {
-				Ok(()) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
-				Err(err) => Err(PeekableNextIfError::PredicateError(err)),
-			},
-			None => Err(PeekableNextIfError::StreamExhausted),
+		let item = self
+			.peek()
+			.ok_or(PeekableNextIfError::StreamExhausted)?;
+
+		match pred(item) {
+			Ok(()) => Ok(self.next().unwrap()), //unwrap is safe here since we managed to peek something
+			Err(err) => Err(PeekableNextIfError::PredicateError(err)),
 		}
 	}
 	

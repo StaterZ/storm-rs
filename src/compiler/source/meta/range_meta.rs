@@ -35,7 +35,7 @@ impl<'a> RangeMeta<'a> {
 		if self.get_begin() > self.get_end() { return None; }
 
 		self.document
-			.get_content()[..self.get_end().byte_index()]
+			.get_text()[..self.get_end().byte_index()]
 			.char_indices()
 			.map(|(i, _)| Pos::new(i).with_meta(self.document))
 			.rev()
@@ -47,7 +47,7 @@ impl<'a> RangeMeta<'a> {
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.document.get_content()[self.get_begin().byte_index() .. self.get_end().byte_index()]
+		&self.document.get_text()[self.get_begin().byte_index() .. self.get_end().byte_index()]
 	}
 }
 

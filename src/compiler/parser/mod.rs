@@ -9,28 +9,23 @@ use std::{cell::RefCell, ops::Deref, rc::Rc};
 use node_sets::*;
 use nodes::*;
 
+use szu::iter::PeekableIterator;
 pub use var::Var;
 pub use rule_error::{RuleErrorKind, RuleError, RuleResult, CreateOrPass, RuleResultCreateOrPass};
 use crate::compiler::{
 	lexer::{Token, TokenTag}, map_peekable::{
-		soft_error::{SoftError, SoftResult, SoftResultTrait, SoftResultTraitSame},
 		PeekIterUtils,
-		PeekableIterator,
-		PeekableNextIfError
-	},
-	source::{self, Pos, Sourced},
+		PeekableNextIfError,
+		soft_error::{SoftError, SoftResult, SoftResultTrait, SoftResultTraitSame},
+	}, source::{self, Pos, Sourced},
 };
 
 use debug::rule_observers::Observer as RuleObserver;
 
 pub trait TokStream<'i> = PeekableIterator<Item = &'i Sourced<Token>> + Clone;
 
-fn next_if_eq<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenTag) -> Option<&'i Sourced<Token>> {
-	stream.next_if(|t| Into::<TokenTag>::into(&***t) == expected)
-}
-
 fn next_if_eq_err<'a, 'i>(stream: &mut impl TokStream<'i>, expected: TokenTag) -> Result<&'i Sourced<Token>, RuleErrorKind> {
-	stream.next_if_err(|t| if Into::<TokenTag>::into(&***t) == expected {
+	stream.next_if_err(|t| if *t == expected {
 		Ok(())
 	} else {
 		Err((&***t).into())
@@ -89,23 +84,16 @@ fn create_node_or_pass<'i, T, I: TokStream<'i>>(
 	}))
 }
 
-fn is_space(token: &Sourced<Token>) -> bool {
-	matches!(**token,
-		| Token::Space
-		| Token::NewLine
-		| Token::Comment
-		| Token::MultilineComment)
-}
-
 pub fn parse<'a, 'i>(
 	tokens: &'i Vec<Sourced<Token>>,
 	observer: &'a mut impl RuleObserver<'i>,
 ) -> Result<Sourced<Expr>, RuleError> {
 	let mut stream = tokens
 		.iter()
-		.filter(|t| !is_space(t))
+		.filter(|t| !t.is_whitespace())
 		.peekable()
-		.map_peekable(
+		.peeking_map(
+			|t| t,
 			|t| t,
 			|t| t,
 		);
@@ -125,7 +113,7 @@ fn parse_file<'a, 'i>(stream: &'a mut impl TokStream<'i>, observer: &'a mut impl
 	create_node(stream, |stream| {
 		let mut stmts = Vec::new();
 		loop {
-			if next_if_eq(stream, TokenTag::Eof).is_some() {
+			if stream.next_if_eq(&TokenTag::Eof).is_some() {
 				return Ok(Expr::Block(Block { stmts, expr: None }));
 			}
 			
@@ -159,7 +147,7 @@ fn parse_stmt<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl Ru
 
 		match expr {
 			Some(expr) => {
-				match next_if_eq(stream, TokenTag::Semicolon) {
+				match stream.next_if_eq(&TokenTag::Semicolon) {
 					Some(_) => Ok(CreateOrPass::Create(Expr::Stmt(Stmt {
 						expr: Box::new(expr),
 					}))),
@@ -247,7 +235,7 @@ fn parse_block<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 		let mut stmts = Vec::new();
 		loop {
 
-			if next_if_eq(stream, TokenTag::RBrace).is_some() {
+			if stream.next_if_eq(&TokenTag::RBrace).is_some() {
 				return Ok(Expr::Block(Block {
 					stmts,
 					expr: None,
@@ -326,7 +314,7 @@ fn parse_plex<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 		let mut fields = Vec::new();
 		loop {
 
-			if next_if_eq(stream, TokenTag::RBrace).is_some() {
+			if stream.next_if_eq(&TokenTag::RBrace).is_some() {
 				return Ok(Expr::Plex(Plex {
 					name: "unnamed plex".to_string(), //TODO: names?
 					fields,
@@ -357,12 +345,12 @@ fn parse_if<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleObs
 		
 		let cond = try_rule("cond:expr", stream, observer, parse_expr).force_hard()?;
 
-		let body = match next_if_eq(stream, TokenTag::Colon) {
+		let body = match stream.next_if_eq(&TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
+		let body_else = stream.next_if_eq(&TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -392,12 +380,12 @@ fn parse_while<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 
 		let cond = try_rule("cond:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body = match next_if_eq(stream, TokenTag::Colon) {
+		let body = match stream.next_if_eq(&TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
+		let body_else = stream.next_if_eq(&TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -419,12 +407,12 @@ fn parse_for<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleOb
 
 		let iter = try_rule("iter:expr", stream, observer, parse_expr).force_hard()?;
 		
-		let body = match next_if_eq(stream, TokenTag::Colon) {
+		let body = match stream.next_if_eq(&TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
 
-		let body_else = next_if_eq(stream, TokenTag::Else).map(|_| {
+		let body_else = stream.next_if_eq(&TokenTag::Else).map(|_| {
 			try_rule("else:expr", stream, observer, parse_expr)
 		}).transpose().force_hard()?;
 
@@ -443,7 +431,7 @@ fn parse_func<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl RuleO
 
 		let binding = try_rule("binding:pattern", stream, observer, parse_pattern).force_hard()?;
 		
-		let body = match next_if_eq(stream, TokenTag::Colon) {
+		let body = match stream.next_if_eq(&TokenTag::Colon) {
 			Some(_) => try_rule("body:stmt", stream, observer, parse_stmt).force_hard()?,
 			None => try_rule("body:block", stream, observer, parse_block).force_hard()?,
 		};
@@ -543,10 +531,10 @@ fn parse_expr_bin<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl R
 
 fn parse_bin_op(stream: &mut impl TokStream<'_>) -> Option<BinOpKind> {
 	match stream.next()?.deref() {
-		Token::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
-		Token::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
-		Token::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
-		Token::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: next_if_eq(stream, TokenTag::Percent).is_some() })),
+		Token::Plus => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: stream.next_if_eq(&TokenTag::Percent).is_some() })),
+		Token::Dash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: stream.next_if_eq(&TokenTag::Percent).is_some() })),
+		Token::Star => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: stream.next_if_eq(&TokenTag::Percent).is_some() })),
+		Token::Slash => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: stream.next_if_eq(&TokenTag::Percent).is_some() })),
 		Token::Percent => Some(BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false })), //TODO: allow_wrap is not a thing for mod, change data structure?
 
 		Token::LShift => Some(BinOpKind::Bitwise(BitwiseBinOpKind::Shl)),
@@ -635,7 +623,7 @@ fn parse_expr_atom<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut im
 
 fn parse_binding<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut impl RuleObserver<'i>) -> RuleResult<Pattern> {
 	create_node(stream, |stream| Ok({
-		if next_if_eq(stream, TokenTag::Discard).is_some() {
+		if stream.next_if_eq(&TokenTag::Discard).is_some() {
 			Pattern::Discard
 		} else {
 			Pattern::Binding(parse_identifier(stream, observer)?)
@@ -674,12 +662,12 @@ fn parse_tuple_ctor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut i
 		next_if_eq_err(stream, TokenTag::LParen).map_err(|err| SoftError::Soft(err))?;
 
 		let mut items = Vec::new();
-		while next_if_eq(stream, TokenTag::RParen).is_none() {
+		while stream.next_if_eq(&TokenTag::RParen).is_none() {
 			let item = try_rule("item:expr", stream, observer, parse_expr);
 			let item = if items.is_empty() { item? } else { item.force_hard()? };
 			items.push(item);
 
-			if next_if_eq(stream, TokenTag::Comma).is_none() {
+			if stream.next_if_eq(&TokenTag::Comma).is_none() {
 				if let Err(err) = next_if_eq_err(stream, TokenTag::RParen) {
 					return Err(SoftError::Hard(err));
 				}
@@ -699,18 +687,19 @@ fn parse_tuple_dtor<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &'a mut i
 		next_if_eq_err(stream, TokenTag::LParen).map_err(|err| SoftError::Soft(err))?;
 
 		let mut items = Vec::new();
-		while next_if_eq(stream, TokenTag::RParen).is_none() {
+		while stream.next_if_eq(&TokenTag::RParen).is_none() {
 			let item = try_rule("pattern:arg", stream, observer, parse_pattern);
 			let item = if items.is_empty() { item? } else { item.force_hard()? };
 			items.push(item);
 
-			if next_if_eq(stream, TokenTag::Comma).is_none() {
+			if stream.next_if_eq(&TokenTag::Comma).is_none() {
 				if let Err(err) = next_if_eq_err(stream, TokenTag::RParen) {
 					return Err(SoftError::Hard(err));
 				}
-				if items.len() == 1 {
-					return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenTag::RParen)));
-				}
+				// i don't think we need this for dtor...
+				// if items.len() == 1 {
+				// 	return Err(SoftError::Soft(RuleErrorKind::UnexpectedToken(TokenTag::RParen)));
+				// }
 				break;
 			}
 		}

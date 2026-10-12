@@ -46,11 +46,11 @@ impl<'a> PosMeta<'a> {
 	}
 
 	pub fn as_range(&self) -> RangeMeta<'_> {
-		let content = self.document.get_content();
-		let end = Pos::new(content[self.byte_index()..]
+		let text = self.document.get_text();
+		let end = Pos::new(text[self.byte_index()..]
 			.char_indices()
 			.nth(1)
-			.map_or(content.len(), |(i, _)| i));
+			.map_or(text.len(), |(i, _)| i));
 		Range { begin: **self, end }.with_meta(self.document)
 	}
 

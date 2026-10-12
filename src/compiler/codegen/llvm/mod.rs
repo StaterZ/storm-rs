@@ -185,7 +185,7 @@ fn gen_expr<'a, 'ctx>(
 			//TODO: i ain't trusting this mess yet
 			todo!()
 		},
-		Expr::If(value) => {
+		Expr::If(node) => {
 			//TODO: i ain't trusting this mess yet
 
 			let parent = builder.get_insert_block().unwrap().get_parent().unwrap();
@@ -193,15 +193,15 @@ fn gen_expr<'a, 'ctx>(
 			let else_bb = context.append_basic_block(parent, "else");
 			let end_bb = context.append_basic_block(parent, "end");
 
-			let cond = gen_expr(&value.cond, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let cond = gen_expr(&node.cond, context, builder, module, sym_tbl, func_tbl)?.unwrap();
 			builder.build_conditional_branch(cond.into_int().unwrap(), then_bb, else_bb)?;
 
 			builder.position_at_end(then_bb);
-			let then_val = gen_expr(&value.body, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let then_val = gen_expr(&node.body, context, builder, module, sym_tbl, func_tbl)?.unwrap();
 			builder.build_unconditional_branch(end_bb)?;
 
 			builder.position_at_end(else_bb);
-			let else_val = value.body_else
+			let else_val = node.body_else
 				.as_ref()
 				.map(|body_else| Ok::<_, BuilderError>(gen_expr(body_else.as_ref(), context, builder, module, sym_tbl, func_tbl)?.unwrap()))
 				.transpose()?;
@@ -215,25 +215,25 @@ fn gen_expr<'a, 'ctx>(
 			Ok(Some(Value::Phi(phi)))
 		},
 
-		Expr::Block(value) => {
-			for stmt in value.stmts.iter() {
+		Expr::Block(node) => {
+			for stmt in node.stmts.iter() {
 				let stmt = gen_expr(stmt, context, builder, module, sym_tbl, func_tbl)?;
 				assert_eq!(stmt, None);
 			}
-			let expr = value.expr
+			let expr = node.expr
 				.as_ref()
 				.map(|expr| gen_expr(expr, context, builder, module, sym_tbl, func_tbl))
 				.transpose()?
 				.and_then(identity);
 			Ok(expr)
 		},
-		Expr::Stmt(value) => gen_expr(&value.expr, context, builder, module, sym_tbl, func_tbl),
-		Expr::BinOp(value) => {
-			let lhs = gen_expr(&value.lhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
-			let rhs = gen_expr(&value.rhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
+		Expr::Stmt(node) => gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl),
+		Expr::BinOp(node) => {
+			let lhs = gen_expr(&node.lhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
+			let rhs = gen_expr(&node.rhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
 			let is_signed = true;
 			
-			let result = match value.op {
+			let result = match node.op {
 				BinOpKind::Arith(op) => match op.kind {
 					ArithBinOpKind::Add => builder.build_int_add(lhs, rhs, "add_temp")?,
 					ArithBinOpKind::Sub => builder.build_int_sub(lhs, rhs, "sub_temp")?,
@@ -270,16 +270,16 @@ fn gen_expr<'a, 'ctx>(
 			};
 			Ok(Some(Value::Int(result)))
 		},
-		Expr::UnaOp(value) => {
-			let expr_val = gen_expr(&value.expr, context, builder, module, sym_tbl, func_tbl)?.unwrap();
-			let result = match value.op {
+		Expr::UnaOp(node) => {
+			let expr_val = gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let result = match node.op {
 				UnaOpKind::Deref => {
 					let ptr = expr_val.into_ptr().unwrap();
 					builder.build_load(ptr.get_pointee_type().clone(), *ptr, "deref")?.into()
 				},
 				UnaOpKind::AddressOf => {
-					if let Expr::Identifier(value) = &**value.expr {
-						let binding = &value.borrow().name;
+					if let Expr::Identifier(node) = &**node.expr {
+						let binding = &node.borrow().name;
 						Value::Ptr(sym_tbl[binding.as_str()].clone())
 					} else {
 						let ty = expr_val.get_type();
@@ -300,12 +300,12 @@ fn gen_expr<'a, 'ctx>(
 			Ok(Some(result))
 		},
 		Expr::FieldAccess(_) => todo!(),
-		Expr::Func(value) => {
-			let arg_ty = gen_pattern_type(&value.binding, context)?;
+		Expr::Func(node) => {
+			let arg_ty = gen_pattern_type(&node.binding, context)?;
 			
 			let fn_type = context.i64_type().fn_type(&[arg_ty.into()], false);
 			let func = module.add_function("lambda", fn_type, None);
-			func_tbl.push(FuncJob { value: func, node: value });
+			func_tbl.push(FuncJob { value: func, node });
 
 			//goopy awfulness:
 			let fn_ptr = PtrValue::new(
@@ -314,14 +314,14 @@ fn gen_expr<'a, 'ctx>(
 			);
 			Ok(Some(Value::Ptr(fn_ptr)))
 		},
-		Expr::Call(value) => {
-			let func_ptr = gen_expr(&value.func, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
+		Expr::Call(node) => {
+			let func_ptr = gen_expr(&node.func, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
 			let func = func_ptr
 				.get_pointee_type()
 				.as_func()
 				.unwrap()
 				.clone();
-			let arg = gen_expr(&value.arg, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let arg = gen_expr(&node.arg, context, builder, module, sym_tbl, func_tbl)?.unwrap();
 			let args: Vec<inkwell::values::BasicMetadataValueEnum<'_>> = if func.get_linkage() == Linkage::External {
 				let arg = arg
 					.into_ptr()
@@ -349,8 +349,8 @@ fn gen_expr<'a, 'ctx>(
 			Ok(Some(call_site.try_as_basic_value().unwrap_basic().into()))
 		},
 
-		Expr::TupleCtor(value) => {
-			let item_values = value.items
+		Expr::TupleCtor(node) => {
+			let item_values = node.items
 				.iter()
 				.map(|item| Ok(gen_expr(item, context, builder, module, sym_tbl, func_tbl)?.unwrap()))
 				.collect::<Result<Vec<_>, BuilderError>>()?;
@@ -376,16 +376,16 @@ fn gen_expr<'a, 'ctx>(
 
 			Ok(Some(Value::Ptr(PtrValue::new(tuple_alloca, ValueType::Struct(tuple_type)))))
 		},
-		Expr::BoolLit(value) => Ok(Some(Value::Int(context.bool_type().const_int(*value as u64, false)))),
-		Expr::IntLit(value) => Ok(Some(Value::Int(context.i64_type().const_int(*value, false)))),
-		Expr::StrLit(value) => {
-			let str_const = context.const_string(value.as_bytes(), true); //false
+		Expr::BoolLit(node) => Ok(Some(Value::Int(context.bool_type().const_int(*node as u64, false)))),
+		Expr::IntLit(node) => Ok(Some(Value::Int(context.i64_type().const_int(*node, false)))),
+		Expr::StrLit(node) => {
+			let str_const = context.const_string(node.as_bytes(), true); //false
 			let global = module.add_global(str_const.get_type(), None, "str");
 			global.set_initializer(&str_const);
 			Ok(Some(Value::Ptr(PtrValue::new(global.as_pointer_value(), ValueType::Array(str_const.get_type())))))
 		},
-		Expr::Identifier(value) => {
-			let binding = &value.borrow().name;
+		Expr::Identifier(node) => {
+			let binding = &node.borrow().name;
 			let sym = sym_tbl[binding.as_str()].clone();
 			let val = builder.build_load(sym.get_pointee_type().clone(), *sym, binding.as_str())?;
 			Ok(Some(Value::new(val, sym.get_pointee_type().clone())))
@@ -404,25 +404,25 @@ fn gen_pattern<'a, 'ctx>(
 	func_tbl: &mut Vec<FuncJob<'a, 'ctx>>,
 ) -> Result<(), BuilderError> {
 	match node.deref() {
-		Pattern::Let(value) => gen_pattern(&value.pat, rhs, true, context, builder, module, sym_tbl, func_tbl),
-		Pattern::Mut(value) => gen_pattern(&value.pat, rhs, is_let, context, builder, module, sym_tbl, func_tbl),
-		Pattern::TupleDtor(value) => {
+		Pattern::Let(node) => gen_pattern(&node.pat, rhs, true, context, builder, module, sym_tbl, func_tbl),
+		Pattern::Mut(node) => gen_pattern(&node.pat, rhs, is_let, context, builder, module, sym_tbl, func_tbl),
+		Pattern::TupleDtor(node) => {
 			let rhs = rhs.into_struct().unwrap();
 			let n = rhs.get_type().get_field_types().len();
 			let fields = (0..n).map(|i| builder.build_extract_value(rhs, i as u32, "tuple_dtor_elem"));
 			
-			for (lhs_item, rhs_item) in value.items.iter().zip_eq(fields) {
+			for (lhs_item, rhs_item) in node.items.iter().zip_eq(fields) {
 				gen_pattern(lhs_item, rhs_item?.into(), is_let, context, builder, module, sym_tbl, func_tbl)?;
 			}
 			Ok(())
 		},
-		Pattern::Deref(value) => {
-			let ptr = gen_expr(value, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
+		Pattern::Deref(node) => {
+			let ptr = gen_expr(node, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
 			builder.build_store(*ptr, rhs)?;
 			Ok(())
 		},
-		Pattern::Binding(value) => {
-			let binding = value.borrow().name.clone();
+		Pattern::Binding(node) => {
+			let binding = node.borrow().name.clone();
 			let ptr = if is_let {
 				let ty = rhs.clone().get_type();
 				let ptr = builder.build_alloca(ty.clone(), binding.as_str())?;
@@ -443,10 +443,10 @@ fn gen_pattern_type<'ctx>(
 	context: &'ctx Context,
 ) -> Result<ValueType<'ctx>, BuilderError> {
 	match node.deref() {
-		Pattern::Let(value) => gen_pattern_type(&value.pat, context),
-		Pattern::Mut(value) => gen_pattern_type(&value.pat, context),
-		Pattern::TupleDtor(value) => {
-			let field_types = value.items
+		Pattern::Let(node) => gen_pattern_type(&node.pat, context),
+		Pattern::Mut(node) => gen_pattern_type(&node.pat, context),
+		Pattern::TupleDtor(node) => {
+			let field_types = node.items
 				.iter()
 				.map(|item| Ok(gen_pattern_type(item, context)?.into()))
 				.collect::<Result<Vec<BasicTypeEnum>, BuilderError>>()?;
@@ -454,7 +454,7 @@ fn gen_pattern_type<'ctx>(
 			Ok(ValueType::Struct(context.struct_type(field_types.as_slice(), false)))
 		},
 		Pattern::Deref(_value) => {
-			//Ok(ValueType::Ptr(gen_expr(value, context)?.unwrap().into_ptr().unwrap().get_type()))
+			//Ok(ValueType::Ptr(gen_expr(node, context)?.unwrap().into_ptr().unwrap().get_type()))
 			todo!()
 		},
 		Pattern::Binding(_value) => {

@@ -15,9 +15,9 @@ pub struct DocumentMeta<'a> {
 
 impl<'a> DocumentMeta<'a> {
 	pub fn new(document: &'a Document) -> Self {
-		let mut char_to_byte = Vec::<usize>::with_capacity(document.get_content().len());
+		let mut char_to_byte = Vec::<usize>::with_capacity(document.get_text().len());
 		unsafe { char_to_byte.set_len(char_to_byte.capacity()); }
-		let lines_begin_indices = document.get_content()
+		let lines_begin_indices = document.get_text()
 			.char_indices()
 			.enumerate()
 			.window_option()

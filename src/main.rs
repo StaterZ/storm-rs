@@ -1,13 +1,9 @@
 #![allow(dead_code)]
 #![feature(trait_alias)]
-#![feature(map_try_insert)]
-#![feature(type_alias_impl_trait)]
 #![feature(const_trait_impl)]
 #![feature(try_blocks)]
-#![feature(inplace_iteration)]
 #![feature(min_specialization)]
 #![feature(anonymous_lifetime_in_impl_trait)]
-#![feature(box_patterns)]
 
 mod compiler;
 
@@ -28,7 +24,7 @@ enum Backend {
 
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
-struct Args {
+struct Cli {
 	#[arg(
 		short = 'b',
 		long = "backend",
@@ -54,7 +50,7 @@ fn main() {
 }
 
 fn compile() {
-	let args = Args::parse();
+	let args = Cli::parse();
 	let out_path = args.out_path.unwrap_or(args.in_path.with_extension("out"));
 
 	let content = match std::fs::read_to_string(&args.in_path) {
@@ -74,12 +70,12 @@ fn compile() {
 	);
 
 	let flags = compiler::Flags {
-		show_source: false,
-		show_tokens: false,
+		show_source: true,
+		show_tokens: true,
 		show_ast_rule_path: true,
-		show_ast: false,
+		show_ast: true,
 		show_sem: true,
-		show_output: false,
+		show_output: true,
 	};
 
 	let mut timer = Stopwatch::start_new();

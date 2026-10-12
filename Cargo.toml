@@ -1,40 +1,39 @@
 [package]
 name = "storm"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ### terminal stuff ###
-clap = { version = "4.5.54", features= ["derive"] } # command line parser
-owo-colors = "4.2.3" # ansi color formatter (good for dynamic colors)
+clap = { version = "4.6.6", features= ["derive"] } # command line parser
+owo-colors = "4.4.0" # ansi color formatter (good for dynamic colors)
 color-print = "0.3.7" # ansi color formatter (good for static colors)
 colors-transform = "0.2.11" #helps with HSV conversions in some temporary debug printing
 #prettytable-rs = "0.10.0"
 unicode-width = "0.2.2"
 
 ### error handling ###
-thiserror = "2.0.17" # error type generation
+thiserror = "2.0.20" # error type generation
 #error-stack = "0.6.0" # good error handling
 #anyhow = { version = "1.0.82", features = ["backtrace"] } # simple error handling
 
 
-### enums ###
-strum = { version = "0.27.2", features = ["derive"] } # get names of enum fields as strings
-enum-as-inner = "0.6.1" # unwarp for enum fields without needing annoying pattern matching
+strum = { version = "0.28.0", features = ["derive"], git = "https://github.com/StaterZ/strum" } # get names of enum fields as strings
+enum-as-inner = "0.7.0" # unwarp for enum fields without needing annoying pattern matching
 
 ### misc ###
 #lazy_static = "1.4.0" #init statics at runtime
-phf = { version = "0.13.1", features = ["macros"] } # generate LUTs and other data at comptime
-itertools = "0.14.0" #more iterator utlites
+phf = { version = "0.14.0", features = ["macros"] } # generate LUTs and other data at comptime
+itertools = "0.15.0" #more iterator utlites
 streaming-iterator = "0.1.9" #streaming iterators
 more-asserts = "0.3.1" #more asserts
 #anymap = "0.12.1" #type map
 stopwatch = "0.0.7" #easy timer library
 
 ### LLVM ###
-inkwell = { version = "0.8.0", features = ["llvm18-1"] }
+inkwell = { version = "0.10.0", features = ["llvm18-1"] }
 #melior = { version = "0.25.0", features = ["ods-dialects", "helpers"] }
 #llvm-sys = "201.0.0"
 #mlir-sys = "0.4.1"

@@ -64,7 +64,7 @@ impl<'ctx> Value<'ctx> {
 			(BasicValueEnum::ArrayValue(value), ValueType::Array(_type)) => Self::Array(value),
 			(BasicValueEnum::IntValue(value), ValueType::Int(_type)) => Self::Int(value),
 			(BasicValueEnum::FloatValue(value), ValueType::Flt(_type)) => Self::Flt(value),
-			(BasicValueEnum::PointerValue(value), ValueType::Ptr(box r#type)) => Self::Ptr(PtrValue::new(value, r#type.pointee)),
+			(BasicValueEnum::PointerValue(value), ValueType::Ptr(r#type)) => Self::Ptr(PtrValue::new(value, r#type.pointee)),
 			(BasicValueEnum::StructValue(value), ValueType::Struct(_type)) => Self::Struct(value),
 			_ => unreachable!("type is not correct for value"),
 		}

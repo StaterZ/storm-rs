@@ -3,11 +3,12 @@ mod lexer_error;
 
 use phf::phf_map;
 
+use szu::iter::{MapPeekable, PeekableIterator};
 pub use token::{Token, TokenTag};
 
 use crate::compiler::{
 	lexer::lexer_error::{LexerError, LexerErrorKind, LexerResult}, map_peekable::{
-		soft_error::{SoftError, SoftResultTrait}, MapPeekable, PeekIterUtils, PeekableIterator
+		soft_error::{SoftError, SoftResultTrait}, PeekIterUtils
 	}, source::{self, Sourced}
 };
 
@@ -17,7 +18,8 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerErro
 	let mut stream = document
 		.char_positions()
 		.peekable()
-		.map_peekable(
+		.peeking_map(
+			|(_, c)| c,
 			|(_, c)| c,
 			|(_, c)| c,
 		);
@@ -25,6 +27,7 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerErro
 	fn get_current_source_pos<'a>(document: &'a source::Document, stream: &mut MapPeekable<
 		impl PeekableIterator<Item = (source::Pos, char)> + Clone,
 		impl for<'b> Fn(&'b (source::Pos, char)) -> &'b char + Clone,
+		impl for<'b> Fn(&'b mut (source::Pos, char)) -> &'b mut char + Clone,
 		impl Fn((source::Pos, char)) -> char + Clone,
 		char,
 	>) -> source::Pos {
@@ -139,7 +142,6 @@ fn next_token(stream: &mut impl CharStream) -> Result<Token, LexerErrorKind> {
 					None => return Err(LexerErrorKind::MultilineCommentDelimiterNotClosed),
 				}
 			}
-			stream.skip_while(|c| !matches!(c, '\r' | '\n')).next();
 			return Ok(Token::MultilineComment);
 		}
 		
