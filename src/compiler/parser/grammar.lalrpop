@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::compiler::{lexer::Token, source::Sourced};
+use crate::compiler::{lexer::{literal::NumLit, Token}, source::Sourced};
 use super::{
 	node_sets::*,
 	nodes::*,
@@ -10,70 +10,6 @@ use super::{
 };
 
 grammar;
-
-extern {
-	type Location = usize;
-	type Error = RuleError;
-
-	enum Token {
-		"." => Token::Dot,
-		".*" => Token::Deref,
-		"," => Token::Comma,
-		":" => Token::Colon,
-		";" => Token::Semicolon,
-
-		"(" => Token::LParen,
-		")" => Token::RParen,
-		"{" => Token::LBrace,
-		"}" => Token::RBrace,
-
-		"+" => Token::Plus,
-		"-" => Token::Dash,
-		"*" => Token::Star,
-		"/" => Token::Slash,
-		"%" => Token::Percent,
-		"<<" => Token::LShift,
-		">>" => Token::RShift,
-		"&" => Token::Ampersand,
-
-		"=" => Token::Equals,
-		"==" => Token::Eq,
-		"!=" => Token::Ne,
-		"<" => Token::Lt,
-		"<=" => Token::Le,
-		">" => Token::Gt,
-		">=" => Token::Ge,
-		"&&" => Token::And,
-		"||" => Token::Or,
-		"!" => Token::Bang,
-
-		"let" => Token::Let,
-		"mut" => Token::Mut,
-		"_" => Token::Discard,
-
-		"ret" => Token::Return,
-		"break" => Token::Break,
-		"continue" => Token::Continue,
-		"unreachable" => Token::Unreachable,
-
-		"plex" => Token::Plex,
-		"fn" => Token::Fn,
-
-		"loop" => Token::Loop,
-		"while" => Token::While,
-		"for" => Token::For,
-		"in" => Token::In,
-		"if" => Token::If,
-		"else" => Token::Else,
-
-		"true" => Token::True,
-		"false" => Token::False,
-
-		"str" => Token::StrLit(<String>),
-		"int" => Token::IntLit(<u64>),
-		"ident" => Token::Identifier(<String>),
-	}
-}
 
 // The `E` parameter says what may end an expression:
 // - "open": anything.
@@ -270,7 +206,10 @@ Prefix: Sourced<Cover> = {
 Atom: Sourced<Cover> = {
 	<l:@L> "true" <r:@R> => cover(l, Expr::BoolLit(true), r),
 	<l:@L> "false" <r:@R> => cover(l, Expr::BoolLit(false), r),
-	<l:@L> <value:"int"> <r:@R> => cover(l, Expr::IntLit(value), r),
+	<l:@L> <value:"num"> <r:@R> => cover(l, match value {
+		NumLit::Int(lit) => Expr::IntLit(lit),
+		NumLit::Real(lit) => Expr::RealLit(lit),
+	}, r),
 	<l:@L> <value:"str"> <r:@R> => cover(l, Expr::StrLit(value), r),
 	<l:@L> <name:"ident"> <r:@R> => cover(l, Expr::Identifier(var(name)), r),
 	<l:@L> "(" <item:Item> ")" <r:@R> => node(l, Cover::Paren(Box::new(item)), r),
@@ -383,3 +322,67 @@ Func<E>: Sourced<Expr> = {
 		body: Box::new(body),
 	}), r),
 };
+
+extern {
+	type Location = usize;
+	type Error = RuleError;
+
+	enum Token {
+		"." => Token::Dot,
+		".*" => Token::Deref,
+		"," => Token::Comma,
+		":" => Token::Colon,
+		";" => Token::Semicolon,
+
+		"(" => Token::LParen,
+		")" => Token::RParen,
+		"{" => Token::LBrace,
+		"}" => Token::RBrace,
+
+		"+" => Token::Plus,
+		"-" => Token::Dash,
+		"*" => Token::Star,
+		"/" => Token::Slash,
+		"%" => Token::Percent,
+		"<<" => Token::LShift,
+		">>" => Token::RShift,
+		"&" => Token::Ampersand,
+
+		"=" => Token::Equals,
+		"==" => Token::Eq,
+		"!=" => Token::Ne,
+		"<" => Token::Lt,
+		"<=" => Token::Le,
+		">" => Token::Gt,
+		">=" => Token::Ge,
+		"&&" => Token::And,
+		"||" => Token::Or,
+		"!" => Token::Bang,
+
+		"let" => Token::Let,
+		"mut" => Token::Mut,
+		"_" => Token::Discard,
+
+		"ret" => Token::Return,
+		"break" => Token::Break,
+		"continue" => Token::Continue,
+		"unreachable" => Token::Unreachable,
+
+		"plex" => Token::Plex,
+		"fn" => Token::Fn,
+
+		"loop" => Token::Loop,
+		"while" => Token::While,
+		"for" => Token::For,
+		"in" => Token::In,
+		"if" => Token::If,
+		"else" => Token::Else,
+
+		"true" => Token::True,
+		"false" => Token::False,
+
+		"str" => Token::StrLit(<String>),
+		"num" => Token::NumLit(<NumLit>),
+		"ident" => Token::Identifier(<String>),
+	}
+}

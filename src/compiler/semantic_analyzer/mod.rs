@@ -122,6 +122,7 @@ fn eval_expr(node: &mut Sourced<Expr>, sym_tbl: &mut SymTbl, errors: &mut Vec<Se
 		},
 		Expr::BoolLit(_value) => { },
 		Expr::IntLit(_value) => { },
+		Expr::RealLit(_value) => { },
 		Expr::StrLit(_value) => { },
 		Expr::Identifier(var) => {
 			if let Err(err) = sym_tbl.get(var) { errors.push(err); return; }

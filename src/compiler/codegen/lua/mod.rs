@@ -94,7 +94,8 @@ fn gen_expr(node: &Sourced<Expr>, loop_depth: usize) -> String {
 			.map(|item| gen_expr(item, loop_depth))
 			.join(","),
 		Expr::BoolLit(node) => node.to_string(),
-		Expr::IntLit(node) => node.to_string(),
+		Expr::IntLit(node) => node.value.to_string(),
+		Expr::RealLit(node) => format!("{:?}", node.to_f64()),
 		Expr::StrLit(node) => format!("\"{}\"", node.escape_default()),
 		Expr::Identifier(node) => node.borrow().name.clone(),
 	}

@@ -5,7 +5,7 @@ use unescaper::unescape;
 
 use crate::compiler::source::line_break::find_line_break;
 
-use super::lexer_error::LexerErrorKind;
+use super::{lexer_error::LexerErrorKind, literal::{lex_num, NumLit}};
 
 #[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Eq, Clone, strum::AsRefStr, strum::EnumDiscriminants, enum_as_inner::EnumAsInner)]
 #[strum_discriminants(name(TokenTag), derive(strum::AsRefStr))]
@@ -138,8 +138,8 @@ pub enum Token {
 		unescape(&s[1..s.len() - 1]).map_err(|e| LexerErrorKind::InvalidEscapeSequence(e.to_string()))
 	})]
 	StrLit(String),
-	#[regex(r"[0-9][0-9a-zA-Z_]*", lex_int)]
-	IntLit(u64),
+	#[regex(r"[0-9][0-9a-zA-Z_]*(\.[0-9][0-9a-zA-Z_]*)?", lex_num)]
+	NumLit(NumLit),
 	// Unicode identifiers: https://unicode.org/reports/tr31/
 	#[regex(r"[\p{XID_Start}_]\p{XID_Continue}*", |lex| lex.slice().to_string())]
 	#[regex(r#"@"(?:[^"\\]|\\.)*""#, |lex| {
@@ -177,60 +177,6 @@ fn block_comment(lex: &mut logos::Lexer<Token>) -> Result<Skip, LexerErrorKind> 
 		}
 	}
 	Err(LexerErrorKind::MultilineCommentDelimiterNotClosed)
-}
-
-fn lex_int(lex: &mut logos::Lexer<Token>) -> Result<u64, LexerErrorKind> {
-	let s = lex.slice();
-
-	if let Some(rest) = s.strip_prefix('0') {
-		let radix = match rest.chars().next() {
-			Some('b') => Some(2),
-			Some('q') => Some(4),
-			Some('o') => Some(8),
-			Some('d') => Some(10),
-			Some('x') => Some(16),
-			_ => None,
-		};
-		if let Some(radix) = radix {
-			return parse_digits(&rest[1..], radix);
-		}
-	}
-
-	match s.split_once('r') {
-		Some((radix, digits)) => {
-			let radix = parse_digits(radix, 10)?;
-			if radix > 36 {
-				return Err(LexerErrorKind::IntRadixTooLarge(radix));
-			}
-			parse_digits(digits, radix)
-		},
-		None => parse_digits(s, 10),
-	}
-}
-
-fn parse_digits(s: &str, radix: u64) -> Result<u64, LexerErrorKind> {
-	if s.is_empty() {
-		return Err(LexerErrorKind::IntHasNoDigits);
-	}
-	if s.starts_with('_') {
-		return Err(LexerErrorKind::DigitsHaveLeadingUnderscore);
-	}
-	if s.ends_with('_') {
-		return Err(LexerErrorKind::IntHasTrailingUnderscore);
-	}
-
-	let mut value = 0u64;
-	for c in s.chars().filter(|&c| c != '_') {
-		let digit_value = c.to_digit(36).expect("the regex only allows ASCII letters and digits") as u64;
-		if digit_value >= radix {
-			return Err(LexerErrorKind::InvalidDigitForRadix { digit_symbol: c, digit_value, radix });
-		}
-		value = value
-			.checked_mul(radix)
-			.and_then(|v| v.checked_add(digit_value))
-			.ok_or(LexerErrorKind::IntOverflow)?;
-	}
-	Ok(value)
 }
 
 impl Display for TokenTag {

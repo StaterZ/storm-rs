@@ -38,6 +38,8 @@ logos-display = "0.1.3"
 ariadne = { version = "0.6.0", features = ["auto-color"] }
 unescaper = "0.2.0"
 lalrpop-util = { version = "0.23.1", default-features = false, features = ["std"] } # runtime support for the generated parser
+num-bigint = "0.5.1" # arbitrary precision literal values
+num-traits = "0.2.19" # numeric conversions for num-bigint
 
 ### LLVM ###
 inkwell = { version = "0.10.0", features = ["llvm18-1"] }

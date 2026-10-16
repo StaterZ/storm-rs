@@ -86,6 +86,7 @@ mod tests {
 			Expr::TupleCtor(n) => format!("[{}]", n.items.iter().map(|i| expr(i)).join(" ")),
 			Expr::BoolLit(v) => v.to_string(),
 			Expr::IntLit(v) => v.to_string(),
+			Expr::RealLit(v) => v.to_string(),
 			Expr::StrLit(v) => format!("{:?}", v),
 			Expr::Identifier(v) => v.borrow().name.clone(),
 		}

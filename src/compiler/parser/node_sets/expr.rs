@@ -5,6 +5,8 @@ use strum::AsRefStr;
 use color_print::cformat;
 use tree_printer::TreeDisplay;
 
+use crate::compiler::lexer::literal::{IntLit, RealLit};
+
 use super::super::{nodes::*, Var};
 
 #[derive(Debug, AsRefStr, EnumAsInner, TreeDisplay)]
@@ -33,7 +35,8 @@ pub enum Expr {
 	
 	TupleCtor(#[tree(flatten)] TupleCtor),
 	BoolLit(#[tree(skip)] bool),
-	IntLit(#[tree(skip)] u64),
+	IntLit(#[tree(skip)] IntLit),
+	RealLit(#[tree(skip)] RealLit),
 	StrLit(#[tree(skip)] String),
 	Identifier(#[tree(skip)] Rc<RefCell<Var>>),
 }
@@ -65,6 +68,7 @@ impl Expr {
 			Expr::TupleCtor(_) => None,
 			Expr::BoolLit(value) => Some(cformat!("<cyan>{}</>", value)),
 			Expr::IntLit(value) => Some(cformat!("<cyan>{}</>", value)),
+			Expr::RealLit(value) => Some(cformat!("<cyan>{}</>", value)),
 			Expr::StrLit(value) => Some(cformat!("<cyan>{:?}</>", value)),
 			Expr::Identifier(value) => Some(cformat!("<cyan>{}</>", value.borrow())),
 		};

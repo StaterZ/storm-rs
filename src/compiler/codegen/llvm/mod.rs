@@ -351,7 +351,11 @@ fn gen_expr<'a, 'ctx>(
 			Ok(Some(Value::Ptr(PtrValue::new(tuple_alloca, ValueType::Struct(tuple_type)))))
 		},
 		Expr::BoolLit(node) => Ok(Some(Value::Int(context.bool_type().const_int(*node as u64, false)))),
-		Expr::IntLit(node) => Ok(Some(Value::Int(context.i64_type().const_int(*node, false)))),
+		Expr::IntLit(node) => {
+			let value = node.value.iter_u64_digits().next().unwrap_or(0); //TODO: everything is an i64 for now, so the literal type and higher bits are ignored
+			Ok(Some(Value::Int(context.i64_type().const_int(value, false))))
+		},
+		Expr::RealLit(node) => Ok(Some(Value::Flt(context.f64_type().const_float(node.to_f64())))), //TODO: respect the f<bits> suffix
 		Expr::StrLit(node) => {
 			let str_const = context.const_string(node.as_bytes(), true); //false
 			let global = module.add_global(str_const.get_type(), None, "str");
