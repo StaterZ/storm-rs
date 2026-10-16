@@ -16,6 +16,7 @@ pub mod interactive;
 
 #[derive(Debug)]
 pub struct Flags {
+	pub emit_optimized_ir: bool,
 	pub show_source: bool,
 	pub show_tokens: bool,
 	pub show_ast: bool,
@@ -122,7 +123,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	}
 
 	let mut gen_timer = Stopwatch::start_new();
-	let gen_output = codegen::generate(&ast, backend);
+	let gen_output = codegen::generate(&ast, backend, flags.emit_optimized_ir);
 	gen_timer.stop();
 	let gen_output = match gen_output {
 		Ok(output) => output,

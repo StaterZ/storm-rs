@@ -48,9 +48,13 @@ struct Cli {
 	#[arg(
 		short = 'I',
 		long = "interactive",
-		conflicts_with_all = ["backend", "in_path", "out_path"],
+		conflicts_with_all = ["backend", "in_path", "out_path", "emit_optimized_ir"],
 	)]
 	interactive: bool,
+
+	/// Also write the optimized LLVM IR to out/test.opt.ll, next to the unoptimized out/test.ll. Only used by the LLVM backend
+	#[arg(long = "emit-optimized-ir")]
+	emit_optimized_ir: bool,
 }
 
 fn main() {
@@ -84,6 +88,7 @@ fn compile(args: Cli) {
 	);
 
 	let flags = compiler::Flags {
+		emit_optimized_ir: args.emit_optimized_ir,
 		show_source: true,
 		show_tokens: true,
 		show_ast: true,

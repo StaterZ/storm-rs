@@ -11,9 +11,9 @@ pub enum GenError {
 	Stormworks(stormworks::GenError),
 }
 
-pub fn generate(ast: &Sourced<Expr>, backend: Backend) -> Result<Vec<u8>, GenError> {
+pub fn generate(ast: &Sourced<Expr>, backend: Backend, emit_optimized_ir: bool) -> Result<Vec<u8>, GenError> {
 	match backend {
-		Backend::LLVM => llvm::generate(ast).map_err(|err| GenError::LLVM(err)),
+		Backend::LLVM => llvm::generate(ast, emit_optimized_ir).map_err(|err| GenError::LLVM(err)),
 		Backend::Lua => lua::generate(ast).map_err(|err| GenError::Lua(err)),
 		Backend::Stormworks => stormworks::generate(ast).map_err(|err| GenError::Stormworks(err)),
 	}

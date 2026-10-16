@@ -7,7 +7,7 @@ use inkwell::{
 	passes::PassBuilderOptions,
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
 	types::{BasicType, BasicTypeEnum},
-	values::{BasicValue, FunctionValue, IntValue},
+	values::{BasicValueEnum, FunctionValue, IntValue},
 	AddressSpace,
 	IntPredicate
 };
@@ -56,9 +56,7 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 		decl_extern(scan_fn, &builder, &mut sym_tbl); //TODO: super temp
 
 		let expr_val = gen_expr(&ast, &context, &builder, &module, &mut sym_tbl, &mut func_tbl).map_err(|err| GenError::BuilderError(err))?;
-		builder.build_return(expr_val
-			.as_ref()
-			.map(|expr_val| expr_val as &dyn BasicValue)).map_err(|err| GenError::BuilderError(err))?;
+		gen_return(expr_val, &builder).map_err(|err| GenError::BuilderError(err))?;
 	}
 
 	let err: Result<(), BuilderError> = try {
@@ -74,14 +72,28 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 			gen_pattern(&job.node.binding, rhs, true, &context, &builder, &module, &mut sym_tbl, &mut func_tbl)?;
 			
 			let expr_val = gen_expr(&job.node.body, &context, &builder, &module, &mut sym_tbl, &mut func_tbl)?;
-			builder.build_return(expr_val
-				.as_ref()
-				.map(|expr_val| expr_val as &dyn BasicValue))?;
+			gen_return(expr_val, &builder)?;
 		}
 	};
 	err.map_err(|err| GenError::BuilderError(err))?;
 
 	Ok(stupid_shit(&module, emit_optimized_ir))
+}
+
+fn gen_return<'ctx>(value: Option<Value<'ctx>>, builder: &Builder<'ctx>) -> Result<(), BuilderError> {
+	let func = builder.get_insert_block().unwrap().get_parent().unwrap();
+	let Some(ret_type) = func.get_type().get_return_type() else {
+		builder.build_return(None)?;
+		return Ok(());
+	};
+	let value: BasicValueEnum = match (value, ret_type) {
+		(Some(Value::Int(value)), BasicTypeEnum::IntType(ret_type)) => builder.build_int_cast(value, ret_type, "ret_cast")?.into(),
+		(Some(Value::Ptr(value)), BasicTypeEnum::IntType(ret_type)) => builder.build_ptr_to_int(*value, ret_type, "ret_cast")?.into(),
+		(Some(value), _) => value.into(),
+		(None, ret_type) => ret_type.const_zero(),
+	};
+	builder.build_return(Some(&value))?;
+	Ok(())
 }
 
 fn decl_extern<'ctx>(
@@ -125,9 +137,11 @@ fn gen_expr<'a, 'ctx>(
 				.map(|expr| Ok::<_, BuilderError>(gen_expr(expr, context, builder, module, sym_tbl, func_tbl)?.unwrap()))
 				.transpose()?;
 
-			builder.build_return(expr_val
-				.as_ref()
-				.map(|expr_val| expr_val as &dyn BasicValue))?;
+			gen_return(expr_val, builder)?;
+			// anything after a `ret` is dead, but still needs a block to go in
+			let func = builder.get_insert_block().unwrap().get_parent().unwrap();
+			let dead = context.append_basic_block(func, "after_ret");
+			builder.position_at_end(dead);
 			
 			Ok(None)
 		},
@@ -280,7 +294,7 @@ fn gen_expr<'a, 'ctx>(
 			let arg_ty = gen_pattern_type(&node.binding, context)?;
 			
 			let fn_type = context.i64_type().fn_type(&[arg_ty.into()], false);
-			let func = module.add_function("lambda", fn_type, None);
+			let func = module.add_function("lambda", fn_type, Some(Linkage::Internal));
 			func_tbl.push(FuncJob { value: func, node });
 
 			//goopy awfulness:
@@ -315,7 +329,10 @@ fn gen_expr<'a, 'ctx>(
 					}))
 					.collect::<Result<Vec<_>, BuilderError>>()?
 			} else {
-				vec![arg.into()]
+				// functions take their tuple by value
+				let arg = arg.into_ptr().unwrap();
+				let tuple_type = *arg.get_pointee_type().as_struct().unwrap();
+				vec![builder.build_load(tuple_type, *arg, "call_arg")?.into()]
 			};
 			let call_site = builder.build_indirect_call(
 				func.into(),
@@ -540,11 +557,17 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Vec<u8> 
 		.unwrap();
 
 	if emit_optimized_ir {
-		// a copy, so the executable is still built the same way as without the flag
-		let optimized = module.clone();
-		match optimized.run_passes("default<O2>", &target_machine, PassBuilderOptions::create()) {
-			Ok(()) => optimized.print_to_file(out_dir_path.join("test.opt.ll")).unwrap(),
-			Err(err) => eprintln!("Failed to optimize the IR: {}", err),
+		// LLVM can't optimize, or even copy, a module that isn't valid
+		match module.verify() {
+			Err(err) => eprintln!("Can't optimize invalid IR: {}", err.to_string()),
+			Ok(()) => {
+				// a copy, so the executable is still built the same way as without the flag
+				let optimized = module.clone();
+				match optimized.run_passes("default<O2>", &target_machine, PassBuilderOptions::create()) {
+					Ok(()) => optimized.print_to_file(out_dir_path.join("test.opt.ll")).unwrap(),
+					Err(err) => eprintln!("Failed to optimize the IR: {}", err.to_string()),
+				}
+			},
 		}
 	}
 
