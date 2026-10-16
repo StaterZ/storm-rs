@@ -241,9 +241,15 @@ fn gen_expr<'a, 'ctx>(
 		Expr::UnaOp(node) => {
 			let expr_val = gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl)?.unwrap();
 			let result = match node.op {
-				UnaOpKind::Deref => {
-					let ptr = expr_val.into_ptr().unwrap();
-					builder.build_load(ptr.get_pointee_type().clone(), *ptr, "deref")?.into()
+				UnaOpKind::Deref => match expr_val {
+					Value::Ptr(ptr) => builder.build_load(ptr.get_pointee_type().clone(), *ptr, "deref")?.into(),
+					Value::Int(addr) => {
+						// untyped values are plain i64s, so treat them as byte addresses (like C's char*)
+						let ptr = builder.build_int_to_ptr(addr, context.ptr_type(AddressSpace::default()), "deref_addr")?;
+						let byte = builder.build_load(context.i8_type(), ptr, "deref")?.into_int_value();
+						Value::Int(builder.build_int_z_extend(byte, context.i64_type(), "deref_ext")?)
+					},
+					_ => unreachable!("can't deref {:?}", expr_val),
 				},
 				UnaOpKind::AddressOf => {
 					if let Expr::Identifier(node) = &**node.expr {
