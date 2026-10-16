@@ -12,6 +12,7 @@ pub mod lexer;
 pub mod parser;
 pub mod semantic_analyzer;
 pub mod codegen;
+pub mod interactive;
 
 #[derive(Debug)]
 pub struct Flags {

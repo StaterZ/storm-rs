@@ -58,11 +58,68 @@ impl RealLit {
 	}
 }
 
+/// How far from 1 a real may be before its Display switches to an exponent: `1e20` and `1e-20` are shown in full, `1e21` and `1e-21` aren't.
+const MAX_DISPLAY_PADDING: i64 = 20;
+/// How many fraction digits to try before giving up on an exact decimal, like for `3r0.1` which is 1/3.
+const MAX_DISPLAY_FRACTION_DIGITS: usize = 1000;
+
+impl RealLit {
+	/// The exact value in decimal, like `0.0015`. `None` when it's too large, too small or doesn't terminate in decimal.
+	fn to_decimal_string(&self) -> Option<String> {
+		// a radix is at least 2, so each step of the exponent adds at least 0.3 decimal digits. stops huge exponents from building huge numbers
+		if self.exponent > MAX_DISPLAY_PADDING * 4 || -self.exponent > MAX_DISPLAY_FRACTION_DIGITS as i64 {
+			return None;
+		}
+
+		let radix = BigUint::from(self.radix);
+		if self.exponent >= 0 {
+			let value = &self.mantissa * radix.pow(u32::try_from(self.exponent).ok()?);
+			let int = value.to_string();
+			return (int.len() as i64 <= MAX_DISPLAY_PADDING + 1).then(|| format!("{}.0", int));
+		}
+
+		let denominator = radix.pow(u32::try_from(-self.exponent).ok()?);
+		let int = &self.mantissa / &denominator;
+		let mut remainder = &self.mantissa % &denominator;
+		let mut fraction = String::new();
+		while !remainder.is_zero() {
+			if fraction.len() >= MAX_DISPLAY_FRACTION_DIGITS {
+				return None;
+			}
+			remainder *= 10u32;
+			let digit = (&remainder / &denominator).to_u32().expect("a digit is below 10");
+			remainder %= &denominator;
+			fraction.push(char::from_digit(digit, 10).expect("a digit is below 10"));
+		}
+
+		let int = int.to_string();
+		let leading_zeros = fraction.len() - fraction.trim_start_matches('0').len();
+		if int.len() as i64 > MAX_DISPLAY_PADDING + 1 || (int == "0" && leading_zeros as i64 >= MAX_DISPLAY_PADDING) {
+			return None;
+		}
+		if fraction.is_empty() {
+			fraction.push('0');
+		}
+		Some(format!("{}.{}", int, fraction))
+	}
+}
+
 impl Display for RealLit {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self.radix {
-			10 => write!(f, "{}e{}", self.mantissa, self.exponent)?,
-			radix => write!(f, "{}*{}^{}", self.mantissa.to_str_radix(radix), radix, self.exponent)?,
+		if let Some(decimal) = self.to_decimal_string() {
+			write!(f, "{}", decimal)?;
+		} else {
+			// scientific notation in the literal's own radix, like `1.5e-400` or `3r1*3^-1`
+			let digits = self.mantissa.to_str_radix(self.radix);
+			let digits = digits.trim_end_matches('0');
+			let digits = if digits.is_empty() { "0" } else { digits };
+			let exponent = self.exponent + (self.mantissa.to_str_radix(self.radix).len() - 1) as i64;
+			let (first, rest) = digits.split_at(1);
+			let mantissa = if rest.is_empty() { first.to_string() } else { format!("{}.{}", first, rest) };
+			match self.radix {
+				10 => write!(f, "{}e{}", mantissa, exponent)?,
+				radix => write!(f, "{}r{}*{}^{}", radix, mantissa, radix, exponent)?,
+			}
 		}
 		if let Some(bits) = self.num_bits {
 			write!(f, "f{}", bits)?;

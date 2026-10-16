@@ -4,10 +4,10 @@ pub mod literal;
 
 use logos::Logos;
 
-pub use lexer_error::LexerError;
+pub use lexer_error::{LexerError, LexerErrorKind};
 pub use token::{Token, TokenTag};
 
-use crate::compiler::{lexer::lexer_error::LexerErrorKind, source::{self, DocumentMeta, Sourced}};
+use crate::compiler::source::{self, DocumentMeta, Sourced};
 
 pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerError> {
 	let mut tokens = Vec::new();

@@ -12,6 +12,10 @@ pub struct RuleError {
 }
 
 impl RuleError {
+	pub fn is_stream_exhausted(&self) -> bool {
+		self.kind == RuleErrorKind::StreamExhausted
+	}
+
 	pub fn to_meta<'a>(self, document: &'a source::DocumentMeta<'a>) -> RuleErrorMeta<'a> {
 		RuleErrorMeta {
 			error: self,

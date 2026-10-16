@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use crate::compiler::lexer::TokenTag;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RuleErrorKind {
 	StreamExhausted,
 	UnexpectedToken(TokenTag),
