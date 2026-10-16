@@ -7,9 +7,11 @@
 			"args": [
 				"run",
 				"--",
+				"build",
 				"--backend=llvm",
-				"--in-path=data/test.storm",
-				"--out-path=out/test.out"
+				"-i=data/test.storm",
+				"-o=out/test.out",
+				"--show-all"
 			],
 			"problemMatcher": [
 				"$rustc"

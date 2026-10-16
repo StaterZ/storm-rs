@@ -20,9 +20,11 @@
 				}
 			},
 			"args": [
+				"build",
 				"--backend=llvm",
-				"--in-path=data/test.storm",
-				"--out-path=out/test.out"
+				"-i=data/test.storm",
+				"-o=out/test.out",
+				"--show-all"
 			],
 			"cwd": "${workspaceFolder}"
 		},
@@ -43,9 +45,10 @@
 				}
 			},
 			"args": [
+				"build",
 				"--backend=llvm",
-				"--in-path=data/test.storm",
-				"--out-path=out/test.out"
+				"-i=data/test.storm",
+				"-o=out/test.out"
 			],
 			"cwd": "${workspaceFolder}"
 		},
@@ -55,9 +58,11 @@
 			"request": "launch",
 			"program": "${workspaceRoot}/target/debug/storm.exe",
 			"args": [
+				"build",
 				"--backend=llvm",
-				"--in-path=data/test.storm",
-				"--out-path=out/test.out"
+				"-i=data/test.storm",
+				"-o=out/test.out",
+				"--show-all"
 			],
 			"cwd": "${workspaceFolder}",
 		}

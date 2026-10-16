@@ -14,14 +14,33 @@ pub mod semantic_analyzer;
 pub mod codegen;
 pub mod interactive;
 
-#[derive(Debug)]
+#[derive(Debug, clap::Args)]
 pub struct Flags {
+	/// Also write the optimized LLVM IR to out/test.opt.ll, next to the unoptimized out/test.ll. Only used by the LLVM backend
+	#[arg(long = "emit-optimized-ir")]
 	pub emit_optimized_ir: bool,
+	/// Print the source with line numbers
+	#[arg(long = "show-source")]
 	pub show_source: bool,
+	/// Print the tokens from the lexer
+	#[arg(long = "show-tokens")]
 	pub show_tokens: bool,
+	/// Print the AST from the parser
+	#[arg(long = "show-ast")]
 	pub show_ast: bool,
+	/// Print the AST after semantic analysis, with symbols linked to their declarations
+	#[arg(long = "show-sem")]
 	pub show_sem: bool,
-	pub show_output: bool,
+}
+
+impl Flags {
+	/// Turns on every `show_` flag.
+	pub fn show_all(&mut self) {
+		self.show_source = true;
+		self.show_tokens = true;
+		self.show_ast = true;
+		self.show_sem = true;
+	}
 }
 
 #[derive(Debug, strum::AsRefStr)]
@@ -118,10 +137,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		println!();
 	}
 
-	if flags.show_output {
-		println!("=== GENERATOR ===");
-	}
-
+	// === GENERATOR ===
 	let mut gen_timer = Stopwatch::start_new();
 	let gen_output = codegen::generate(&ast, backend, flags.emit_optimized_ir);
 	gen_timer.stop();
@@ -132,12 +148,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 			return Err(CompilerError::GeneratorFailed);
 		},
 	};
-
-	if flags.show_output {
-		println!("{:?}", gen_output);
-		println!();
-	}
-
+	
 	println!("lex time: {}", lex_timer);
 	println!("ast time: {}", ast_timer);
 	println!("sem time: {}", sem_timer);

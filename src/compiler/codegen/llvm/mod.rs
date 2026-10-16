@@ -20,7 +20,13 @@ mod value;
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {
-	BuilderError(BuilderError)
+	BuilderError(BuilderError),
+	LinkFailed,
+}
+
+/// Where the built executable goes.
+pub fn executable_path() -> PathBuf {
+	PathBuf::from_str("out").unwrap().join("test.exe")
 }
 
 struct FuncJob<'a, 'ctx> {
@@ -77,7 +83,7 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 	};
 	err.map_err(|err| GenError::BuilderError(err))?;
 
-	Ok(stupid_shit(&module, emit_optimized_ir))
+	stupid_shit(&module, emit_optimized_ir)
 }
 
 fn gen_return<'ctx>(value: Option<Value<'ctx>>, builder: &Builder<'ctx>) -> Result<(), BuilderError> {
@@ -530,7 +536,7 @@ fn gen_pattern_type<'ctx>(
 	}
 }
 
-fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Vec<u8> {
+fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Result<Vec<u8>, GenError> {
 	println!("Starting Backend...");
 	let out_dir_path = PathBuf::from_str("out").unwrap();
 	if let Err(e) = std::fs::create_dir_all(&out_dir_path) {
@@ -577,7 +583,7 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Vec<u8> 
 		.write_to_file(&module, FileType::Object, &object_path)
 		.unwrap();
 
-	let exe_path = out_dir_path.join("test.exe");
+	let exe_path = executable_path();
 	{
 		println!("Spinning up CLANG...");
 		let args = vec![
@@ -589,16 +595,8 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Vec<u8> 
 		let proc = linker.args(args.iter()).spawn().unwrap();
 		let output = proc.wait_with_output().unwrap();
 		println!("Linker status: {}", output.status.success());
-		if !output.status.success() { return Vec::new() }
+		if !output.status.success() { return Err(GenError::LinkFailed) }
 	}
 
-	{
-		println!("Executable is running...");
-		let mut exe = std::process::Command::new(&exe_path);
-		let proc = exe.spawn().unwrap();
-		let output = proc.wait_with_output().unwrap();
-		let code = output.status.code().unwrap();
-		println!("Exit code was: {}", code);
-		Vec::new()
-	}
+	Ok(Vec::new())
 }

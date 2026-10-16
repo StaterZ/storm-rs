@@ -5,9 +5,9 @@
 
 mod compiler;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use clap::{Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use color_print::cprintln;
 use compiler::source;
@@ -23,59 +23,72 @@ enum Backend {
 #[derive(Parser, Debug)]
 #[clap(author = "StaterZ")]
 struct Cli {
+	#[command(subcommand)]
+	command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+	Build(BuildArgs),
+	Run(BuildArgs),
+	Interactive,
+}
+
+#[derive(Args, Debug)]
+struct BuildArgs {
 	#[arg(
 		short = 'b',
 		long = "backend",
-		required_unless_present = "interactive",
 	)]
 	#[clap(value_enum)]
-	backend: Option<Backend>,
+	backend: Backend,
 
 	#[arg(
 		short = 'i',
-		long = "in-path",
-		required_unless_present = "interactive",
+		long = "in",
 	)]
-	in_path: Option<PathBuf>,
+	in_path: PathBuf,
 
 	#[arg(
 		short = 'o',
-		long = "out-path"
+		long = "out"
 	)]
 	out_path: Option<PathBuf>,
 
-	/// Enter code snippets and see their AST, instead of compiling a file
-	#[arg(
-		short = 'I',
-		long = "interactive",
-		conflicts_with_all = ["backend", "in_path", "out_path", "emit_optimized_ir"],
-	)]
-	interactive: bool,
+	/// Print every stage of the compiler, like all the --show- flags together
+	#[arg(long = "show-all")]
+	show_all: bool,
 
-	/// Also write the optimized LLVM IR to out/test.opt.ll, next to the unoptimized out/test.ll. Only used by the LLVM backend
-	#[arg(long = "emit-optimized-ir")]
-	emit_optimized_ir: bool,
+	#[command(flatten)]
+	flags: compiler::Flags,
 }
 
 fn main() {
-	let args = Cli::parse();
-	if args.interactive {
-		compiler::interactive::run();
-	} else {
-		compile(args);
+	match Cli::parse().command {
+		Command::Build(args) => if build(args).is_none() {
+			std::process::exit(1);
+		},
+		Command::Run(args) => {
+			let backend = args.backend;
+			let Some(out_path) = build(args) else {
+				std::process::exit(1);
+			};
+			run(backend, &out_path);
+		},
+		Command::Interactive => compiler::interactive::run(),
 	}
 }
 
-fn compile(args: Cli) {
-	let backend = args.backend.expect("clap requires a backend outside interactive mode");
-	let in_path = args.in_path.expect("clap requires an in-path outside interactive mode");
+fn build(args: BuildArgs) -> Option<PathBuf> {
+	let backend = args.backend;
+	let in_path = args.in_path;
 	let out_path = args.out_path.unwrap_or(in_path.with_extension("out"));
 
 	let content = match std::fs::read_to_string(&in_path) {
 		Ok(content) => content,
 		Err(err) => {
 			eprintln!("Failed to read input file: {}", err);
-			return;
+			return None;
 		}
 	};
 
@@ -87,26 +100,50 @@ fn compile(args: Cli) {
 		content
 	);
 
-	let flags = compiler::Flags {
-		emit_optimized_ir: args.emit_optimized_ir,
-		show_source: true,
-		show_tokens: true,
-		show_ast: true,
-		show_sem: true,
-		show_output: true,
-	};
+	let mut flags = args.flags;
+	if args.show_all {
+		flags.show_all();
+	}
 
 	let mut timer = Stopwatch::start_new();
 	let result = compiler::compile(&document, backend, flags);
 	timer.stop();
 	println!();
 	println!("compile time: {}ms", timer.elapsed().as_millis());
-	match &result {
-		Ok(_) => cprintln!("<yellow>HAPPY! ^v^</>"),
-		Err(_) => { cprintln!("<blue>SAD >~<<</>"); return; },
-	}
-
-	let Ok(_) = std::fs::write(out_path, result.unwrap()) else {
-		return;
+	let output = match result {
+		Ok(output) => {
+			cprintln!("<yellow>HAPPY! ^v^</>");
+			output
+		},
+		Err(_) => {
+			cprintln!("<blue>SAD >~<<</>");
+			return None;
+		},
 	};
+
+	if let Err(err) = std::fs::write(&out_path, output) {
+		eprintln!("Failed to write output file: {}", err);
+		return None;
+	}
+	Some(out_path)
+}
+
+/// Runs a build's output and exits with its exit code.
+fn run(backend: Backend, out_path: &Path) {
+	let Some(mut command) = compiler::codegen::run_command(backend, out_path) else {
+		eprintln!("The {:?} backend's output can't be run here", backend);
+		std::process::exit(1);
+	};
+
+	println!("Running...");
+	let status = match command.status() {
+		Ok(status) => status,
+		Err(err) => {
+			eprintln!("Failed to run {:?}: {}", command.get_program(), err);
+			std::process::exit(1);
+		},
+	};
+	let code = status.code().unwrap_or(1);
+	println!("Exit code was: {}", code);
+	std::process::exit(code);
 }
