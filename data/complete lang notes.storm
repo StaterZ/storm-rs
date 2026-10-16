@@ -21,6 +21,7 @@ ints and floats will have fields. f32 would have a u23 mantissa field, a i8 expo
 
 we allow user-defined operators between any 2 types.
 if multiple operators have the same symbol with the same types, we compile-time error.
+operators may be + - or other common ones, or unicode sumbols like 
 */
 
 //example statements:

@@ -1,15 +1,19 @@
 use std::{error::Error, fmt::Display};
 
+use itertools::Itertools;
+
 use crate::compiler::lexer::TokenTag;
 
 #[derive(Debug)]
 pub enum RuleErrorKind {
 	StreamExhausted,
 	UnexpectedToken(TokenTag),
-	ExpectedToken {
-		expected: TokenTag,
+	ExpectedOneOf {
+		expected: Vec<String>,
 		found: TokenTag,
 	},
+	PatternInExpr,
+	ExprInPattern,
 }
 
 impl Display for RuleErrorKind {
@@ -17,7 +21,9 @@ impl Display for RuleErrorKind {
 		match self {
 			RuleErrorKind::StreamExhausted => write!(f, "Stream was exhausted"),
 			RuleErrorKind::UnexpectedToken(token_tag) => write!(f, "Unexpected token '{}'", token_tag),
-			RuleErrorKind::ExpectedToken { expected, found } => write!(f, "Expected token '{}', found '{}'", expected, found),
+			RuleErrorKind::ExpectedOneOf { expected, found } => write!(f, "Unexpected token '{}', expected one of {}", found, expected.iter().join(", ")),
+			RuleErrorKind::PatternInExpr => write!(f, "Pattern can't be used as an expression"),
+			RuleErrorKind::ExprInPattern => write!(f, "Expression can't be used as a pattern"),
 		}
 	}
 }

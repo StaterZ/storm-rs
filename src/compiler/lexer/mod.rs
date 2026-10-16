@@ -44,3 +44,26 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerErro
 	tokens.push(Sourced::new(Token::Eof, source::Range { begin: eof, end: eof }));
 	Ok(tokens)
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::compiler::source::Document;
+
+	use super::{lex, Token};
+
+	fn lex_str(text: &str) -> Option<Vec<Token>> {
+		let document = Document::new("test".to_string(), text.to_string());
+		lex(&document).ok().map(|tokens| tokens.into_iter().map(|t| t.inner()).collect())
+	}
+
+	#[test]
+	fn block_comments() {
+		assert_eq!(lex_str("a /* b */ c"), Some(vec![Token::Identifier("a".to_string()), Token::Identifier("c".to_string()), Token::Eof]));
+		assert_eq!(lex_str("/* a /* b */ c */ d"), Some(vec![Token::Identifier("d".to_string()), Token::Eof]));
+		assert_eq!(lex_str("/* a //b */ c"), Some(vec![Token::Identifier("c".to_string()), Token::Eof]));
+		assert_eq!(lex_str("/*/ a */"), Some(vec![Token::Eof]));
+		assert_eq!(lex_str("/* ░▒▓█ */"), Some(vec![Token::Eof]));
+		assert_eq!(lex_str("/* a"), None);
+		assert_eq!(lex_str("/* a /* b */"), None);
+	}
+}

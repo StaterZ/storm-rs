@@ -5,21 +5,6 @@ use crate::compiler::source::Sourced;
 
 use super::super::node_sets::*;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Precedence {
-	//Exponential,
-	Linear,
-	Bitwise,
-	Constant,
-	Compare,
-	And,
-	Or,
-}
-
-pub trait PrecedenceOrd {
-	fn precedence(&self) -> Precedence;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArithBinOpKind {
 	Add,
@@ -27,14 +12,6 @@ pub enum ArithBinOpKind {
 	Mul,
 	Div,
 	Mod,
-}
-impl PrecedenceOrd for ArithBinOpKind {
-	fn precedence(&self) -> Precedence {
-		match self {
-			ArithBinOpKind::Add | ArithBinOpKind::Sub => Precedence::Constant,
-			ArithBinOpKind::Mul | ArithBinOpKind::Div | ArithBinOpKind::Mod => Precedence::Linear,
-		}
-	}
 }
 impl Display for ArithBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -53,11 +30,6 @@ pub enum BitwiseBinOpKind {
 	Shl,
 	Shr,
 }
-impl PrecedenceOrd for BitwiseBinOpKind {
-	fn precedence(&self) -> Precedence {
-		Precedence::Bitwise
-	}
-}
 impl Display for BitwiseBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -72,14 +44,6 @@ pub enum LogicBinOpKind {
 	And,
 	Or,
 }
-impl PrecedenceOrd for LogicBinOpKind {
-	fn precedence(&self) -> Precedence {
-		match self {
-			LogicBinOpKind::And => Precedence::And,
-			LogicBinOpKind::Or => Precedence::Or,
-		}
-	}
-}
 impl Display for LogicBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -93,11 +57,6 @@ impl Display for LogicBinOpKind {
 pub struct ArithBinOp {
 	pub kind: ArithBinOpKind,
 	pub allow_wrap: bool,
-}
-impl PrecedenceOrd for ArithBinOp {
-	fn precedence(&self) -> Precedence {
-		self.kind.precedence()
-	}
 }
 impl Display for ArithBinOp {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -118,11 +77,6 @@ pub enum CmpBinOpKind {
 	Gt,
 	Ge,
 }
-impl PrecedenceOrd for CmpBinOpKind {
-	fn precedence(&self) -> Precedence {
-		Precedence::Compare
-	}
-}
 impl Display for CmpBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -142,16 +96,6 @@ pub enum BinOpKind {
 	Bitwise(BitwiseBinOpKind),
 	Cmp(CmpBinOpKind),
 	Logic(LogicBinOpKind),
-}
-impl PrecedenceOrd for BinOpKind {
-	fn precedence(&self) -> Precedence {
-		match self {
-			BinOpKind::Arith(arith) => arith.precedence(),
-			BinOpKind::Bitwise(bitwise) => bitwise.precedence(),
-			BinOpKind::Cmp(cmp) => cmp.precedence(),
-			BinOpKind::Logic(logic) => logic.precedence(),
-		}
-	}
 }
 impl Display for BinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

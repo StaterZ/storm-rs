@@ -1,0 +1,387 @@
+use std::rc::Rc;
+
+use crate::compiler::{lexer::Token, source::Sourced};
+use super::{
+	node_sets::*,
+	nodes::*,
+	Var,
+	RuleError,
+	cover::*,
+};
+
+grammar;
+
+extern {
+	type Location = usize;
+	type Error = RuleError;
+
+	enum Token {
+		"." => Token::Dot,
+		".*" => Token::Deref,
+		"," => Token::Comma,
+		":" => Token::Colon,
+		";" => Token::Semicolon,
+
+		"(" => Token::LParen,
+		")" => Token::RParen,
+		"{" => Token::LBrace,
+		"}" => Token::RBrace,
+
+		"+" => Token::Plus,
+		"-" => Token::Dash,
+		"*" => Token::Star,
+		"/" => Token::Slash,
+		"%" => Token::Percent,
+		"<<" => Token::LShift,
+		">>" => Token::RShift,
+		"&" => Token::Ampersand,
+
+		"=" => Token::Equals,
+		"==" => Token::Eq,
+		"!=" => Token::Ne,
+		"<" => Token::Lt,
+		"<=" => Token::Le,
+		">" => Token::Gt,
+		">=" => Token::Ge,
+		"&&" => Token::And,
+		"||" => Token::Or,
+		"!" => Token::Bang,
+
+		"let" => Token::Let,
+		"mut" => Token::Mut,
+		"_" => Token::Discard,
+
+		"ret" => Token::Return,
+		"break" => Token::Break,
+		"continue" => Token::Continue,
+		"unreachable" => Token::Unreachable,
+
+		"plex" => Token::Plex,
+		"fn" => Token::Fn,
+
+		"loop" => Token::Loop,
+		"while" => Token::While,
+		"for" => Token::For,
+		"in" => Token::In,
+		"if" => Token::If,
+		"else" => Token::Else,
+
+		"true" => Token::True,
+		"false" => Token::False,
+
+		"str" => Token::StrLit(<String>),
+		"int" => Token::IntLit(<u64>),
+		"ident" => Token::Identifier(<String>),
+
+		"eof" => Token::Eof,
+	}
+}
+
+// The `E` parameter says what may end an expression:
+// - "open": anything.
+// - "closed": no trailing `if`/`while`/`for` without an `else`, so `if a: if b: c else d` binds the `else` to the innermost `if`.
+// - "cond": no trailing bare `ret`/`break`, since a condition is followed by a body that could also be their value.
+// - "block": must end in a `}`, so nothing after it can continue the expression.
+
+pub File: Sourced<Expr> = {
+	<l:@L> <stmts:Stmts> <r:@R> "eof" => {
+		let (mut stmts, last) = stmts;
+		stmts.reverse();
+		stmts.extend(last);
+		node(l, Expr::Block(Block { stmts, expr: None }), r)
+	},
+};
+
+Block: Sourced<Expr> = {
+	<l:@L> "{" <stmts:Stmts> "}" <r:@R> => {
+		let (mut stmts, expr) = stmts;
+		stmts.reverse();
+		node(l, Expr::Block(Block { stmts, expr: expr.map(Box::new) }), r)
+	},
+};
+
+// Statements end with `;`, except for the last one and ones that end in a block (like `if a { b }`) followed by another statement.
+// Right recursive so a block-ending statement can require a statement after it. Gives the statements in reverse order.
+Stmts: (Vec<Sourced<Expr>>, Option<Sourced<Expr>>) = {
+	=> (vec![], None),
+	StmtsNonEmpty,
+};
+StmtsNonEmpty: (Vec<Sourced<Expr>>, Option<Sourced<Expr>>) = {
+	<last:Stmt<"open">> => (vec![], Some(last)),
+	<stmt:SemiStmt> <mut rest:Stmts> => { rest.0.push(stmt); rest },
+	<stmt:BlockStmt> <mut rest:StmtsNonEmpty> => { rest.0.push(stmt); rest },
+};
+
+SemiStmt: Sourced<Expr> = {
+	<l:@L> <expr:Stmt<"open">> ";" <r:@R> => node(l, Expr::Stmt(Stmt { expr: Box::new(expr) }), r),
+};
+
+BlockStmt: Sourced<Expr> = {
+	<l:@L> <expr:Expr<"block">> <r:@R> => node(l, Expr::Stmt(Stmt { expr: Box::new(expr) }), r),
+};
+
+Body<E>: Sourced<Expr> = {
+	Block,
+	":" <Stmt<E>>,
+};
+
+Stmt<E>: Sourced<Expr> = {
+	// the assignee is parsed as an expression and converted afterwards, since we can't tell them apart until we see the `=`
+	<l:@L> <lhs:PatLead> <op:BinOp?> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, op, rhs, r),
+	<l:@L> <lhs:Or> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, None, rhs, r),
+	<l:@L> <lhs:Or> <op:OrOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+	<l:@L> <lhs:And> <op:AndOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+	<l:@L> <lhs:Cmp> <op:CmpOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+	<l:@L> <lhs:Const> <op:ConstOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+	<l:@L> <lhs:Bit> <op:BitOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+	<l:@L> <lhs:Lin> <op:LinOp> "=" <rhs:Expr<E>> <r:@R> =>? assign(l, lhs, Some(op), rhs, r),
+
+	<l:@L> "ret" <r:@R> if E !~ "^(cond|block)$" => node(l, Expr::Return(Return { expr: None }), r),
+	<l:@L> "ret" <expr:Expr<E>> <r:@R> => node(l, Expr::Return(Return { expr: Some(Box::new(expr)) }), r),
+	Break<E>,
+	<l:@L> "continue" <r:@R> if E != "block" => node(l, Expr::Continue, r),
+	<l:@L> "unreachable" <r:@R> if E != "block" => node(l, Expr::Unreachable, r),
+	Expr<E>,
+};
+
+Break<E>: Sourced<Expr> = {
+	<l:@L> "break" <r:@R> if E !~ "^(cond|block)$" => node(l, Expr::Break(Break { expr: None }), r),
+	<l:@L> "break" <expr:Break<E>> <r:@R> => node(l, Expr::Break(Break { expr: Some(Box::new(expr)) }), r),
+	<l:@L> "break" <cl:@L> "continue" <cr:@R> <r:@R> => node(l, Expr::Break(Break { expr: Some(Box::new(node(cl, Expr::Continue, cr))) }), r),
+	<l:@L> "break" <expr:Expr<E>> <r:@R> => node(l, Expr::Break(Break { expr: Some(Box::new(expr)) }), r),
+};
+
+Expr<E>: Sourced<Expr> = CExpr<E> =>? into_expr(<>);
+
+// Expressions are produced as covers so that tuples can still turn into patterns.
+// An expression ends either in a plain operand (`Or`) or in a tail form like `if` (`FOr`).
+// Tail forms are only allowed as the rightmost operand, which keeps them from swallowing the operators after them.
+CExpr<E>: Sourced<Cover> = {
+	Or if E != "block",
+	FOr<E>,
+};
+
+Or: Sourced<Cover> = {
+	<l:@L> <lhs:Or> <op:OrOp> <rhs:And> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	And,
+};
+And: Sourced<Cover> = {
+	<l:@L> <lhs:And> <op:AndOp> <rhs:Cmp> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Cmp,
+};
+Cmp: Sourced<Cover> = {
+	<l:@L> <lhs:Cmp> <op:CmpOp> <rhs:Const> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Const,
+};
+Const: Sourced<Cover> = {
+	<l:@L> <lhs:Const> <op:ConstOp> <rhs:Bit> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Bit,
+};
+Bit: Sourced<Cover> = {
+	<l:@L> <lhs:Bit> <op:BitOp> <rhs:Lin> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Lin,
+};
+Lin: Sourced<Cover> = {
+	<l:@L> <lhs:Lin> <op:LinOp> <rhs:Postfix> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Postfix,
+};
+
+FOr<E>: Sourced<Cover> = {
+	<l:@L> <lhs:Or> <op:OrOp> <rhs:FAnd<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	FAnd<E>,
+};
+FAnd<E>: Sourced<Cover> = {
+	<l:@L> <lhs:And> <op:AndOp> <rhs:FCmp<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	FCmp<E>,
+};
+FCmp<E>: Sourced<Cover> = {
+	<l:@L> <lhs:Cmp> <op:CmpOp> <rhs:FConst<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	FConst<E>,
+};
+FConst<E>: Sourced<Cover> = {
+	<l:@L> <lhs:Const> <op:ConstOp> <rhs:FBit<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	FBit<E>,
+};
+FBit<E>: Sourced<Cover> = {
+	<l:@L> <lhs:Bit> <op:BitOp> <rhs:FLin<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	FLin<E>,
+};
+FLin<E>: Sourced<Cover> = {
+	<l:@L> <lhs:Lin> <op:LinOp> <rhs:Tail<E>> <r:@R> =>? bin_op(l, lhs, op, rhs, r),
+	Tail<E>,
+};
+
+BinOp: BinOpKind = {
+	OrOp,
+	AndOp,
+	CmpOp,
+	ConstOp,
+	BitOp,
+	LinOp,
+};
+OrOp: BinOpKind = {
+	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
+};
+AndOp: BinOpKind = {
+	"&&" => BinOpKind::Logic(LogicBinOpKind::And),
+};
+CmpOp: BinOpKind = {
+	"==" => BinOpKind::Cmp(CmpBinOpKind::Eq),
+	"!=" => BinOpKind::Cmp(CmpBinOpKind::Ne),
+	"<" => BinOpKind::Cmp(CmpBinOpKind::Lt),
+	"<=" => BinOpKind::Cmp(CmpBinOpKind::Le),
+	">" => BinOpKind::Cmp(CmpBinOpKind::Gt),
+	">=" => BinOpKind::Cmp(CmpBinOpKind::Ge),
+};
+ConstOp: BinOpKind = {
+	"+" <wrap:"%"?> => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Add, allow_wrap: wrap.is_some() }),
+	"-" <wrap:"%"?> => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Sub, allow_wrap: wrap.is_some() }),
+};
+BitOp: BinOpKind = {
+	"<<" => BinOpKind::Bitwise(BitwiseBinOpKind::Shl),
+	">>" => BinOpKind::Bitwise(BitwiseBinOpKind::Shr),
+};
+LinOp: BinOpKind = {
+	"*" <wrap:"%"?> => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: wrap.is_some() }),
+	"/" <wrap:"%"?> => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Div, allow_wrap: wrap.is_some() }),
+	"%" => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mod, allow_wrap: false }), //TODO: allow_wrap is not a thing for mod, change data structure?
+};
+
+// prefix operators bind tighter than postfix ones, so `-a.*` is `(-a).*`
+Postfix: Sourced<Cover> = {
+	<l:@L> <expr:Postfix> ".*" <r:@R> =>? una_op(l, UnaOpKind::Deref, expr, r),
+	<l:@L> <expr:Postfix> "&" <r:@R> =>? una_op(l, UnaOpKind::AddressOf, expr, r),
+	<l:@L> <expr:Postfix> "." <ident:"ident"> <r:@R> =>? Ok(cover(l, Expr::FieldAccess(FieldAccess {
+		expr: Box::new(into_expr(expr)?),
+		ident: Rc::new(Var::new(ident)),
+	}), r)),
+	<l:@L> <func:Postfix> <arg:CallArg> <r:@R> =>? Ok(cover(l, Expr::Call(Call {
+		func: Box::new(into_expr(func)?),
+		arg: Box::new(arg),
+	}), r)),
+	Prefix,
+};
+
+Prefix: Sourced<Cover> = {
+	<l:@L> "+" <expr:Atom> <r:@R> =>? una_op(l, UnaOpKind::Identity, expr, r),
+	<l:@L> "-" <expr:Atom> <r:@R> =>? una_op(l, UnaOpKind::Negate, expr, r),
+	<l:@L> "!" <expr:Atom> <r:@R> =>? una_op(l, UnaOpKind::Not, expr, r),
+	Atom,
+};
+
+Atom: Sourced<Cover> = {
+	<l:@L> "true" <r:@R> => cover(l, Expr::BoolLit(true), r),
+	<l:@L> "false" <r:@R> => cover(l, Expr::BoolLit(false), r),
+	<l:@L> <value:"int"> <r:@R> => cover(l, Expr::IntLit(value), r),
+	<l:@L> <value:"str"> <r:@R> => cover(l, Expr::StrLit(value), r),
+	<l:@L> <name:"ident"> <r:@R> => cover(l, Expr::Identifier(var(name)), r),
+	<l:@L> "(" <item:Item> ")" <r:@R> => node(l, Cover::Paren(Box::new(item)), r),
+	<l:@L> <items:Tuple<Item>> <r:@R> => node(l, Cover::Tuple(items), r),
+};
+
+Item: Sourced<Cover> = {
+	PatLead,
+	CExpr<"open">,
+};
+
+// the call argument is always a tuple, `f(x)` is a parenthesized `x` and not a call. use `f(x,)` instead
+CallArg: Sourced<Expr> = {
+	<l:@L> <items:Tuple<Expr<"open">>> <r:@R> => node(l, Expr::TupleCtor(TupleCtor { items }), r),
+};
+
+// a parenthesized list that isn't a lone item without a trailing comma
+Tuple<T>: Vec<T> = {
+	"(" ")" => vec![],
+	"(" <item:T> "," ")" => vec![item],
+	"(" <first:T> <rest:("," <T>)+> ","? ")" => {
+		let mut items = vec![first];
+		items.extend(rest);
+		items
+	},
+};
+
+Pattern: Sourced<Pattern> = PatLike =>? into_pattern(<>);
+
+PatLike: Sourced<Cover> = {
+	PatLead,
+	Postfix,
+};
+
+PatLead: Sourced<Cover> = {
+	<l:@L> "let" <pat:PatLike> <r:@R> => node(l, Cover::Let(Box::new(pat)), r),
+	<l:@L> "mut" <pat:PatLike> <r:@R> => node(l, Cover::Mut(Box::new(pat)), r),
+	<l:@L> "_" <r:@R> => node(l, Cover::Discard, r),
+};
+
+Tail<E>: Sourced<Cover> = {
+	<Block> => lift(<>),
+	<Plex> => lift(<>),
+	<If<E>> => lift(<>),
+	<While<E>> => lift(<>),
+	<For<E>> => lift(<>),
+	<Loop<E>> => lift(<>),
+	<Func<E>> => lift(<>),
+};
+
+Plex: Sourced<Expr> = {
+	<l:@L> "plex" "{" <fields:Field*> "}" <r:@R> => node(l, Expr::Plex(Plex {
+		name: "unnamed plex".to_string(), //TODO: names?
+		fields,
+	}), r),
+};
+
+Field: Field = {
+	<name:"ident"> ":" <ty:Expr<"cond">> => Field { name, r#type: ty },
+};
+
+If<E>: Sourced<Expr> = {
+	<l:@L> "if" <cond:Expr<"cond">> <body:Body<E>> <r:@R> if E != "closed" => node(l, Expr::If(If {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: None,
+	}), r),
+	<l:@L> "if" <cond:Expr<"cond">> <body:Body<"closed">> "else" <body_else:Expr<E>> <r:@R> => node(l, Expr::If(If {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
+	}), r),
+};
+
+While<E>: Sourced<Expr> = {
+	<l:@L> "while" <cond:Expr<"cond">> <body:Body<E>> <r:@R> if E != "closed" => node(l, Expr::While(While {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: None,
+	}), r),
+	<l:@L> "while" <cond:Expr<"cond">> <body:Body<"closed">> "else" <body_else:Expr<E>> <r:@R> => node(l, Expr::While(While {
+		cond: Box::new(cond),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
+	}), r),
+};
+
+For<E>: Sourced<Expr> = {
+	<l:@L> "for" <binding:Pattern> "in" <iter:Expr<"cond">> <body:Body<E>> <r:@R> if E != "closed" => node(l, Expr::For(For {
+		binding: Box::new(binding),
+		iter: Box::new(iter),
+		body: Box::new(body),
+		body_else: None,
+	}), r),
+	<l:@L> "for" <binding:Pattern> "in" <iter:Expr<"cond">> <body:Body<"closed">> "else" <body_else:Expr<E>> <r:@R> => node(l, Expr::For(For {
+		binding: Box::new(binding),
+		iter: Box::new(iter),
+		body: Box::new(body),
+		body_else: Some(Box::new(body_else)),
+	}), r),
+};
+
+Loop<E>: Sourced<Expr> = {
+	<l:@L> "loop" <body:Expr<E>> <r:@R> => node(l, Expr::Loop(Loop { body: Box::new(body) }), r),
+};
+
+Func<E>: Sourced<Expr> = {
+	<l:@L> "fn" <binding:Pattern> <body:Body<E>> <r:@R> => node(l, Expr::Func(Func {
+		binding: Box::new(binding),
+		body: Box::new(body),
+	}), r),
+};

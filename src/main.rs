@@ -1,9 +1,7 @@
 #![allow(dead_code)]
-#![feature(trait_alias)]
 #![feature(const_trait_impl)]
 #![feature(try_blocks)]
 #![feature(min_specialization)]
-#![feature(anonymous_lifetime_in_impl_trait)]
 
 mod compiler;
 
@@ -72,7 +70,6 @@ fn compile() {
 	let flags = compiler::Flags {
 		show_source: true,
 		show_tokens: true,
-		show_ast_rule_path: true,
 		show_ast: true,
 		show_sem: true,
 		show_output: true,

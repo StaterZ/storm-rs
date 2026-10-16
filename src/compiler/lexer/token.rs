@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use itertools::Itertools;
 use logos::{Logos, Skip};
 use unescaper::unescape;
 
@@ -160,23 +159,25 @@ fn line_comment(lex: &mut logos::Lexer<Token>) -> Skip {
 }
 
 fn block_comment(lex: &mut logos::Lexer<Token>) -> Result<Skip, LexerErrorKind> {
-	let mut chars = lex.remainder().char_indices().tuple_windows();
+	// `/` and `*` are ASCII, so scanning bytes never splits a char
+	let bytes = lex.remainder().as_bytes();
 	let mut depth = 1usize;
-	while let Some(((_, prev_c), (i, c))) = chars.next() {
-		match (prev_c, c) {
-			('/', '*') => {
+	let mut i = 0;
+	while i + 1 < bytes.len() {
+		match (bytes[i], bytes[i + 1]) {
+			(b'/', b'*') => {
 				depth += 1;
-				chars.next().ok_or(LexerErrorKind::MultilineCommentDelimiterNotClosed)?;
+				i += 2;
 			},
-			('*', '/') => {
+			(b'*', b'/') => {
 				depth -= 1;
-				chars.next().ok_or(LexerErrorKind::MultilineCommentDelimiterNotClosed)?;
+				i += 2;
 				if depth == 0 {
 					lex.bump(i);
 					return Ok(Skip);
 				}
 			},
-			_ => { },
+			_ => i += 1,
 		}
 	}
 	Err(LexerErrorKind::MultilineCommentDelimiterNotClosed)

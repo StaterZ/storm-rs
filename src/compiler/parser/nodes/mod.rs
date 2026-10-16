@@ -14,7 +14,6 @@ pub use r#if::If;
 pub use block::Block;
 pub use stmt::Stmt;
 pub use bin_op::{
-	PrecedenceOrd,
 	BinOp,
 	BinOpKind,
 	ArithBinOpKind,

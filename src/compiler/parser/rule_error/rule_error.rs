@@ -1,7 +1,6 @@
-use crate::compiler::source::{self, Sourced};
+use crate::compiler::source;
 
 use super::{
-	super::SoftResult,
 	RuleErrorKind,
 	RuleErrorMeta,
 };
@@ -20,11 +19,3 @@ impl RuleError {
 		}
 	}
 }
-
-pub type RuleResult<T> = SoftResult<Sourced<T>, RuleErrorKind, RuleErrorKind>;
-
-pub enum CreateOrPass<T> {
-	Create(T),
-	Pass(Sourced<T>),
-}
-pub type RuleResultCreateOrPass<T> = SoftResult<CreateOrPass<T>, RuleErrorKind, RuleErrorKind>;

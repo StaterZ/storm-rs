@@ -1,6 +1,5 @@
 use std::{error::Error, fmt::Display};
 
-use parser::debug::RuleTree;
 use color_print::{cformat, cprintln};
 use stopwatch::Stopwatch;
 use szu::math::ilog10ceil;
@@ -14,14 +13,11 @@ pub mod parser;
 pub mod semantic_analyzer;
 pub mod codegen;
 
-mod map_peekable;
-
 #[derive(Debug)]
 pub struct Flags {
 	pub show_source: bool,
 	pub show_tokens: bool,
 	pub show_ast: bool,
-	pub show_ast_rule_path: bool,
 	pub show_sem: bool,
 	pub show_output: bool,
 }
@@ -80,32 +76,17 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		println!("=== AST ===");
 	}
 	let mut ast_timer = Stopwatch::start_new();
-	let (ast, rule_tree) = if flags.show_ast_rule_path {
-		let mut observer = parser::debug::rule_observers::DebugObserver::new();
-		(parser::parse(&tokens, &mut observer), Some(observer.conclude()))
-	} else {
-		(parser::parse(&tokens, &mut parser::debug::rule_observers::DummyObserver { }), None)
-	};
+	let ast = parser::parse(&tokens);
 	ast_timer.stop();
-
-	fn print_rule_tree(rule_tree: Option<RuleTree>, document: &source::DocumentMeta) {
-		if let Some(rule_tree) = &rule_tree {
-			println!("{}", tree_printer::Tree::new(&rule_tree.with_meta(&document)))
-		}
-	}
 
 	let mut ast = match ast {
 		Ok(root) => root,
 		Err(err) => {
 			let err_meta = err.to_meta(&document);
 			cprintln!("<red>AST Failed:</>\n{}", err_meta);
-			print_rule_tree(rule_tree, &document);
 			return Err(CompilerError::AstParserFailed);
 		},
 	};
-	
-	print_rule_tree(rule_tree, &document);
-	println!();
 
 	if flags.show_ast {
 		println!("{}", tree_printer::Tree::new(&ast)

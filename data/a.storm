@@ -8,21 +8,21 @@ let haha;
 {
 	grub = 0x42 + 5 * 2 - 0b1001;
 	/*let @"ba\"r" = 0x42 + 5 * 2 - 0b1001;
-	//weeeeee*/
-	let x = "❤️n! ░▒▓█";
+	//weeeeee
+	*/
 }
 */
+let x = "❤️n! ░▒▓█";
 
-loop {
+let e = loop {
 	if (3 + 2) * 4 <= 3 {
-		break;
+		break 2;
 	}
 	continue;
 
 	let x = 3 + 56;
 
 	break break continue;
-	give 3;
-}
+};
 
 unreachable;
