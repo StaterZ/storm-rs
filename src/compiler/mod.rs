@@ -2,7 +2,6 @@ use std::{error::Error, fmt::Display};
 
 use color_print::{cformat, cprintln};
 use stopwatch::Stopwatch;
-use szu::math::ilog10ceil;
 use tree_printer;
 
 use crate::Backend;
@@ -13,6 +12,7 @@ pub mod parser;
 pub mod semantic_analyzer;
 pub mod codegen;
 pub mod interactive;
+mod debug_print;
 
 #[derive(Debug, clap::Args)]
 pub struct Flags {
@@ -25,12 +25,9 @@ pub struct Flags {
 	/// Print the tokens from the lexer
 	#[arg(long = "show-tokens")]
 	pub show_tokens: bool,
-	/// Print the AST from the parser
+	/// Print the AST after semantic analysis, with symbols linked to their declarations
 	#[arg(long = "show-ast")]
 	pub show_ast: bool,
-	/// Print the AST after semantic analysis, with symbols linked to their declarations
-	#[arg(long = "show-sem")]
-	pub show_sem: bool,
 }
 
 impl Flags {
@@ -39,7 +36,6 @@ impl Flags {
 		self.show_source = true;
 		self.show_tokens = true;
 		self.show_ast = true;
-		self.show_sem = true;
 	}
 }
 
@@ -62,40 +58,40 @@ impl Error for CompilerError { }
 pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> Result<Vec<u8>, CompilerError> {
 	let document = source::DocumentMeta::new(document); //TODO: this isn't great, change it to only do this if we find errors
 
-	if flags.show_source {
-		println!("=== Source ===");
-		let width = ilog10ceil(document.get_num_lines());
-		for line in document.lines() {
-			cprintln!("<cyan>{:>width$} |</> {:?}", line, line.range().get_str());
-		}
-		println!();
-	}
-
-	if flags.show_tokens {
-		println!("=== TOKENS ===");
-	}
+	// lexing comes first so the source can be highlighted with the tokens
 	let mut lex_timer = Stopwatch::start_new();
 	let tokens = lexer::lex(&document);
 	lex_timer.stop();
+
+	if flags.show_source {
+		println!("=== SOURCE ===");
+		let highlight = match &tokens {
+			Ok(tokens) => tokens,
+			Err(err) => &err.tokens, // the tokens before the error
+		};
+		debug_print::print_source(&document, Some(highlight));
+		println!();
+	}
+
 	let tokens = match tokens {
 		Ok(tokens) => tokens,
 		Err(err) => {
+			if flags.show_tokens {
+				println!("=== TOKENS ===");
+				debug_print::print_tokens(&document, &err.tokens);
+				println!();
+			}
 			err.eprint(&document);
 			return Err(CompilerError::LexerFailed);
 		}
 	};
 
 	if flags.show_tokens {
-		for token in tokens.iter() {
-			let token = token.as_ref().with_meta(&document);
-			println!("{:?}", token);
-		}
+		println!("=== TOKENS ===");
+		debug_print::print_tokens(&document, &tokens);
 		println!();
 	}
 	
-	if flags.show_ast {
-		println!("=== AST ===");
-	}
 	let mut ast_timer = Stopwatch::start_new();
 	let ast = parser::parse(&tokens);
 	ast_timer.stop();
@@ -109,19 +105,19 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		},
 	};
 
+	let mut sem_timer = Stopwatch::start_new();
+	let sem_output = semantic_analyzer::analyze(&mut ast);
+	sem_timer.stop();
+
+	// printed once, after analysis links the symbols. when the analysis fails, it's the parser's AST with whatever got linked
 	if flags.show_ast {
+		println!("=== AST ===");
 		println!("{}", tree_printer::Tree::new(&ast)
 				.label("Root")
 				.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
 		println!();
 	}
-	
-	if flags.show_sem {
-		println!("=== SEMANTIC ANALYSIS ===");
-	}
-	let mut sem_timer = Stopwatch::start_new();
-	let sem_output = semantic_analyzer::analyze(&mut ast);
-	sem_timer.stop();
+
 	if let Err(errors) = sem_output {
 		cprintln!("<red>SEM Failed:</>");
 		for (i, err) in errors.iter().enumerate() {
@@ -130,12 +126,6 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		println!();
 		return Err(CompilerError::SatParserFailed);
 	};
-	if flags.show_sem {
-		println!("{}", tree_printer::Tree::new(&ast)
-				.label("Root")
-				.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
-		println!();
-	}
 
 	// === GENERATOR ===
 	let mut gen_timer = Stopwatch::start_new();
