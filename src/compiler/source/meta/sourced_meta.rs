@@ -9,7 +9,7 @@ pub struct SourcedMeta<'a, T> {
 }
 
 impl<'a, T> SourcedMeta<'a, T> {
-	pub fn new_with_document(sourced: Sourced<T>, document: &'a DocumentMeta) -> Self {
+	pub(in super::super) fn new_with_document(sourced: Sourced<T>, document: &'a DocumentMeta) -> Self {
 		Self {
 			sourced,
 			document,

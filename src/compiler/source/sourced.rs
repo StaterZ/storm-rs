@@ -2,7 +2,11 @@ use std::ops::{Deref, DerefMut};
 
 use szu::mappable::Mappable;
 
-use super::Range;
+use super::{
+	Range,
+	SourcedMeta,
+	DocumentMeta,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sourced<T> {
@@ -42,6 +46,11 @@ impl<T> Sourced<T> {
 
 	pub fn source(&self) -> &Range {
 		&self.range
+	}
+
+	
+	pub fn with_meta<'a>(self, document: &'a DocumentMeta) -> SourcedMeta<'a, T> {
+		SourcedMeta::new_with_document(self, document)
 	}
 }
 
