@@ -1,11 +1,11 @@
 let times_three = fn(x): x*3;
 
 let str_cmp = fn(mut a, mut b) {
-	while a# != 0 && a# == b# {
+	while a.* != 0 && a.* == b.* {
 		a += 1;
 		b += 1;
 	};
-	a# - b#
+	a.* - b.*
 };
 
 let mut i = 0;

@@ -21,6 +21,8 @@ pub enum Token {
 
 	#[token(".")]
 	Dot,
+	#[token(".*")]
+	Deref,
 	#[token(",")]
 	Comma,
 	#[token(":")]

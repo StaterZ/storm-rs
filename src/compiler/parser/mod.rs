@@ -201,7 +201,7 @@ fn parse_deref<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut impl Rule
 	create_node(stream, |stream| {
 		let expr = try_rule("expr_atom", stream, observer, parse_expr_atom)?;
 
-		next_if_eq_err(stream, TokenTag::Hash).map_err(|err| SoftError::Soft(err))?;
+		next_if_eq_err(stream, TokenTag::Deref).map_err(|err| SoftError::Soft(err))?;
 
 		Ok(Pattern::Deref(Box::new(expr)))
 	})
@@ -567,7 +567,7 @@ fn parse_expr_una_post<'a, 'i>(stream: &mut impl TokStream<'i>, observer: &mut i
 		};
 
 		Ok(CreateOrPass::Create(match token.deref() {
-			Token::Hash => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
+			Token::Deref => Expr::UnaOp(UnaOp { op: UnaOpKind::Deref, expr: Box::new(expr) }),
 			Token::Ampersand => Expr::UnaOp(UnaOp { op: UnaOpKind::AddressOf, expr: Box::new(expr) }),
 			Token::Dot => {
 				let ident = parse_identifier_without_crying_myself_to_sleep(stream, observer).force_hard()?;
