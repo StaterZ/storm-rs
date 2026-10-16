@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use tree_printer::TreeDisplay;
 
 use crate::compiler::source::Sourced;
 
@@ -163,7 +164,7 @@ impl Display for BinOpKind {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, TreeDisplay)]
 pub struct BinOp {
 	pub op: BinOpKind,
 	pub lhs: Box<Sourced<Expr>>,

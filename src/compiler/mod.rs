@@ -90,7 +90,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 
 	fn print_rule_tree(rule_tree: Option<RuleTree>, document: &source::DocumentMeta) {
 		if let Some(rule_tree) = &rule_tree {
-			tree_printer::print_tree("", &rule_tree.with_meta(&document), |_label, value| cformat!("{}", value))
+			println!("{}", tree_printer::Tree::new(&rule_tree.with_meta(&document)))
 		}
 	}
 
@@ -108,7 +108,9 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	println!();
 
 	if flags.show_ast {
-		tree_printer::print_tree("Root", &ast, |label, value| cformat!("<green>{}</>: {}", label, value));
+		println!("{}", tree_printer::Tree::new(&ast)
+				.label("Root")
+				.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
 		println!();
 	}
 	
@@ -127,7 +129,9 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		return Err(CompilerError::SatParserFailed);
 	};
 	if flags.show_sem {
-		tree_printer::print_tree("Root", &ast, |label, value| cformat!("<green>{}</>: {}", label, value));
+		println!("{}", tree_printer::Tree::new(&ast)
+				.label("Root")
+				.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
 		println!();
 	}
 

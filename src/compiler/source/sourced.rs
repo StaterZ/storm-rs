@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use szu::mappable::Mappable;
+use tree_printer::TreeDisplay;
 
 use super::{
 	Range,
@@ -104,3 +105,6 @@ impl<T> DerefMut for Sourced<T> {
 		&mut self.value
 	}
 }
+
+// shows the value only; the source range isn't part of the tree
+tree_printer::impl_forward!([T: TreeDisplay] Sourced<T>);

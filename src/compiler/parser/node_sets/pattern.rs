@@ -1,53 +1,38 @@
-use std::{cell::RefCell, rc::Rc};
-use std::ops::Deref;
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use enum_as_inner::EnumAsInner;
 use strum::AsRefStr;
 use color_print::cformat;
-use szu::opt_own::OptOwnStr;
-use tree_printer::{TreeDisplay, TreeDisplayChild, make_list};
+use tree_printer::TreeDisplay;
 
 use crate::compiler::source::Sourced;
 
 use super::{super::{nodes::*, Var}, *};
 
-#[derive(Debug, AsRefStr, EnumAsInner)]
+#[derive(Debug, AsRefStr, EnumAsInner, TreeDisplay)]
+#[tree(fmt_line = Pattern::fmt_tree_line)]
 pub enum Pattern {
-	Let(Let),
-	Mut(Mut),
-	TupleDtor(TupleDtor),
-	Deref(Box<Sourced<Expr>>),
-	Binding(Rc<RefCell<Var>>),
+	Let(#[tree(flatten)] Let),
+	Mut(#[tree(flatten)] Mut),
+	TupleDtor(#[tree(flatten)] TupleDtor),
+	Deref(#[tree(name = "expr")] Box<Sourced<Expr>>),
+	Binding(#[tree(skip)] Rc<RefCell<Var>>),
 	Discard,
 }
 
-impl TreeDisplay for Sourced<Pattern> {
-	fn get_text_line(&self) -> String {
-		let text: OptOwnStr = match self.deref() {
-			Pattern::Let(_) => "".into(),
-			Pattern::Mut(_) => "".into(),
-			Pattern::Deref(_) => "".into(),
-			Pattern::TupleDtor(_) => "".into(),
-			Pattern::Binding(value) => cformat!("<cyan>{}</>", value.borrow()).into(),
-			Pattern::Discard => "".into(),
-		};
-		format!("{}{}({})", text.deref(), if text.len() > 0 { " " } else { "" }, self.deref().as_ref())
-	}
-
-	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
-		match self.deref() {
-			Pattern::Let(value) => Some(vec![
-				("expr".into(), (value.pat.deref() as &dyn TreeDisplay).into()),
-			]),
-			Pattern::Mut(value) => Some(vec![
-				("expr".into(), (value.pat.deref() as &dyn TreeDisplay).into()),
-			]),
-			Pattern::Deref(value) => Some(vec![
-				("expr".into(), (value.deref() as &dyn TreeDisplay).into()),
-			]),
-			Pattern::TupleDtor(value) => Some(make_list(value.items.iter())),
-			Pattern::Binding(_) => None,
+impl Pattern {
+	fn fmt_tree_line(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let value = match self {
+			Pattern::Let(_) => None,
+			Pattern::Mut(_) => None,
+			Pattern::Deref(_) => None,
+			Pattern::TupleDtor(_) => None,
+			Pattern::Binding(value) => Some(cformat!("<cyan>{}</>", value.borrow())),
 			Pattern::Discard => None,
+		};
+		if let Some(value) = value {
+			write!(f, "{} ", value)?;
 		}
+		write!(f, "({})", self.as_ref())
 	}
 }

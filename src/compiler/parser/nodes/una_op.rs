@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use tree_printer::TreeDisplay;
 
 use crate::compiler::source::Sourced;
 
@@ -25,7 +26,7 @@ impl Display for UnaOpKind {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, TreeDisplay)]
 pub struct UnaOp {
 	pub op: UnaOpKind,
 	pub expr: Box<Sourced<Expr>>,

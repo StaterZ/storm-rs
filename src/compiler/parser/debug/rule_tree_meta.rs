@@ -1,8 +1,8 @@
-use itertools::Itertools;
+use std::fmt;
+
 use owo_colors::{AnsiColors, DynColors, OwoColorize};
 use color_print::cformat;
-use szu::opt_own::OptOwnStr;
-use tree_printer::{TreeDisplay, TreeDisplayChild};
+use tree_printer::{Children, TreeDisplay};
 
 use crate::compiler::map_peekable::soft_error::SoftError;
 use crate::compiler::source;
@@ -14,25 +14,21 @@ pub struct RuleTreeMeta<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> TreeDisplay for RuleTreeMeta<'a, 'b, 'c> {
-	fn get_text_line(&self) -> String {
-		format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| {
+	fn fmt_line(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let line = format!("Rule '{}' Next: {}", self.tree.name, self.tree.stream_state.map_or_else(|| "EOF".to_string(), |state| {
 			let range = state.source().with_meta(self.document);
 			cformat!("{} <cyan>{}</>", range, range.get_str())
-		}))
-			.color(self.get_scope_color())
-			.to_string()
+		}));
+		write!(f, "{}", line.color(self.scope_color()))
 	}
 
-	fn get_children<'s>(&'s self) -> Option<Vec<(OptOwnStr<'s>, TreeDisplayChild<'s>)>> {
-		(self.tree.children.len() > 0)
-			.then(|| self.tree.children
-				.iter()
-				.map(|child| ("".into(), TreeDisplayChild::Owned(Box::new(child.with_meta(self.document)))))
-				.collect_vec()
-			)
+	fn fmt_children(&self, children: &mut Children<'_>) {
+		for child in self.tree.children.iter() {
+			children.field("", &child.with_meta(self.document));
+		}
 	}
 
-	fn get_scope_color(&self) -> DynColors {
+	fn scope_color(&self) -> DynColors {
 		DynColors::Ansi(match self.tree.result_kind {
 			Ok(_) => AnsiColors::Green,
 			Err(SoftError::Soft(_)) => AnsiColors::Yellow,

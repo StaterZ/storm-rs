@@ -16,6 +16,8 @@
 			"cprintln",
 			"peeker"
 		],
-		"git.ignoreLimitWarning": true
+		"git.ignoreLimitWarning": true,
+		// build into target/rust-analyzer so its proc-macro server doesn't lock DLLs cargo needs to relink
+		"rust-analyzer.cargo.targetDir": true
 	}
 }

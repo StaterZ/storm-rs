@@ -4,27 +4,15 @@ use crate::compiler::source::Sourced;
 
 use super::super::node_sets::*;
 
-#[derive(Debug)]
+#[derive(Debug, TreeDisplay)]
 pub struct Plex {
 	pub name: String,
+	#[tree(items)]
 	pub fields: Vec<Field>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TreeDisplay)]
 pub struct Field {
 	pub name: String,
 	pub r#type: Sourced<Expr>,
-}
-
-impl TreeDisplay for Field {
-	fn get_text_line(&self) -> String {
-		"".into()
-	}
-
-	fn get_children<'s>(&'s self) -> Option<Vec<(szu::opt_own::OptOwnStr<'s>, tree_printer::TreeDisplayChild<'s>)>> {
-		Some(vec![
-			("name".into(), (&self.name as &dyn TreeDisplay).into()),
-			("type".into(), (&self.r#type as &dyn TreeDisplay).into()),
-		])
-	}
 }

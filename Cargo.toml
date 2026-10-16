@@ -46,7 +46,7 @@ inkwell = { version = "0.10.0", features = ["llvm18-1"] }
 
 ### custom ###
 szu = { version = "0.2.1", path = "../szu" }
-tree_printer = { version = "0.1.0", path = "../tree_printer" }
+tree_printer = { version = "0.1.0", path = "../tree_printer", features = ["derive"] }
 
 [profile.release]
 lto = true
