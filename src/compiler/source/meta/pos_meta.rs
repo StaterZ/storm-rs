@@ -33,7 +33,7 @@ impl<'a> PosMeta<'a> {
 		let range = self
 			.line()
 			.range();
-		let range = Range::new(range.get_begin(), self.clone())
+		let range = Range::new(range.begin(), self.clone())
 			.with_meta(self.document);
 		Column::new(range
 			.get_str()

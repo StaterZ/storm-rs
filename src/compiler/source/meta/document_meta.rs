@@ -15,14 +15,15 @@ pub struct DocumentMeta<'a> {
 
 impl<'a> DocumentMeta<'a> {
 	pub fn new(document: &'a Document) -> Self {
-		let mut char_to_byte = Vec::<usize>::with_capacity(document.get_text().len());
-		unsafe { char_to_byte.set_len(char_to_byte.capacity()); }
-		let lines_begin_indices = document.get_text()
+		let text = document.get_text();
+		let mut byte_to_char = Vec::<usize>::with_capacity(text.len() + 1);
+		unsafe { byte_to_char.set_len(text.len()); }
+		let lines_begin_indices = text
 			.char_indices()
 			.enumerate()
 			.window_option()
-			.filter_map_deref(|(prev_c, (ci, (bi, c)))| {
-				char_to_byte[*bi] = *ci;
+			.filter_map_deref(|(prev_c, (char_i, (byte_i, c)))| {
+				byte_to_char[*byte_i] = *char_i;
 				
 				let prev_c = prev_c.as_ref().map(|(_, (_, prev_c))| prev_c);
 				match (prev_c, c) {
@@ -31,14 +32,16 @@ impl<'a> DocumentMeta<'a> {
 					(Some('\n'), _) => true, //Linux + Windows end
 					(None, _) => true,
 					_ => false,
-				}.then_some(Pos::new(*bi))
+				}.then_some(Pos::new(*byte_i))
 			})
 			.collect_vec();
+
+		byte_to_char.push(text.len());
 
 		Self {
 			document,
 			lines_begin: lines_begin_indices,
-			byte_to_char: char_to_byte,
+			byte_to_char,
 		}
 	}
 	

@@ -8,10 +8,10 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 	let range_str = format!("[{}]", range);
 	
 	let line = {
-		let begin = range.get_begin();
+		let begin = range.begin();
 		let begin_line = begin.line();
 		
-		let last = range.get_last();
+		let last = range.last();
 		let last_line = last.map_or(begin_line, |last| last.line()); //if it's None, that means it's zero size, so then we just grab the begin line
 
 		(begin_line == last_line).then_some(begin_line).ok_or("MUTI-LINE NOT SUPPORTED")
@@ -31,8 +31,8 @@ pub fn generate_error_line(range: RangeMeta) -> String {
 				.unwrap_or(line_str.bytes().len());
 			
 			let error_inset = RangeMeta::new(
-				line.range().get_begin().add_byte_offset(line_trunc_begin_byte),
-				range.get_begin()
+				line.range().begin().add_byte_offset(line_trunc_begin_byte),
+				range.begin()
 			).get_str().width();
 			let error_length = range.get_str().width();
 			let line_trunc_str = &line_str[line_trunc_begin_byte..line_trunc_end_byte];

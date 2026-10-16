@@ -23,31 +23,35 @@ impl<'a> RangeMeta<'a> {
 		}
 	}
 
-	pub fn get_begin(&self) -> PosMeta<'a> {
+	pub fn begin(&self) -> PosMeta<'a> {
 		self.range.begin.with_meta(self.document)
 	}
 
-	pub fn get_end(&self) -> PosMeta<'a> {
+	pub fn end(&self) -> PosMeta<'a> {
 		self.range.end.with_meta(self.document)
 	}
 	
-	pub fn get_last(&self) -> Option<PosMeta<'a>> {
-		if self.get_begin() > self.get_end() { return None; }
+	pub fn last(&self) -> Option<PosMeta<'a>> {
+		if self.begin() > self.end() { return None; }
 
 		self.document
-			.get_text()[..self.get_end().byte_index()]
+			.get_text()[..self.end().byte_index()]
 			.char_indices()
 			.map(|(i, _)| Pos::new(i).with_meta(self.document))
 			.rev()
 			.next()
 	}
 
-	pub fn get_length(&self) -> usize {
-		self.get_end().char_index() - self.get_begin().char_index()
+	pub fn length(&self) -> usize {
+		self.char_index_range().len()
+	}
+
+	pub fn char_index_range(&self) -> std::ops::Range<usize> {
+		self.begin().char_index()..self.end().char_index()
 	}
 
 	pub fn get_str(&self) -> &'a str {
-		&self.document.get_text()[self.get_begin().byte_index() .. self.get_end().byte_index()]
+		&self.document.get_text()[self.begin().byte_index() .. self.end().byte_index()]
 	}
 }
 
@@ -67,13 +71,13 @@ impl DerefMut for RangeMeta<'_> {
 
 impl Display for RangeMeta<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let begin = self.get_begin();
-		let end = self.get_end();
+		let begin = self.begin();
+		let end = self.end();
 
 		if begin == end {
 			write!(f, "{} (0 sized)", begin)
 		} else {
-			let last = self.get_last().unwrap(); //SAFETY: unwarp safe due to begin != end, i.e 0<=begin<end, so end>0
+			let last = self.last().unwrap(); //SAFETY: unwarp safe due to begin != end, i.e 0<=begin<end, so end>0
 
 			if begin.line() != last.line() {
 				write!(f, "{}-{}", begin, last)
@@ -95,7 +99,7 @@ impl Debug for RangeMeta<'_> {
 impl PartialEq for RangeMeta<'_> {
 	fn eq(&self, other: &Self) -> bool {
 		debug_assert!(ptr::eq(self.document, other.document));
-		self.get_begin() == other.get_begin() && self.get_end() == other.get_end()
+		self.begin() == other.begin() && self.end() == other.end()
 	}
 }
 
