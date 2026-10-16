@@ -4,6 +4,7 @@ use inkwell::{
 	builder::{Builder, BuilderError},
 	context::Context,
 	module::{Linkage, Module},
+	passes::PassBuilderOptions,
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
 	types::{BasicType, BasicTypeEnum},
 	values::{BasicValue, FunctionValue, IntValue},
@@ -27,7 +28,8 @@ struct FuncJob<'a, 'ctx> {
 	node: &'a Func,
 }
 
-pub fn generate(ast: &Sourced<Expr>) -> Result<Vec<u8>, GenError> {
+/// `emit_optimized_ir` also writes the IR after LLVM's optimization passes to `out/test.opt.ll`.
+pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>, GenError> {
 	let context = Context::create();
 	let builder = context.create_builder();
 	let module = context.create_module("main");
@@ -79,7 +81,7 @@ pub fn generate(ast: &Sourced<Expr>) -> Result<Vec<u8>, GenError> {
 	};
 	err.map_err(|err| GenError::BuilderError(err))?;
 
-	Ok(stupid_shit(&module))
+	Ok(stupid_shit(&module, emit_optimized_ir))
 }
 
 fn decl_extern<'ctx>(
@@ -511,7 +513,7 @@ fn gen_pattern_type<'ctx>(
 	}
 }
 
-fn stupid_shit<'ctx>(module: &Module<'ctx>) -> Vec<u8> {
+fn stupid_shit<'ctx>(module: &Module<'ctx>, emit_optimized_ir: bool) -> Vec<u8> {
 	println!("Starting Backend...");
 	let out_dir_path = PathBuf::from_str("out").unwrap();
 	if let Err(e) = std::fs::create_dir_all(&out_dir_path) {
@@ -536,6 +538,15 @@ fn stupid_shit<'ctx>(module: &Module<'ctx>) -> Vec<u8> {
 			CodeModel::Default,
 		)
 		.unwrap();
+
+	if emit_optimized_ir {
+		// a copy, so the executable is still built the same way as without the flag
+		let optimized = module.clone();
+		match optimized.run_passes("default<O2>", &target_machine, PassBuilderOptions::create()) {
+			Ok(()) => optimized.print_to_file(out_dir_path.join("test.opt.ll")).unwrap(),
+			Err(err) => eprintln!("Failed to optimize the IR: {}", err),
+		}
+	}
 
 	println!("LLVM is running...");
 	let object_path = out_dir_path.join("test.o");

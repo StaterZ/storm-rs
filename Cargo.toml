@@ -54,5 +54,8 @@ tree_printer = { version = "0.1.0", path = "../tree_printer", features = ["deriv
 [build-dependencies]
 lalrpop = "0.23.1" # parser generator
 
+[dev-dependencies]
+mlua = { version = "0.12.2", features = ["lua54", "vendored"] } # runs the lua backend's output in tests
+
 [profile.release]
 lto = true
