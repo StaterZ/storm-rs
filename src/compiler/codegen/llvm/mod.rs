@@ -288,6 +288,7 @@ fn gen_expr<'a, 'ctx>(
 			);
 			Ok(Some(Value::Ptr(fn_ptr)))
 		},
+		Expr::Cast(node) => gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl), //TODO: casts are no-ops until values have real types
 		Expr::Call(node) => {
 			let func_ptr = gen_expr(&node.func, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
 			let func = func_ptr

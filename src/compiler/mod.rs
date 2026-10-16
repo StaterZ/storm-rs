@@ -104,8 +104,8 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	sem_timer.stop();
 	if let Err(errors) = sem_output {
 		cprintln!("<red>SEM Failed:</>");
-		for (i, err) in errors.into_iter().enumerate() {
-			cprintln!("  <red>{:04}:</> {}", i, err);
+		for (i, err) in errors.iter().enumerate() {
+			cprintln!("  <red>{:04}:</> {}", i, err.to_meta(&document));
 		}
 		println!();
 		return Err(CompilerError::SatParserFailed);

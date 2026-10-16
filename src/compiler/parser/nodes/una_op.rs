@@ -5,7 +5,7 @@ use crate::compiler::source::Sourced;
 
 use super::super::node_sets::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaOpKind {
 	Deref,
 	AddressOf,

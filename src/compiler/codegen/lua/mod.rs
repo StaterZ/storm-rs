@@ -87,6 +87,7 @@ fn gen_expr(node: &Sourced<Expr>, loop_depth: usize) -> String {
 		},
 		Expr::FieldAccess(node) => format!("{}.{}", gen_expr(&node.expr, loop_depth), &node.ident.name),
 		Expr::Func(node) => format!("function({})\n{}\nend\n", gen_pattern(&node.binding, loop_depth).unwrap_or_default(), gen_body(&node.body, loop_depth)),
+		Expr::Cast(node) => gen_expr(&node.expr, loop_depth), //TODO: casts are no-ops until values have real types
 		Expr::Call(node) => format!("{}({})", gen_expr(&node.func, loop_depth), gen_expr(&node.arg, loop_depth)),
 
 		Expr::TupleCtor(node) => node.items

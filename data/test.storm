@@ -8,7 +8,7 @@ let str_cmp = fn(mut a, mut b) {
 	a.* - b.*
 };
 
-let mut i = 0;
+let mut i = 0#i64;
 let _ = printf("give number: ",);
 let _ = scanf("%d", i&);
 let o = times_three(i,);

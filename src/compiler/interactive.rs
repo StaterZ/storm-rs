@@ -3,7 +3,7 @@ use std::io::{self, BufRead, Write};
 use color_print::{cformat, cprintln};
 use tree_printer;
 
-use super::{lexer::{self, LexerErrorKind}, parser, source};
+use super::{lexer::{self, LexerErrorKind}, parser, semantic_analyzer, source};
 
 enum Snippet {
 	Done,
@@ -11,10 +11,10 @@ enum Snippet {
 	Incomplete,
 }
 
-/// Reads snippets from stdin and prints their AST.
+/// Reads snippets from stdin and prints their AST and type.
 /// A snippet that ends early keeps reading lines until it's complete, or until an empty line forces it through.
 pub fn run() {
-	cprintln!("<cyan>Storm interactive mode.</> Enter code to see its AST. Unfinished code continues on the next line, an empty line ends it. Ctrl+Z (Windows) or Ctrl+D quits.");
+	cprintln!("<cyan>Storm interactive mode.</> Enter code to see its AST and type. Unfinished code continues on the next line, an empty line ends it. Ctrl+Z (Windows) or Ctrl+D quits.");
 
 	let mut lines = io::stdin().lock().lines();
 	let mut snippet = String::new();
@@ -57,12 +57,28 @@ fn show_ast(snippet: &str, force: bool) -> Snippet {
 		},
 	};
 
-	match parser::parse(&tokens) {
-		Ok(ast) => println!("{}", tree_printer::Tree::new(&ast)
-			.label("Root")
-			.format_line(|label, value| cformat!("<green>{}</>: {}", label, value))),
+	let mut ast = match parser::parse(&tokens) {
+		Ok(ast) => ast,
 		Err(err) if err.is_stream_exhausted() && !force => return Snippet::Incomplete,
-		Err(err) => cprintln!("<red>AST Failed:</>\n{}", err.to_meta(&document_meta)),
+		Err(err) => {
+			cprintln!("<red>AST Failed:</>\n{}", err.to_meta(&document_meta));
+			return Snippet::Done;
+		},
+	};
+
+	// analyzing links symbols to their declarations, so the tree is printed after it
+	let analysis = semantic_analyzer::analyze(&mut ast);
+	println!("{}", tree_printer::Tree::new(&ast)
+		.label("Root")
+		.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
+	match analysis {
+		Ok(ty) => cprintln!("<green>Type:</> {}", ty),
+		Err(errors) => {
+			cprintln!("<red>SEM Failed:</>");
+			for (i, err) in errors.iter().enumerate() {
+				cprintln!("  <red>{:04}:</> {}", i, err.to_meta(&document_meta));
+			}
+		},
 	}
 	Snippet::Done
 }

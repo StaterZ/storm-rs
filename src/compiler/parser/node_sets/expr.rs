@@ -32,6 +32,7 @@ pub enum Expr {
 	FieldAccess(#[tree(flatten)] FieldAccess),
 	Func(#[tree(flatten)] Func),
 	Call(#[tree(flatten)] Call),
+	Cast(#[tree(flatten)] Cast),
 	
 	TupleCtor(#[tree(flatten)] TupleCtor),
 	BoolLit(#[tree(skip)] bool),
@@ -64,6 +65,7 @@ impl Expr {
 			Expr::FieldAccess(_) => None,
 			Expr::Func(_) => None,
 			Expr::Call(_) => None,
+			Expr::Cast(_) => None,
 
 			Expr::TupleCtor(_) => None,
 			Expr::BoolLit(value) => Some(cformat!("<cyan>{}</>", value)),

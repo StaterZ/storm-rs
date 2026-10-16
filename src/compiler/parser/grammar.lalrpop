@@ -193,6 +193,10 @@ Postfix: Sourced<Cover> = {
 		func: Box::new(into_expr(func)?),
 		arg: Box::new(arg),
 	}), r)),
+	<l:@L> <expr:Postfix> "#" <ty:TypeExpr> <r:@R> =>? Ok(cover(l, Expr::Cast(Cast {
+		expr: Box::new(into_expr(expr)?),
+		ty,
+	}), r)),
 	Prefix,
 };
 
@@ -235,6 +239,12 @@ Tuple<T>: Vec<T> = {
 		items.extend(rest);
 		items
 	},
+};
+
+TypeExpr: Sourced<TypeExpr> = {
+	<l:@L> <name:"ident"> <r:@R> => node(l, TypeExpr::Named(name), r),
+	"(" <TypeExpr> ")",
+	<l:@L> <items:Tuple<TypeExpr>> <r:@R> => node(l, TypeExpr::Tuple(items), r),
 };
 
 Pattern: Sourced<Pattern> = PatLike =>? into_pattern(<>);
@@ -347,6 +357,7 @@ extern {
 		"<<" => Token::LShift,
 		">>" => Token::RShift,
 		"&" => Token::Ampersand,
+		"#" => Token::Hash,
 
 		"=" => Token::Equals,
 		"==" => Token::Eq,

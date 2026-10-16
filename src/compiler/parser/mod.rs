@@ -83,6 +83,7 @@ mod tests {
 			Expr::FieldAccess(n) => format!("(. {} {})", expr(&n.expr), n.ident.name),
 			Expr::Func(n) => format!("(fn {} {})", pattern(&n.binding), expr(&n.body)),
 			Expr::Call(n) => format!("(call {} {})", expr(&n.func), expr(&n.arg)),
+			Expr::Cast(n) => format!("(# {} {})", expr(&n.expr), *n.ty),
 			Expr::TupleCtor(n) => format!("[{}]", n.items.iter().map(|i| expr(i)).join(" ")),
 			Expr::BoolLit(v) => v.to_string(),
 			Expr::IntLit(v) => v.to_string(),
@@ -131,6 +132,12 @@ mod tests {
 		check("a.*.*;", "(* (* a));");
 		check("i&;", "(& i);");
 		check("a.b.c;", "(. (. a b) c);");
+		check("x#u8 + 1;", "(+ (# x u8) 1);");
+		check("-x#i8;", "(# (- x) i8);");
+		check("x.*#f32#b32;", "(# (# (* x) f32) b32);");
+		check("x#(u8, (i8));", "(# x (u8, i8));");
+		check("x#(u8,);", "(# x (u8,));");
+		check("x#();", "(# x ());");
 	}
 
 	#[test]

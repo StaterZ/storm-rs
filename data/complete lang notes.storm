@@ -3,15 +3,17 @@ there's two unit types. There's VOID and there's NOTHING.
 
 all statements are expressions.
 the last expression of a block is cascaded to it's parent.
-the ';' symbol is a post-fix unary operator that takes in a VOID and returns a NOTHING.
+the ';' symbol acts as a post-fix unary operator that takes in a VOID and returns a NOTHING.
 declarations and assignments return VOID.
 all types returned from expressions need to be caught (or returned from the procedure), except for the NOTHING type.
 "catching something" here refers to either cascading or binding.
+
+This serves to stop the user from cascade returning from a block without meaning to. function calls and similar can otherwise get too easy cascade by accident.
 */
 
 /* argument notes:
 all functions get exactly one argument.
-if you want "more arguments" you can use a tuple destructure binding
+if you want "more arguments" you can use a tuple destructure binding in the declaration
 */
 
 /* type notes:
@@ -23,42 +25,3 @@ we allow user-defined operators between any 2 types.
 if multiple operators have the same symbol with the same types, we compile-time error.
 operators may be + - or other common ones, or unicode symbols like ⊕, ∘, ∃
 */
-
-//example statements:
-{
-	let a = b;
-	let mut a = b;
-	a = b;
-	(a, b) = c;
-	let (a, b) = c;
-	let mut (a, b) = c;
-	let (mut a, b) = c;
-	(let a, let mut b, c) = d;
-	(let a, let mut b, (if c: d else e).*) = f;
-	(if a: b else c).* = d;
-	
-	if a { ret; }
-	if a: ret;
-	if a { b } else c;
-	if a: b else c;
-	loop a;
-	loop { a };
-	loop { a } else b;
-
-	while a { b; }
-	while a: b;
-	while a { b; } else c;
-	while a: b else c;
-
-	if a: while b: c else d //else should bind to while (always innermost nesting)
-
-	for a in b { c; }
-	for a in b: c;
-
-	let a = (1); //paren
-	let a = (); //tuple unit
-	let a = (1,); //tuple one
-	let a = (1, 2, 3); //tuple many
-	let a = (1, 2, 3,); //tuple many trail
-}
-
