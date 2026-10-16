@@ -19,7 +19,7 @@ pub enum RuleErrorKind {
 impl Display for RuleErrorKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			RuleErrorKind::StreamExhausted => write!(f, "Stream was exhausted"),
+			RuleErrorKind::StreamExhausted => write!(f, "Unexpected end of file"),
 			RuleErrorKind::UnexpectedToken(token_tag) => write!(f, "Unexpected token '{}'", token_tag),
 			RuleErrorKind::ExpectedOneOf { expected, found } => write!(f, "Unexpected token '{}', expected one of {}", found, expected.iter().join(", ")),
 			RuleErrorKind::PatternInExpr => write!(f, "Pattern can't be used as an expression"),

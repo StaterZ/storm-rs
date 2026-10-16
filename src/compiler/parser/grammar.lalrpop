@@ -72,8 +72,6 @@ extern {
 		"str" => Token::StrLit(<String>),
 		"int" => Token::IntLit(<u64>),
 		"ident" => Token::Identifier(<String>),
-
-		"eof" => Token::Eof,
 	}
 }
 
@@ -84,7 +82,7 @@ extern {
 // - "block": must end in a `}`, so nothing after it can continue the expression.
 
 pub File: Sourced<Expr> = {
-	<l:@L> <stmts:Stmts> <r:@R> "eof" => {
+	<l:@L> <stmts:Stmts> <r:@R> => {
 		let (mut stmts, last) = stmts;
 		stmts.reverse();
 		stmts.extend(last);

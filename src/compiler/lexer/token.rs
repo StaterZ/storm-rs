@@ -147,10 +147,6 @@ pub enum Token {
 		unescape(&s[2..s.len() - 1]).map_err(|e| LexerErrorKind::InvalidEscapeSequence(e.to_string()))
 	})]
 	Identifier(String),
-
-	// TODO: remove me
-	// Logos never matches this. The `lex` function adds it at the end of the stream.
-	Eof,
 }
 
 fn line_comment(lex: &mut logos::Lexer<Token>) -> Skip {

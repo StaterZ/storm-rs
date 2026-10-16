@@ -40,8 +40,6 @@ pub fn lex(document: &source::Document) -> Result<Vec<Sourced<Token>>, LexerErro
 		}
 	}
 
-	let eof = document.eof();
-	tokens.push(Sourced::new(Token::Eof, source::Range { begin: eof, end: eof }));
 	Ok(tokens)
 }
 
@@ -58,11 +56,11 @@ mod tests {
 
 	#[test]
 	fn block_comments() {
-		assert_eq!(lex_str("a /* b */ c"), Some(vec![Token::Identifier("a".to_string()), Token::Identifier("c".to_string()), Token::Eof]));
-		assert_eq!(lex_str("/* a /* b */ c */ d"), Some(vec![Token::Identifier("d".to_string()), Token::Eof]));
-		assert_eq!(lex_str("/* a //b */ c"), Some(vec![Token::Identifier("c".to_string()), Token::Eof]));
-		assert_eq!(lex_str("/*/ a */"), Some(vec![Token::Eof]));
-		assert_eq!(lex_str("/* ░▒▓█ */"), Some(vec![Token::Eof]));
+		assert_eq!(lex_str("a /* b */ c"), Some(vec![Token::Identifier("a".to_string()), Token::Identifier("c".to_string())]));
+		assert_eq!(lex_str("/* a /* b */ c */ d"), Some(vec![Token::Identifier("d".to_string())]));
+		assert_eq!(lex_str("/* a //b */ c"), Some(vec![Token::Identifier("c".to_string())]));
+		assert_eq!(lex_str("/*/ a */"), Some(vec![]));
+		assert_eq!(lex_str("/* ░▒▓█ */"), Some(vec![]));
 		assert_eq!(lex_str("/* a"), None);
 		assert_eq!(lex_str("/* a /* b */"), None);
 	}
@@ -70,9 +68,9 @@ mod tests {
 	#[test]
 	fn line_comments() {
 		let c = || Token::Identifier("c".to_string());
-		assert_eq!(lex_str("// a\nc"), Some(vec![c(), Token::Eof]));
-		assert_eq!(lex_str("// a\r\nc"), Some(vec![c(), Token::Eof]));
-		assert_eq!(lex_str("// a\rc"), Some(vec![c(), Token::Eof]));
-		assert_eq!(lex_str("// a"), Some(vec![Token::Eof]));
+		assert_eq!(lex_str("// a\nc"), Some(vec![c()]));
+		assert_eq!(lex_str("// a\r\nc"), Some(vec![c()]));
+		assert_eq!(lex_str("// a\rc"), Some(vec![c()]));
+		assert_eq!(lex_str("// a"), Some(vec![]));
 	}
 }
