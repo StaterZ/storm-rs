@@ -10,9 +10,9 @@ pub const POINTER_BITS: u64 = 64;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
 	// comptime-only, these implicitly cast to runtime types
-	IntLit,
-	RealLit,
-	BoolLit,
+	ComptimeInt,
+	ComptimeReal,
+	ComptimeBool,
 
 	Int { signed: bool, bits: u64 },
 	Usize,
@@ -38,19 +38,19 @@ impl Type {
 	pub const VOID: Type = Type::Tuple(Vec::new());
 
 	pub fn is_comptime(&self) -> bool {
-		matches!(self, Type::IntLit | Type::RealLit | Type::BoolLit)
+		matches!(self, Type::ComptimeInt | Type::ComptimeReal | Type::ComptimeBool)
 	}
 
 	pub fn is_int(&self) -> bool {
-		matches!(self, Type::Int { .. } | Type::Usize | Type::Isize | Type::IntLit)
+		matches!(self, Type::Int { .. } | Type::Usize | Type::Isize | Type::ComptimeInt)
 	}
 
 	pub fn is_numeric(&self) -> bool {
-		self.is_int() || matches!(self, Type::Float(_) | Type::RealLit)
+		self.is_int() || matches!(self, Type::Float(_) | Type::ComptimeReal)
 	}
 
 	pub fn is_bool(&self) -> bool {
-		matches!(self, Type::Bool(_) | Type::BoolLit)
+		matches!(self, Type::Bool(_) | Type::ComptimeBool)
 	}
 
 	/// Whether a value of this type may be dropped without being caught.
@@ -72,9 +72,9 @@ impl Type {
 		match (self, to) {
 			_ if self == to => true,
 			(Type::Unknown | Type::Never, _) | (_, Type::Unknown) => true,
-			(Type::IntLit, to) => to.is_numeric() || to.is_bool(),
-			(Type::RealLit, Type::Float(_)) => true,
-			(Type::BoolLit, Type::Bool(_)) => true,
+			(Type::ComptimeInt, to) => to.is_numeric() || to.is_bool(),
+			(Type::ComptimeReal, Type::Float(_)) => true,
+			(Type::ComptimeBool, Type::Bool(_)) => true,
 			(Type::Tuple(from), Type::Tuple(to)) => from.len() == to.len() && from.iter().zip(to).all(|(from, to)| from.implicitly_casts_to(to)),
 			_ => false,
 		}
@@ -91,6 +91,8 @@ impl Type {
 			// bools reinterpret the bits of a number, so the sizes have to match
 			(from, Type::Bool(bits)) | (Type::Bool(bits), from) if from.is_numeric() => from.bits().is_none_or(|from_bits| from_bits == *bits),
 			(Type::Bool(_), Type::Bool(_)) => true,
+			// unsized bits can become any number, as long as they fit
+			(Type::ComptimeBool, to) if to.is_numeric() && !to.is_comptime() => true,
 			(Type::Ptr(_), Type::Usize) | (Type::Usize, Type::Ptr(_)) | (Type::Ptr(_), Type::Ptr(_)) => true,
 			(Type::Tuple(from), Type::Tuple(to)) => from.len() == to.len() && from.iter().zip(to).all(|(from, to)| from.explicitly_casts_to(to)),
 			_ => false,
@@ -103,7 +105,7 @@ impl Type {
 			_ if self == other => Some(self.clone()),
 			(Type::Unknown, _) | (_, Type::Unknown) => Some(Type::Unknown),
 			(Type::Never, other) | (other, Type::Never) => Some(other.clone()),
-			(Type::IntLit, Type::RealLit) | (Type::RealLit, Type::IntLit) => Some(Type::RealLit),
+			(Type::ComptimeInt, Type::ComptimeReal) | (Type::ComptimeReal, Type::ComptimeInt) => Some(Type::ComptimeReal),
 			(comptime, runtime) | (runtime, comptime) if comptime.is_comptime() && comptime.implicitly_casts_to(runtime) => Some(runtime.clone()),
 			(Type::Tuple(a), Type::Tuple(b)) if a.len() == b.len() => a.iter().zip(b).map(|(a, b)| a.unify(b)).collect::<Option<_>>().map(Type::Tuple),
 			_ => None,
@@ -149,9 +151,9 @@ impl Type {
 impl Display for Type {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Type::IntLit => write!(f, "IntLit"),
-			Type::RealLit => write!(f, "RealLit"),
-			Type::BoolLit => write!(f, "BoolLit"),
+			Type::ComptimeInt => write!(f, "ComptimeInt"),
+			Type::ComptimeReal => write!(f, "ComptimeReal"),
+			Type::ComptimeBool => write!(f, "ComptimeBool"),
 			Type::Int { signed: true, bits } => write!(f, "i{}", bits),
 			Type::Int { signed: false, bits } => write!(f, "u{}", bits),
 			Type::Usize => write!(f, "usize"),

@@ -4,7 +4,7 @@ use crate::compiler::source::Sourced;
 
 use super::{super::node_sets::*, BinOpKind};
 
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct Assign {
 	pub op: Option<BinOpKind>,
 	pub lhs: Box<Sourced<Pattern>>,

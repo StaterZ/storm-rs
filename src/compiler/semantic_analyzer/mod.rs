@@ -145,7 +145,8 @@ impl Analyzer {
 			},
 			_ => return,
 		};
-		if lit.ty.is_some() {
+		// unsized literals take the size of where they're used
+		if lit.ty.is_some_and(|ty| ty != IntType::Bits) {
 			return;
 		}
 
@@ -394,14 +395,15 @@ impl Analyzer {
 			},
 
 			Expr::TupleCtor(tuple) => Type::Tuple(tuple.items.iter_mut().map(|item| self.expr(item)).collect()),
-			Expr::BoolLit(_) => Type::BoolLit,
+			Expr::BoolLit(_) => Type::ComptimeBool,
 			Expr::IntLit(lit) => match lit.ty {
-				None => Type::IntLit,
+				None => Type::ComptimeInt,
 				Some(IntType::Signed(bits)) => Type::Int { signed: true, bits },
 				Some(IntType::Unsigned(bits)) => Type::Int { signed: false, bits },
 				Some(IntType::Bool(bits)) => Type::Bool(bits),
+				Some(IntType::Bits) => Type::ComptimeBool,
 			},
-			Expr::RealLit(lit) => lit.num_bits.map_or(Type::RealLit, Type::Float),
+			Expr::RealLit(lit) => lit.num_bits.map_or(Type::ComptimeReal, Type::Float),
 			Expr::StrLit(_) => Type::Str,
 			Expr::Identifier(var) => self.resolve(var, range),
 		}
@@ -435,7 +437,7 @@ impl Analyzer {
 
 		if let BinOpKind::Bitwise(BitwiseBinOpKind::Shl | BitwiseBinOpKind::Shr) = op {
 			// the shift amount is a count, so it doesn't share the type of the bits
-			if !matches!(lhs, Type::Bool(_) | Type::Unknown | Type::Never) {
+			if !matches!(lhs, Type::Bool(_) | Type::ComptimeBool | Type::Unknown | Type::Never) {
 				self.error(SemErrorKind::ShiftNonBool(lhs.clone()), range);
 				return (Type::Unknown, op);
 			}
@@ -449,17 +451,20 @@ impl Analyzer {
 			return invalid(self);
 		};
 		let is_unknown = matches!(ty, Type::Unknown | Type::Never);
+		// an unsized bool may have many bits, so its logic is bitwise
 		let is_b1 = ty.implicitly_casts_to(&Type::Bool(1)) && !ty.is_numeric();
 		match (op, &ty) {
 			(BinOpKind::Arith(_), _) if is_unknown || ty.is_numeric() => (ty, op),
 			(BinOpKind::Cmp(CmpBinOpKind::Eq | CmpBinOpKind::Ne), _) => (Type::Bool(1), op),
 			(BinOpKind::Cmp(_), _) if is_unknown || ty.is_numeric() => (Type::Bool(1), op),
+			// unsized bools stay unsized. on single bits it's logic, on more it's bitwise, which compile time evaluation sorts out
+			(BinOpKind::Logic(_), Type::ComptimeBool) => (ty, op),
 			(BinOpKind::Logic(_), _) if is_unknown || is_b1 => (Type::Bool(1), op),
 			(BinOpKind::Logic(LogicBinOpKind::And), Type::Bool(_)) => (ty, BinOpKind::Bitwise(BitwiseBinOpKind::And)),
 			(BinOpKind::Logic(LogicBinOpKind::Or), Type::Bool(_)) => (ty, BinOpKind::Bitwise(BitwiseBinOpKind::Or)),
-			(BinOpKind::Bitwise(BitwiseBinOpKind::Xor), _) if is_b1 => (Type::Bool(1), BinOpKind::Cmp(CmpBinOpKind::Ne)),
+			(BinOpKind::Bitwise(BitwiseBinOpKind::Xor), _) if is_b1 && ty != Type::ComptimeBool => (Type::Bool(1), BinOpKind::Cmp(CmpBinOpKind::Ne)),
 			(BinOpKind::Bitwise(BitwiseBinOpKind::Or), _) if is_b1 => (Type::Bool(1), BinOpKind::Logic(LogicBinOpKind::Or)),
-			(BinOpKind::Bitwise(_), Type::Bool(_)) => (ty, op),
+			(BinOpKind::Bitwise(_), Type::Bool(_) | Type::ComptimeBool) => (ty, op),
 			(BinOpKind::Bitwise(_), _) if is_unknown => (ty, op),
 			_ => invalid(self),
 		}
@@ -531,9 +536,7 @@ impl Analyzer {
 			Pattern::Discard => ty.clone(),
 			Pattern::Binding(var) => {
 				if is_decl {
-					if is_mut && ty.is_comptime() {
-						self.error(SemErrorKind::MutComptime(ty.clone()), range);
-					}
+					// a mutable comptime variable is fine until it has to live at runtime, which compile time evaluation checks
 					self.scope.declare(var.clone(), is_mut, ty.clone());
 					ty.clone()
 				} else {

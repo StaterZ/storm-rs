@@ -35,8 +35,6 @@ pub enum SemErrorKind {
 	ShiftNonBool(Type),
 	#[error("A value of type {0} has to be caught, by binding it with 'let _ = ...' or cascading it out of the block")]
 	UncaughtValue(Type),
-	#[error("Mutable bindings need a runtime type, found the comptime type {0}. Give it one with a cast like '0#i64'")]
-	MutComptime(Type),
 	#[error("Can't destructure {found} into a tuple of {len}")]
 	DestructureMismatch { found: Type, len: usize },
 	#[error("Can't call {0}")]

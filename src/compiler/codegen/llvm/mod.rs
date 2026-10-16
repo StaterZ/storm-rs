@@ -7,7 +7,7 @@ use inkwell::{
 	passes::PassBuilderOptions,
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
 	types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
-	values::{BasicValueEnum, FunctionValue, IntValue},
+	values::{BasicValueEnum, FunctionValue, IntValue, PointerValue},
 	AddressSpace,
 	IntPredicate
 };
@@ -137,6 +137,21 @@ fn gen_return<'ctx>(value: Option<Value<'ctx>>, builder: &Builder<'ctx>) -> Resu
 	Ok(())
 }
 
+/// Allocas go at the start of the function, so loops don't grow the stack and windows doesn't need stack probes.
+fn build_entry_alloca<'ctx, T: BasicType<'ctx>>(builder: &Builder<'ctx>, ty: T, name: &str) -> Result<PointerValue<'ctx>, BuilderError> {
+	let entry = builder
+		.get_insert_block()
+		.and_then(|block| block.get_parent())
+		.and_then(|func| func.get_first_basic_block())
+		.expect("code is always generated inside a function");
+	let entry_builder = entry.get_context().create_builder();
+	match entry.get_first_instruction() {
+		Some(first) => entry_builder.position_before(&first),
+		None => entry_builder.position_at_end(entry),
+	}
+	entry_builder.build_alloca(ty, name)
+}
+
 fn decl_extern<'ctx>(
 	func: FunctionValue<'ctx>,
 	builder: &Builder<'ctx>,
@@ -146,7 +161,7 @@ fn decl_extern<'ctx>(
 		func.as_global_value().as_pointer_value(),
 		ValueType::Func(FuncType::new(func)),
 	);
-	let print_fn_ptr_ptr = builder.build_alloca(print_fn_ptr.clone().get_type(), "print_fn_ptr").expect("no alloca?");
+	let print_fn_ptr_ptr = build_entry_alloca(builder, print_fn_ptr.clone().get_type(), "print_fn_ptr").expect("no alloca?");
 	let _ = builder.build_store(print_fn_ptr_ptr, print_fn_ptr.clone());
 	sym_tbl.insert(func.get_name().to_str().unwrap().to_string(), PtrValue::new(print_fn_ptr_ptr, ValueType::Ptr(Box::new(print_fn_ptr.get_type()))));
 }
@@ -318,7 +333,7 @@ fn gen_expr<'a, 'ctx>(
 						Value::Ptr(sym_tbl[binding.as_str()].clone())
 					} else {
 						let ty = expr_val.get_type();
-						let ptr = builder.build_alloca(ty.clone(), "alloc_temp")?;
+						let ptr = build_entry_alloca(builder, ty.clone(), "alloc_temp")?;
 						Value::Ptr(PtrValue::new(ptr, ty))
 					}
 				},
@@ -419,7 +434,7 @@ fn gen_expr<'a, 'ctx>(
 					.collect::<Vec<_>>(),
 				false,
 			);
-			let tuple_alloca = builder.build_alloca(tuple_type, "tuple_ctor")?;
+			let tuple_alloca = build_entry_alloca(builder, tuple_type, "tuple_ctor")?;
 
 			for (i, value) in item_values.into_iter().enumerate() {
 				let gep = builder.build_struct_gep(
@@ -534,7 +549,7 @@ fn gen_pattern<'a, 'ctx>(
 			let binding = node.borrow().name.clone();
 			let ptr = if is_let {
 				let ty = rhs.clone().get_type();
-				let ptr = builder.build_alloca(ty.clone(), binding.as_str())?;
+				let ptr = build_entry_alloca(builder, ty.clone(), binding.as_str())?;
 				sym_tbl.insert(binding, PtrValue::new(ptr, ty));
 				ptr
 			} else {

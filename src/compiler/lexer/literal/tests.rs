@@ -65,23 +65,23 @@ fn ints() {
 		("1__0", int("10", None)),
 		("18446744073709551616", int("18446744073709551616", None)),
 		("123456789012345678901234567890123456789", int("123456789012345678901234567890123456789", None)),
-		// an explicit base makes a bool type, as wide as its digits can go
-		("0b1010", int("10", Some(Bool(4)))),
-		("0b0", int("0", Some(Bool(1)))),
-		("0b0000_0001", int("1", Some(Bool(8)))),
-		("0q123", int("27", Some(Bool(6)))),
-		("0o777", int("511", Some(Bool(9)))),
-		("0d99", int("99", Some(Bool(7)))),
-		("0d100", int("100", Some(Bool(10)))),
-		("0xff", int("255", Some(Bool(8)))),
-		("0xFF", int("255", Some(Bool(8)))),
-		("0x00ff", int("255", Some(Bool(16)))), // leading zeros count
-		("0xdead_beef", int("3735928559", Some(Bool(32)))),
-		("2r101", int("5", Some(Bool(3)))),
-		("16rFF", int("255", Some(Bool(8)))),
-		("36rzz", int("1295", Some(Bool(11)))),
-		("0x1f32", int("7986", Some(Bool(16)))), // f is a hex digit, not a suffix
-		("0x1e3", int("483", Some(Bool(12)))), // e is a hex digit, not an exponent
+		// an explicit base makes an unsized bool type
+		("0b1010", int("10", Some(Bits))),
+		("0b0", int("0", Some(Bits))),
+		("0b0000_0001", int("1", Some(Bits))),
+		("0q123", int("27", Some(Bits))),
+		("0o777", int("511", Some(Bits))),
+		("0d99", int("99", Some(Bits))),
+		("0d100", int("100", Some(Bits))),
+		("0xff", int("255", Some(Bits))),
+		("0xFF", int("255", Some(Bits))),
+		("0x00ff", int("255", Some(Bits))),
+		("0xdead_beef", int("3735928559", Some(Bits))),
+		("2r101", int("5", Some(Bits))),
+		("16rFF", int("255", Some(Bits))),
+		("36rzz", int("1295", Some(Bits))),
+		("0x1f32", int("7986", Some(Bits))), // f is a hex digit, not a suffix
+		("0x1e3", int("483", Some(Bits))), // e is a hex digit, not an exponent
 	]);
 }
 
@@ -122,7 +122,7 @@ fn int_suffixes() {
 		("1b64", int("1", Some(Bool(64)))),
 		("1b7", int("1", Some(Bool(7)))),
 		("0b1b1", int("1", Some(Bool(1)))), // binary prefix with a bool suffix
-		("0b1", int("1", Some(Bool(1)))), // binary prefix, so a b1
+		("0b1", int("1", Some(Bits))), // binary prefix, so a bool
 		("0xffu8", int("255", Some(Unsigned(8)))), // a suffix wins over the base
 		("12u", suffix("u")),
 		("12i", suffix("i")),

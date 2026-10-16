@@ -9,7 +9,7 @@ use tree_printer::TreeDisplay;
 use crate::compiler::source::Sourced;
 
 /// A type as written in the source, like the `u8` in `x#u8`.
-#[derive(Debug, AsRefStr, EnumAsInner, TreeDisplay)]
+#[derive(Debug, Clone, AsRefStr, EnumAsInner, TreeDisplay)]
 #[tree(fmt_line = TypeExpr::fmt_tree_line)]
 pub enum TypeExpr {
 	Named(#[tree(skip)] String),
@@ -18,7 +18,7 @@ pub enum TypeExpr {
 }
 
 /// `fn(T, U) -> R`. A trailing `...` takes any number of extra arguments, like C's `printf`.
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct FuncTypeExpr {
 	#[tree(items)]
 	pub args: Vec<Sourced<TypeExpr>>,

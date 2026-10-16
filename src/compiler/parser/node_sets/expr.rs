@@ -9,7 +9,7 @@ use crate::compiler::lexer::literal::{IntLit, RealLit};
 
 use super::super::{nodes::*, Var};
 
-#[derive(Debug, AsRefStr, EnumAsInner, TreeDisplay)]
+#[derive(Debug, Clone, AsRefStr, EnumAsInner, TreeDisplay)]
 #[tree(fmt_line = Expr::fmt_tree_line)]
 pub enum Expr {
 	Assign(#[tree(flatten)] Assign),

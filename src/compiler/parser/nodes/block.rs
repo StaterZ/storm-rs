@@ -4,7 +4,7 @@ use crate::compiler::source::Sourced;
 
 use super::super::node_sets::*;
 
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct Block {
 	#[tree(items)]
 	pub stmts: Vec<Sourced<Expr>>,

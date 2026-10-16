@@ -3,7 +3,7 @@ use std::io::{self, BufRead, Write};
 use color_print::{cformat, cprintln};
 use tree_printer;
 
-use super::{lexer::{self, LexerErrorKind}, parser, semantic_analyzer, source};
+use super::{comptime, lexer::{self, LexerErrorKind}, parser::{self, node_sets::Expr}, semantic_analyzer, source};
 
 enum Snippet {
 	Done,
@@ -75,6 +75,29 @@ fn show_ast(snippet: &str, force: bool) -> Snippet {
 		Ok(ty) => cprintln!("<green>Type:</> {}", ty),
 		Err(errors) => {
 			cprintln!("<red>SEM Failed:</>");
+			for (i, err) in errors.iter().enumerate() {
+				cprintln!("  <red>{:04}:</> {}", i, err.to_meta(&document_meta));
+			}
+			return Snippet::Done;
+		},
+	}
+
+	match comptime::evaluate(&ast) {
+		Ok(evaluated) => match evaluated.last_value {
+			Some(value) => cprintln!("<green>Value:</> {}", value),
+			None => {
+				// some of it needs runtime, so show what's left
+				let is_empty = matches!(&*evaluated.ast, Expr::Block(block) if block.stmts.is_empty());
+				if !is_empty {
+					cprintln!("<green>Runtime:</>");
+					println!("{}", tree_printer::Tree::new(&evaluated.ast)
+						.label("Root")
+						.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
+				}
+			},
+		},
+		Err(errors) => {
+			cprintln!("<red>COMPTIME Failed:</>");
 			for (i, err) in errors.iter().enumerate() {
 				cprintln!("  <red>{:04}:</> {}", i, err.to_meta(&document_meta));
 			}

@@ -7,7 +7,7 @@ use crate::compiler::source::Sourced;
 use super::super::{node_sets::*, Var};
 
 /// `extern name: type`, a symbol provided from outside the program, like `printf`.
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct Extern {
 	#[tree(skip)]
 	pub binding: Rc<RefCell<Var>>,

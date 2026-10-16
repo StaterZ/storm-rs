@@ -63,6 +63,10 @@ local function __not(a)
 	if type(a) == "boolean" then return not a end
 	return ~a
 end
+local function __xor(a, b)
+	if type(a) == "boolean" then return a ~= b end
+	return a ~ b
+end
 local function __ref(value)
 	return { get = function() return value end, set = function(v) value = v end }
 end
@@ -694,7 +698,8 @@ fn bin_op_code(op: BinOpKind, lhs: &str, rhs: &str) -> String {
 		BinOpKind::Bitwise(BitwiseBinOpKind::Shr) => ">>",
 		BinOpKind::Bitwise(BitwiseBinOpKind::And) => "&",
 		BinOpKind::Bitwise(BitwiseBinOpKind::Or) => "|",
-		BinOpKind::Bitwise(BitwiseBinOpKind::Xor) => "~",
+		// bools that came from `true` and `false` are lua booleans
+		BinOpKind::Bitwise(BitwiseBinOpKind::Xor) => return format!("__xor({}, {})", lhs, rhs),
 		BinOpKind::Cmp(op) => match op {
 			CmpBinOpKind::Eq => "==",
 			CmpBinOpKind::Ne => "~=",

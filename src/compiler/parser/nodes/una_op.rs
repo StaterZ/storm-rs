@@ -26,7 +26,7 @@ impl Display for UnaOpKind {
 	}
 }
 
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct UnaOp {
 	pub op: UnaOpKind,
 	pub expr: Box<Sourced<Expr>>,

@@ -1,16 +1,29 @@
 use mlua::Lua;
 
-use crate::compiler::{lexer, parser, semantic_analyzer, source::Document};
+use crate::compiler::{comptime, lexer, parser, semantic_analyzer, source::Document};
 
 use super::generate;
 
 fn compile(text: &str) -> String {
+	compile_with(text, false)
+}
+
+/// Compiles to lua, after compile time evaluation when `comptime` is set, like the compiler does.
+fn compile_with(text: &str, comptime: bool) -> String {
 	let document = Document::new("test".to_string(), text.to_string());
 	let Ok(tokens) = lexer::lex(&document) else { panic!("failed to lex {:?}", text) };
 	let Ok(mut ast) = parser::parse(&tokens) else { panic!("failed to parse {:?}", text) };
 	if let Err(errors) = semantic_analyzer::analyze(&mut ast) {
 		panic!("failed the semantic analysis of {:?}: {:?}", text, errors.into_iter().map(|err| err.kind).collect::<Vec<_>>());
 	}
+	let ast = if comptime {
+		match comptime::evaluate(&ast) {
+			Ok(evaluated) => evaluated.ast,
+			Err(errors) => panic!("failed the compile time evaluation of {:?}: {:?}", text, errors.into_iter().map(|err| err.kind).collect::<Vec<_>>()),
+		}
+	} else {
+		ast
+	};
 	let Ok(code) = generate(&ast) else { panic!("failed to generate lua for {:?}", text) };
 	String::from_utf8(code).unwrap()
 }
@@ -25,9 +38,30 @@ struct Run {
 
 /// Runs a program with `input` as the lines of stdin, catching what it writes and its exit code.
 fn run_with_input(text: &str, input: &[&str]) -> Result<Run, String> {
+	run_with(text, input, false)
+}
+
+/// Runs a program both straight and after compile time evaluation, which have to agree.
+fn run_both(text: &str, input: &[&str]) -> Result<Run, String> {
+	let straight = run_with(text, input, false);
+	let evaluated = run_with(text, input, true);
+	match (&straight, &evaluated) {
+		(Ok(a), Ok(b)) => {
+			assert_eq!(a.output, b.output, "output of {:?} after compile time evaluation", text);
+			assert_eq!(a.exit_code, b.exit_code, "exit code of {:?} after compile time evaluation", text);
+		},
+		(Err(_), Err(_)) => { },
+		_ => panic!("{:?} ran differently after compile time evaluation:
+{:?}
+{:?}", text, straight, evaluated),
+	}
+	straight
+}
+
+fn run_with(text: &str, input: &[&str], comptime: bool) -> Result<Run, String> {
 	// snippets get the C functions the data files declare themselves
 	let text = if text.contains("extern ") { text.to_string() } else { format!("{}{}", EXTERNS, text) };
-	let code = compile(&text);
+	let code = compile_with(&text, comptime);
 	let lua = Lua::new();
 	lua.load(r#"
 		__out = {}
@@ -49,7 +83,7 @@ fn run_with_input(text: &str, input: &[&str]) -> Result<Run, String> {
 }
 
 fn run(text: &str) -> Result<Run, String> {
-	run_with_input(text, &[])
+	run_both(text, &[])
 }
 
 #[track_caller]
@@ -193,4 +227,30 @@ fn externs() {
 fn scanf() {
 	let run = run_with_input("let mut a = 0#i64; let mut b = 0#i64; let _ = scanf(\"%d %d\", a.&, b.&,); ret a - b;", &["10", "3"]).unwrap();
 	assert_eq!(run.exit_code, Some(7));
+}
+
+#[test]
+fn comptime_and_runtime_together() {
+	let cases: &[(&str, &[&str], &str, i64)] = &[
+		("let mut i = 0#i64; while i < 3 { let _ = printf(\"%d\", i,); i += 1; }; ret i;", &[], "012", 3),
+		("let mut a = 1#i64; let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); if n > 5 { a = 2; }; ret a * 10 + n;", &["7"], "", 27),
+		("let mut a = 1#i64; let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); if n > 5 { a = 2; }; ret a * 10 + n;", &["3"], "", 13),
+		("let f = fn(x) { x + 2 * 3 }; let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); ret f(n,);", &["4"], "", 10),
+		("let mut s = 0; let mut i = 0; while i < 10 { i += 1; s += i; }; ret s;", &[], "", 55),
+		("let mut x = 5#i64; let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); while n > 0 { x += 1; n -= 1; }; ret x;", &["3"], "", 8),
+		("let mut x = 1#i64; let p = x.&; let _ = scanf(\"%d\", p,); ret x + 1;", &["41"], "", 42),
+		("let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); let r = loop { if n > 100 { break n; }; n *= 2; }; ret r;", &["3"], "", 192),
+		("let mut n = 0#i64; let _ = scanf(\"%d\", n.&,); let k = 10; let mut i = 0#i64; while i < k { n += i; i += 1; }; ret n;", &["1"], "", 46),
+	];
+	for (text, input, output, exit_code) in cases {
+		let run = run_both(text, input).unwrap_or_else(|err| panic!("{:?} failed: {}", text, err));
+		assert_eq!(run.output, *output, "output of {:?}", text);
+		assert_eq!(run.exit_code, Some(*exit_code), "exit code of {:?}", text);
+	}
+	// test.storm, through the whole compiler
+	let text = std::fs::read_to_string("data/test.storm").unwrap();
+	let run = run_both(&text, &["5"]).unwrap();
+	assert_eq!(run.output, "give number: hello world! 15
+");
+	assert_eq!(run.exit_code, Some(42));
 }

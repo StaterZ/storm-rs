@@ -11,6 +11,8 @@ pub enum IntType {
 	Signed(u64),
 	Unsigned(u64),
 	Bool(u64),
+	/// A bool type with no size yet, from a literal with an explicit base like `0x0f`.
+	Bits,
 }
 
 impl Display for IntType {
@@ -19,6 +21,7 @@ impl Display for IntType {
 			IntType::Signed(bits) => write!(f, "i{}", bits),
 			IntType::Unsigned(bits) => write!(f, "u{}", bits),
 			IntType::Bool(bits) => write!(f, "b{}", bits),
+			IntType::Bits => write!(f, "b"),
 		}
 	}
 }
@@ -31,6 +34,10 @@ pub struct IntLit {
 
 impl Display for IntLit {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		// unsized bits read best in hex, like they're usually written
+		if self.ty == Some(IntType::Bits) {
+			return write!(f, "0x{:x}", self.value);
+		}
 		write!(f, "{}", self.value)?;
 		if let Some(ty) = self.ty {
 			write!(f, "{}", ty)?;
@@ -219,8 +226,8 @@ pub fn parse_num(s: &str) -> Result<NumLit, LexerErrorKind> {
 	let value = digits_value(int_digits, radix);
 	let has_radix_prefix = body.len() != s.len();
 	let ty = match suffix {
-		// a literal written in an explicit base is a bit pattern, as wide as its digits can go, so `0x0f` is a b8
-		None if has_radix_prefix => Some(IntType::Bool(digits_width(int_digits, radix))),
+		// a literal written in an explicit base is a bit pattern, which takes a size where it's used
+		None if has_radix_prefix => Some(IntType::Bits),
 		None => None,
 		Some(Suffix::Int(ty)) => Some(ty),
 		Some(Suffix::Float(_)) => unreachable!("float suffixes make the literal real"),
@@ -331,12 +338,6 @@ fn digits_value(digits: &str, radix: u32) -> BigUint {
 	BigUint::parse_bytes(&digits, radix).expect("digits are checked against the radix before parsing")
 }
 
-/// The bits it takes to hold any number with this many digits, like 8 for two hex digits or 4 for `0q12`.
-fn digits_width(digits: &str, radix: u32) -> u64 {
-	let digits = digits.chars().filter(|&c| c != '_').count();
-	(BigUint::from(radix).pow(digits as u32) - 1u32).bits()
-}
-
 fn fits(value: &BigUint, ty: IntType) -> bool {
 	match ty {
 		IntType::Unsigned(bits) => value.bits() <= bits,
@@ -344,6 +345,7 @@ fn fits(value: &BigUint, ty: IntType) -> bool {
 		IntType::Signed(0) => value.is_zero(),
 		IntType::Signed(bits) => value.bits() < bits || (value.bits() == bits && value.trailing_zeros() == Some(bits - 1)),
 		IntType::Bool(bits) => value.bits() <= bits,
+		IntType::Bits => true,
 	}
 }
 

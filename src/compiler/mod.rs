@@ -10,6 +10,7 @@ pub mod source;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analyzer;
+pub mod comptime;
 pub mod codegen;
 pub mod interactive;
 mod debug_print;
@@ -28,6 +29,9 @@ pub struct Flags {
 	/// Print the AST after semantic analysis, with symbols linked to their declarations
 	#[arg(long = "show-ast")]
 	pub show_ast: bool,
+	/// Print what's left to run at runtime after compile time evaluation
+	#[arg(long = "show-comptime")]
+	pub show_comptime: bool,
 }
 
 impl Flags {
@@ -36,6 +40,7 @@ impl Flags {
 		self.show_source = true;
 		self.show_tokens = true;
 		self.show_ast = true;
+		self.show_comptime = true;
 	}
 }
 
@@ -44,6 +49,7 @@ pub enum CompilerError {
 	LexerFailed,
 	AstParserFailed,
 	SatParserFailed,
+	ComptimeFailed,
 	GeneratorFailed,
 }
 
@@ -127,6 +133,28 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 		return Err(CompilerError::SatParserFailed);
 	};
 
+	let mut comptime_timer = Stopwatch::start_new();
+	let evaluated = comptime::evaluate(&ast);
+	comptime_timer.stop();
+	let ast = match evaluated {
+		Ok(evaluated) => evaluated.ast,
+		Err(errors) => {
+			cprintln!("<red>COMPTIME Failed:</>");
+			for (i, err) in errors.iter().enumerate() {
+				cprintln!("  <red>{:04}:</> {}", i, err.to_meta(&document));
+			}
+			println!();
+			return Err(CompilerError::ComptimeFailed);
+		},
+	};
+	if flags.show_comptime {
+		println!("=== COMPTIME ===");
+		println!("{}", tree_printer::Tree::new(&ast)
+				.label("Root")
+				.format_line(|label, value| cformat!("<green>{}</>: {}", label, value)));
+		println!();
+	}
+
 	// === GENERATOR ===
 	let mut gen_timer = Stopwatch::start_new();
 	let gen_output = codegen::generate(&ast, backend, flags.emit_optimized_ir);
@@ -142,8 +170,9 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	println!("lex time: {}", lex_timer);
 	println!("ast time: {}", ast_timer);
 	println!("sem time: {}", sem_timer);
+	println!("cte time: {}", comptime_timer);
 	println!("gen time: {}", gen_timer);
-	let total_elapsed = lex_timer.elapsed() + ast_timer.elapsed() + sem_timer.elapsed() + gen_timer.elapsed();
+	let total_elapsed = lex_timer.elapsed() + ast_timer.elapsed() + sem_timer.elapsed() + comptime_timer.elapsed() + gen_timer.elapsed();
 	println!("tot time: {}ms", total_elapsed.as_millis());
 	
 	Ok(gen_output)

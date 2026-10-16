@@ -116,7 +116,7 @@ impl Display for BinOpKind {
 	}
 }
 
-#[derive(Debug, TreeDisplay)]
+#[derive(Debug, Clone, TreeDisplay)]
 pub struct BinOp {
 	pub op: BinOpKind,
 	pub lhs: Box<Sourced<Expr>>,

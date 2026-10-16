@@ -52,7 +52,7 @@ fn type_names() {
 	assert_eq!(Type::from_name("i08"), None);
 	assert_eq!(Type::from_name("i"), None);
 	assert_eq!(Type::from_name("x32"), None);
-	assert_eq!(Type::from_name("IntLit"), None); // comptime types can't be named
+	assert_eq!(Type::from_name("ComptimeInt"), None); // comptime types can't be named
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn type_display() {
 	assert_eq!(Type::VOID.to_string(), "VOID");
 	assert_eq!(Type::Nothing.to_string(), "NOTHING");
 	assert_eq!(Type::Tuple(vec![Type::Bool(1)]).to_string(), "(b1,)");
-	assert_eq!(Type::Tuple(vec![Type::IntLit, Type::Str]).to_string(), "(IntLit, str)");
+	assert_eq!(Type::Tuple(vec![Type::ComptimeInt, Type::Str]).to_string(), "(ComptimeInt, str)");
 	assert_eq!(Type::Ptr(Box::new(int(false, 8))).to_string(), "u8&");
 	assert_eq!(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(Type::Float(32)), variadic: false }.to_string(), "fn(unknown,) -> f32");
 	assert_eq!(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Str])), ret: Box::new(int(true, 32)), variadic: true }.to_string(), "fn(str, ...) -> i32");
@@ -81,8 +81,8 @@ fn comptime_literals() {
 	ok("let a = -128 + 1i8;");
 	err("let a = -129 + 1i8;", no_fit("-129", int(true, 8)));
 	err("let a = 128 + 1i8;", no_fit("128", int(true, 8)));
-	err("let a = 1.5 + 1u8;", InvalidBinOp { op: "+".to_string(), lhs: Type::RealLit, rhs: int(false, 8) });
-	err("let a = true + 1;", InvalidBinOp { op: "+".to_string(), lhs: Type::BoolLit, rhs: Type::IntLit });
+	err("let a = 1.5 + 1u8;", InvalidBinOp { op: "+".to_string(), lhs: Type::ComptimeReal, rhs: int(false, 8) });
+	err("let a = true + 1;", InvalidBinOp { op: "+".to_string(), lhs: Type::ComptimeBool, rhs: Type::ComptimeInt });
 }
 
 #[test]
@@ -92,12 +92,12 @@ fn implicit_casts() {
 	ok("let mut a = 0#f64; a = 5; a = 1.5;");
 	ok("let mut a = 0#b1; a = true;");
 	err("let mut a = 0#b8; a = 300;", no_fit("300", Type::Bool(8)));
-	err("let mut a = 0#u8; a = 1.5;", mismatch(int(false, 8), Type::RealLit));
+	err("let mut a = 0#u8; a = 1.5;", mismatch(int(false, 8), Type::ComptimeReal));
 	err("let mut a = 0#u8; a = 1i8;", mismatch(int(false, 8), int(true, 8)));
-	err("let mut a = 0#u8; a = true;", mismatch(int(false, 8), Type::BoolLit));
+	err("let mut a = 0#u8; a = true;", mismatch(int(false, 8), Type::ComptimeBool));
 	ok("let mut a = 0#u8; a += 1;");
 	err("let mut a = 0#u8; a += 256;", no_fit("256", int(false, 8)));
-	err("let mut a = 0#u8; a += 1.5;", InvalidBinOp { op: "+".to_string(), lhs: int(false, 8), rhs: Type::RealLit });
+	err("let mut a = 0#u8; a += 1.5;", InvalidBinOp { op: "+".to_string(), lhs: int(false, 8), rhs: Type::ComptimeReal });
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn explicit_casts() {
 	err("let a = \"s\"#u8;", InvalidCast { from: Type::Str, to: int(false, 8) });
 	err("let a = 1#nope;", UnknownType("nope".to_string()));
 	err("let a = 1#f0;", UnknownType("f0".to_string()));
-	err("let a = (1, 2)#(u8,);", InvalidCast { from: Type::Tuple(vec![Type::IntLit, Type::IntLit]), to: Type::Tuple(vec![int(false, 8)]) });
+	err("let a = (1, 2)#(u8,);", InvalidCast { from: Type::Tuple(vec![Type::ComptimeInt, Type::ComptimeInt]), to: Type::Tuple(vec![int(false, 8)]) });
 }
 
 #[test]
@@ -127,14 +127,14 @@ fn operators() {
 	ok("let a = 1#b8 << 2;");
 	ok("let a = 1#b8 >> 2u8;");
 	err("let a = 1u8 << 2;", ShiftNonBool(int(false, 8)));
-	err("let a = 1 << 2;", ShiftNonBool(Type::IntLit));
-	err("let a = 1#b8 << 1.5;", InvalidBinOp { op: "<<".to_string(), lhs: Type::Bool(8), rhs: Type::RealLit });
+	err("let a = 1 << 2;", ShiftNonBool(Type::ComptimeInt));
+	err("let a = 1#b8 << 1.5;", InvalidBinOp { op: "<<".to_string(), lhs: Type::Bool(8), rhs: Type::ComptimeReal });
 	err("let a = 1#b8 + 1#b8;", InvalidBinOp { op: "+".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(8) });
 	ok("let a = true & 1 == 2 | 1u8 < 2;");
 	ok("let a = \"a\" == \"b\";");
-	err("let a = 1u8 & true;", InvalidBinOp { op: "&".to_string(), lhs: int(false, 8), rhs: Type::BoolLit });
+	err("let a = 1u8 & true;", InvalidBinOp { op: "&".to_string(), lhs: int(false, 8), rhs: Type::ComptimeBool });
 	err("let a = 1u8 == 1i8;", InvalidBinOp { op: "==".to_string(), lhs: int(false, 8), rhs: int(true, 8) });
-	err("let a = true < false;", InvalidBinOp { op: "<".to_string(), lhs: Type::BoolLit, rhs: Type::BoolLit });
+	err("let a = true < false;", InvalidBinOp { op: "<".to_string(), lhs: Type::ComptimeBool, rhs: Type::ComptimeBool });
 	ok("let a = !true; let b = !(1#b8); let c = -1i8; let d = -1.5; let e = +1u8;");
 	err("let a = !1u8;", InvalidUnaOp { op: "!".to_string(), ty: int(false, 8) });
 	err("let a = -(1u8);", InvalidUnaOp { op: "-".to_string(), ty: int(false, 8) });
@@ -147,21 +147,28 @@ fn bool_operators() {
 	assert_eq!(check_str("12#b8 | 3"), Ok(Type::Bool(8)));
 	assert_eq!(check_str("12#b8 ^ 10"), Ok(Type::Bool(8)));
 	assert_eq!(check_str("3 ^ 12#b8"), Ok(Type::Bool(8)));
-	assert_eq!(check_str("true ^ false"), Ok(Type::Bool(1)));
+	assert_eq!(check_str("true ^ false"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("true ^ (1 < 2)"), Ok(Type::Bool(1)));
 	assert_eq!(check_str("2b8 | 3b8"), Ok(Type::Bool(8)));
 	assert_eq!(check_str("2b8 | 3"), Ok(Type::Bool(8)));
-	assert_eq!(check_str("true | false"), Ok(Type::Bool(1)));
+	assert_eq!(check_str("true | false"), Ok(Type::ComptimeBool));
 	assert_eq!(check_str("true & 1 < 2"), Ok(Type::Bool(1)));
 	ok("let mut a = 0#b16; a ^= 0x00ff; a &= 0x000f; a |= 1;");
-	assert_eq!(check_str("0x0f"), Ok(Type::Bool(8)));
-	assert_eq!(check_str("0b101 ^ 0b011"), Ok(Type::Bool(3)));
+	// an explicit base makes unsized bits, which take a size where they're used
+	assert_eq!(check_str("0x0f"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("0b101 ^ 0b011"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("0d2 | 3"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("0xff & 0x0fff"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("0x0f & 3#b8"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("0x0f << 2"), Ok(Type::ComptimeBool));
+	assert_eq!(check_str("0x3f#u8"), Ok(int(false, 8)));
+	err("let a = 0xfff & 3#b8;", no_fit("4095", Type::Bool(8)));
 	assert_eq!(check_str("0xffu8 + 1"), Ok(int(false, 8)));
-	err("let a = 0xff + 1;", InvalidBinOp { op: "+".to_string(), lhs: Type::Bool(8), rhs: Type::IntLit });
-	err("let a = 0xff & 0x0fff;", InvalidBinOp { op: "&".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(16) });
+	err("let a = 0xff + 1;", InvalidBinOp { op: "+".to_string(), lhs: Type::ComptimeBool, rhs: Type::ComptimeInt });
 	err("let a = 1#b8 & 1#b16;", InvalidBinOp { op: "&".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(16) });
 	err("let a = 1u8 ^ 2u8;", InvalidBinOp { op: "^".to_string(), lhs: int(false, 8), rhs: int(false, 8) });
-	err("let a = 1 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::IntLit, rhs: Type::IntLit });
-	err("let a = 1.5 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::RealLit, rhs: Type::IntLit });
+	err("let a = 1 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::ComptimeInt, rhs: Type::ComptimeInt });
+	err("let a = 1.5 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::ComptimeReal, rhs: Type::ComptimeInt });
 	err("let a = 1#b8 ^ 256;", no_fit("256", Type::Bool(8)));
 }
 
@@ -170,8 +177,8 @@ fn control_flow() {
 	ok("if true { };");
 	ok("if 1 == 2: ret;");
 	err("if 1u8 { };", mismatch(Type::Bool(1), int(false, 8)));
-	err("while 1.5 { };", mismatch(Type::Bool(1), Type::RealLit));
-	ok("while 1 { };"); // IntLit casts to b1
+	err("while 1.5 { };", mismatch(Type::Bool(1), Type::ComptimeReal));
+	ok("while 1 { };"); // a ComptimeInt casts to b1
 	ok("let a = if true { 1u8 } else { 2 };");
 	ok("let a = if true { 1 } else { 2.5 };");
 	err("let a = if true { 1u8 } else { 2i8 };", mismatch(int(false, 8), int(true, 8)));
@@ -180,7 +187,7 @@ fn control_flow() {
 	ok("let a = loop { break 1u8; };");
 	ok("let a = loop { if true { break 1u8; }; break 2; };");
 	err("let a = loop { if true { break 1u8; }; break 2i8; };", mismatch(int(false, 8), int(true, 8)));
-	err("while true { break 1; };", BreakValueInWhile(Type::IntLit));
+	err("while true { break 1; };", BreakValueInWhile(Type::ComptimeInt));
 	ok("while true { break; };");
 	ok("loop { while true { continue; }; break; };");
 	err("break;", BreakOutsideLoop);
@@ -194,7 +201,7 @@ fn cascading() {
 	ok("{ let a = 1; };");
 	ok("let a = { 1u8 };");
 	err("1u8;", UncaughtValue(int(false, 8)));
-	err("(1, 2);", UncaughtValue(Type::Tuple(vec![Type::IntLit, Type::IntLit])));
+	err("(1, 2);", UncaughtValue(Type::Tuple(vec![Type::ComptimeInt, Type::ComptimeInt])));
 	err("let f = fn(x) { 1u8 }; f(1,);", UncaughtValue(int(false, 8)));
 	ok("let f = fn(x) { 1u8 }; let _ = f(1,);");
 	ok("let f = fn(x) { x; }; f(1,);"); // NOTHING doesn't need to be caught
@@ -210,15 +217,15 @@ fn bindings() {
 	ok("let a = 1; let b = a + 1u8;");
 	err("let a = 1i8; let b = a + 1u8;", InvalidBinOp { op: "+".to_string(), lhs: int(true, 8), rhs: int(false, 8) });
 	ok("let mut a = 1u8;");
-	err("let mut a = 1;", MutComptime(Type::IntLit));
-	err("let mut a = 1.5;", MutComptime(Type::RealLit));
-	err("let mut a = true;", MutComptime(Type::BoolLit));
+	ok("let mut a = 1;"); // compile time evaluation decides whether this needs a size
+	ok("let mut a = 1.5;");
+	ok("let mut a = true;");
 	ok("let (a, b) = (1, 2u8);");
 	ok("let (a, (b, c)) = (1, (2u8, 3));");
 	ok("let mut (a, b) = (1u8, 2#i32);");
-	err("let mut (a, b) = (1u8, 2);", MutComptime(Type::IntLit));
-	err("let (a, b) = (1, 2, 3);", DestructureMismatch { found: Type::Tuple(vec![Type::IntLit; 3]), len: 2 });
-	err("let (a, b) = 1;", DestructureMismatch { found: Type::IntLit, len: 2 });
+	ok("let mut (a, b) = (1u8, 2);");
+	err("let (a, b) = (1, 2, 3);", DestructureMismatch { found: Type::Tuple(vec![Type::ComptimeInt; 3]), len: 2 });
+	err("let (a, b) = 1;", DestructureMismatch { found: Type::ComptimeInt, len: 2 });
 	ok("let mut a = 1u8; let mut b = 2u8; (a, b) = (b, 3);");
 	err("let mut a = 1u8; let mut b = 2u8; (a, b) = (b, 300);", no_fit("300", int(false, 8)));
 }
@@ -285,10 +292,10 @@ fn externs() {
 	let printf = "extern printf: fn(str, ...) -> i32;";
 	ok(&format!("{} let _ = printf(\"%d %s\", 1, \"a\",);", printf));
 	ok(&format!("{} let _ = printf(\"a\",);", printf));
-	err(&format!("{} let _ = printf(1,);", printf), mismatch(Type::Str, Type::IntLit));
+	err(&format!("{} let _ = printf(1,);", printf), mismatch(Type::Str, Type::ComptimeInt));
 	err(&format!("{} let _ = printf();", printf), mismatch(Type::Tuple(vec![Type::Str]), Type::VOID));
 	ok("extern puts: fn(str) -> i32; let _ = puts(\"a\",);");
-	err("extern puts: fn(str) -> i32; let _ = puts(\"a\", 1,);", mismatch(Type::Tuple(vec![Type::Str]), Type::Tuple(vec![Type::Str, Type::IntLit])));
+	err("extern puts: fn(str) -> i32; let _ = puts(\"a\", 1,);", mismatch(Type::Tuple(vec![Type::Str]), Type::Tuple(vec![Type::Str, Type::ComptimeInt])));
 	ok("extern exit: fn(i32); exit(0,);"); // a function without `->` gives VOID
 	err("extern exit: fn(i32); exit(3000000000,);", no_fit("3000000000", int(true, 32)));
 	ok("extern f: fn(); let g = fn() { f(); };"); // functions can see externs
@@ -307,7 +314,7 @@ fn externs() {
 fn last_statement_type() {
 	assert_eq!(check_str(""), Ok(Type::Nothing));
 	assert_eq!(check_str("1u8 + 2"), Ok(int(false, 8)));
-	assert_eq!(check_str("let a = 1; a + 1.5"), Ok(Type::RealLit));
+	assert_eq!(check_str("let a = 1; a + 1.5"), Ok(Type::ComptimeReal));
 	assert_eq!(check_str("let a = 1;"), Ok(Type::Nothing));
 	assert_eq!(check_str("(1, 2.5)#(u8, f32)"), Ok(Type::Tuple(vec![int(false, 8), Type::Float(32)])));
 	assert_eq!(check_str("let a = 1u8; a.&"), Ok(Type::Ptr(Box::new(int(false, 8)))));
