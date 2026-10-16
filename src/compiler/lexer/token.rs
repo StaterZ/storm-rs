@@ -3,6 +3,8 @@ use std::fmt::Display;
 use logos::{Logos, Skip};
 use unescaper::unescape;
 
+use crate::compiler::source::line_break::find_line_break;
+
 use super::lexer_error::LexerErrorKind;
 
 #[derive(Logos, logos_display::Debug, logos_display::Display, PartialEq, Eq, Clone, strum::AsRefStr, strum::EnumDiscriminants, enum_as_inner::EnumAsInner)]
@@ -153,31 +155,29 @@ pub enum Token {
 
 fn line_comment(lex: &mut logos::Lexer<Token>) -> Skip {
 	let rest = lex.remainder();
-	let len = rest.find(['\r', '\n']).unwrap_or(rest.len());
+	let len = find_line_break(rest).map_or(rest.len(), |(index, _)| index);
 	lex.bump(len);
 	Skip
 }
 
 fn block_comment(lex: &mut logos::Lexer<Token>) -> Result<Skip, LexerErrorKind> {
-	// `/` and `*` are ASCII, so scanning bytes never splits a char
-	let bytes = lex.remainder().as_bytes();
+	let mut chars = lex.remainder().char_indices().peekable();
 	let mut depth = 1usize;
-	let mut i = 0;
-	while i + 1 < bytes.len() {
-		match (bytes[i], bytes[i + 1]) {
-			(b'/', b'*') => {
+	while let Some((_, c)) = chars.next() {
+		match (c, chars.peek()) {
+			('/', Some((_, '*'))) => {
 				depth += 1;
-				i += 2;
+				chars.next();
 			},
-			(b'*', b'/') => {
+			('*', Some(&(i, '/'))) => {
 				depth -= 1;
-				i += 2;
+				chars.next();
 				if depth == 0 {
-					lex.bump(i);
+					lex.bump(i + '/'.len_utf8());
 					return Ok(Skip);
 				}
 			},
-			_ => i += 1,
+			_ => { },
 		}
 	}
 	Err(LexerErrorKind::MultilineCommentDelimiterNotClosed)

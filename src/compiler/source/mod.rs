@@ -18,6 +18,7 @@ pub use sourced::Sourced;
 pub use meta::SourcedMeta;
 
 pub mod error_gen;
+pub mod line_break;
 
 mod document;
 mod lines;

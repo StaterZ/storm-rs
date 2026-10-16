@@ -1,10 +1,6 @@
 use std::ops::Deref;
 
-use itertools::Itertools;
-use streaming_iterator::StreamingIterator;
-use szu::iter::WindowOptionExt;
-
-use super::super::*;
+use super::super::{line_break::find_line_break, *};
 
 #[derive(Debug)]
 pub struct DocumentMeta<'a> {
@@ -16,27 +12,22 @@ pub struct DocumentMeta<'a> {
 impl<'a> DocumentMeta<'a> {
 	pub fn new(document: &'a Document) -> Self {
 		let text = document.get_text();
+		
 		let mut byte_to_char = Vec::<usize>::with_capacity(text.len() + 1);
 		unsafe { byte_to_char.set_len(text.len()); }
-		let lines_begin_indices = text
-			.char_indices()
-			.enumerate()
-			.window_option()
-			.filter_map_deref(|(prev_c, (char_i, (byte_i, c)))| {
-				byte_to_char[*byte_i] = *char_i;
-				
-				let prev_c = prev_c.as_ref().map(|(_, (_, prev_c))| prev_c);
-				match (prev_c, c) {
-					(Some('\r'), '\n') => false, //Don't parse Windows CRLF as Mac CR
-					(Some('\r'), _) => true, //Mac
-					(Some('\n'), _) => true, //Linux + Windows end
-					(None, _) => true,
-					_ => false,
-				}.then_some(Pos::new(*byte_i))
-			})
-			.collect_vec();
-
+		for (char_i, (byte_i, _)) in text.char_indices().enumerate() {
+			byte_to_char[byte_i] = char_i;
+		}
 		byte_to_char.push(text.len());
+
+		// a line only begins where there's a char, so a trailing line break doesn't add an empty line
+		let mut lines_begin_indices = Vec::new();
+		let mut line_begin = 0;
+		while line_begin < text.len() {
+			lines_begin_indices.push(Pos::new(line_begin));
+			let Some((index, len)) = find_line_break(&text[line_begin..]) else { break };
+			line_begin += index + len;
+		}
 
 		Self {
 			document,
