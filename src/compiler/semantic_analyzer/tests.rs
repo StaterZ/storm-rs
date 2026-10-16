@@ -63,7 +63,8 @@ fn type_display() {
 	assert_eq!(Type::Tuple(vec![Type::Bool(1)]).to_string(), "(b1,)");
 	assert_eq!(Type::Tuple(vec![Type::IntLit, Type::Str]).to_string(), "(IntLit, str)");
 	assert_eq!(Type::Ptr(Box::new(int(false, 8))).to_string(), "u8&");
-	assert_eq!(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(Type::Float(32)) }.to_string(), "fn(unknown,) -> f32");
+	assert_eq!(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(Type::Float(32)), variadic: false }.to_string(), "fn(unknown,) -> f32");
+	assert_eq!(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Str])), ret: Box::new(int(true, 32)), variadic: true }.to_string(), "fn(str, ...) -> i32");
 }
 
 #[test]
@@ -177,7 +178,7 @@ fn cascading() {
 	err("while true { 1u8 };", UncaughtValue(int(false, 8)));
 	err("loop { 1u8 };", UncaughtValue(int(false, 8)));
 	ok("();"); // the empty tuple is VOID
-	ok("printf(\"a\",);"); // printf isn't typed yet
+	err("extern printf: fn(str, ...) -> i32; printf(\"a\",);", UncaughtValue(int(true, 32)));
 }
 
 #[test]
@@ -233,7 +234,7 @@ fn symbols() {
 	ok("let a = 1; let b = a;");
 	ok("let mut a = 1u8; a = 2;");
 	ok("let a = 1; let a = a + 1;"); // shadowing
-	ok("let f = fn(x) { printf(\"%d\", x,); };");
+	ok("extern printf: fn(str, ...) -> i32; let f = fn(x) { let _ = printf(\"%d\", x,); };");
 	err("let a = b;", UndefinedSymbol("b".to_string()));
 	err("a = 1;", UndefinedSymbol("a".to_string()));
 	err("let a = 1u8; a = 2;", AssignImmutableSymbol("a".to_string()));
@@ -256,6 +257,29 @@ fn scopes() {
 }
 
 #[test]
+fn externs() {
+	let printf = "extern printf: fn(str, ...) -> i32;";
+	ok(&format!("{} let _ = printf(\"%d %s\", 1, \"a\",);", printf));
+	ok(&format!("{} let _ = printf(\"a\",);", printf));
+	err(&format!("{} let _ = printf(1,);", printf), mismatch(Type::Str, Type::IntLit));
+	err(&format!("{} let _ = printf();", printf), mismatch(Type::Tuple(vec![Type::Str]), Type::VOID));
+	ok("extern puts: fn(str) -> i32; let _ = puts(\"a\",);");
+	err("extern puts: fn(str) -> i32; let _ = puts(\"a\", 1,);", mismatch(Type::Tuple(vec![Type::Str]), Type::Tuple(vec![Type::Str, Type::IntLit])));
+	ok("extern exit: fn(i32); exit(0,);"); // a function without `->` gives VOID
+	err("extern exit: fn(i32); exit(3000000000,);", no_fit("3000000000", int(true, 32)));
+	ok("extern f: fn(); let g = fn() { f(); };"); // functions can see externs
+	err("extern f: fn(nope);", UnknownType("nope".to_string()));
+	err("printf(\"a\",);", UndefinedSymbol("printf".to_string())); // nothing is linked without an extern
+	err("extern f: fn(); f = f;", AssignImmutableSymbol("f".to_string()));
+	assert_eq!(check_str(printf), Ok(Type::Nothing));
+	assert_eq!(check_str("extern f: fn(str, ...) -> i32; f"), Ok(Type::Func {
+		arg: Box::new(Type::Tuple(vec![Type::Str])),
+		ret: Box::new(int(true, 32)),
+		variadic: true,
+	}));
+}
+
+#[test]
 fn last_statement_type() {
 	assert_eq!(check_str(""), Ok(Type::Nothing));
 	assert_eq!(check_str("1u8 + 2"), Ok(int(false, 8)));
@@ -264,5 +288,5 @@ fn last_statement_type() {
 	assert_eq!(check_str("(1, 2.5)#(u8, f32)"), Ok(Type::Tuple(vec![int(false, 8), Type::Float(32)])));
 	assert_eq!(check_str("let a = 1u8; a&"), Ok(Type::Ptr(Box::new(int(false, 8)))));
 	assert_eq!(check_str("1 < 2"), Ok(Type::Bool(1)));
-	assert_eq!(check_str("fn(x): 1u8"), Ok(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(int(false, 8)) }));
+	assert_eq!(check_str("fn(x): 1u8"), Ok(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(int(false, 8)), variadic: false }));
 }

@@ -5,6 +5,8 @@ mod tests;
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use itertools::Itertools;
+
 pub use error::{SemError, SemErrorKind};
 pub use types::Type;
 
@@ -19,6 +21,7 @@ use crate::compiler::{
 pub fn analyze(ast: &mut Sourced<Expr>) -> Result<Type, Vec<SemError>> {
 	let mut analyzer = Analyzer {
 		scope: SymTbl::new(),
+		externs: Vec::new(),
 		loops: Vec::new(),
 		errors: Vec::new(),
 		last_stmt: Type::Nothing,
@@ -48,14 +51,9 @@ struct SymTbl {
 
 impl SymTbl {
 	fn new() -> Self {
-		let mut sym_tbl = Self {
+		Self {
 			symbols: HashMap::new(),
-		};
-		//TODO: remove temp funcs. they're untyped until externs can be declared
-		for name in ["printf", "scanf"] {
-			sym_tbl.declare(Rc::new(RefCell::new(Var::new(name.to_string()))), false, Type::Unknown);
 		}
-		sym_tbl
 	}
 
 	fn declare(&mut self, var: Rc<RefCell<Var>>, is_mut: bool, ty: Type) {
@@ -85,6 +83,8 @@ enum LoopKind {
 
 struct Analyzer {
 	scope: SymTbl,
+	/// Every `extern` so far. Functions can't see the symbols around them, but they can see these.
+	externs: Vec<Symbol>,
 	loops: Vec<LoopKind>,
 	errors: Vec<SemError>,
 	/// The type of the last statement analyzed in a block. After a whole file, that's the file's last statement.
@@ -130,9 +130,16 @@ impl Analyzer {
 
 	/// Comptime int literals know their value, so they can be checked against the type they're cast to.
 	fn check_literal_fits(&mut self, node: &Sourced<Expr>, ty: &Type) {
-		let (negative, lit) = match &**node {
-			Expr::IntLit(lit) => (false, lit),
-			Expr::UnaOp(UnaOp { op: UnaOpKind::Negate, expr }) => match &***expr {
+		let (negative, lit) = match (&**node, ty) {
+			// a tuple's literals are checked against the tuple's items, like the arguments of a call
+			(Expr::TupleCtor(tuple), Type::Tuple(items)) if tuple.items.len() == items.len() => {
+				for (item, ty) in tuple.items.iter().zip(items) {
+					self.check_literal_fits(item, ty);
+				}
+				return;
+			},
+			(Expr::IntLit(lit), _) => (false, lit),
+			(Expr::UnaOp(UnaOp { op: UnaOpKind::Negate, expr }), _) => match &***expr {
 				Expr::IntLit(lit) => (true, lit),
 				_ => return,
 			},
@@ -157,13 +164,11 @@ impl Analyzer {
 	}
 
 	fn resolve_type(&mut self, node: &Sourced<TypeExpr>) -> Type {
-		match &**node {
-			TypeExpr::Named(name) => Type::from_name(name).unwrap_or_else(|| {
-				self.error(SemErrorKind::UnknownType(name.clone()), *node.source());
-				Type::Unknown
-			}),
-			TypeExpr::Tuple(items) => Type::Tuple(items.iter().map(|item| self.resolve_type(item)).collect()),
-		}
+		Type::from_type_expr(node).unwrap_or_else(|name| {
+			let range = *name.source();
+			self.error(SemErrorKind::UnknownType(name.inner()), range);
+			Type::Unknown
+		})
 	}
 
 	fn expr(&mut self, node: &mut Sourced<Expr>) -> Type {
@@ -321,18 +326,39 @@ impl Analyzer {
 			},
 			Expr::Func(func) => {
 				// functions don't see the symbols or loops around them
-				let scope = std::mem::replace(&mut self.scope, SymTbl::new());
+				let mut func_scope = SymTbl::new();
+				for symbol in self.externs.iter() {
+					func_scope.symbols.insert(symbol.var.borrow().name.clone(), symbol.clone());
+				}
+				let scope = std::mem::replace(&mut self.scope, func_scope);
 				let loops = std::mem::take(&mut self.loops);
 				let arg = self.pattern(&mut func.binding, &Type::Unknown, None, true, false); //TODO: argument types
 				let ret = self.expr(&mut func.body);
 				self.scope = scope;
 				self.loops = loops;
-				Type::Func { arg: Box::new(arg), ret: Box::new(ret) }
+				Type::Func { arg: Box::new(arg), ret: Box::new(ret), variadic: false }
 			},
 			Expr::Call(call) => {
 				let func = self.expr(&mut call.func);
 				match func {
-					Type::Func { arg, ret } => {
+					Type::Func { arg, ret, variadic: true } => {
+						// the extra arguments can be anything
+						let fixed = match *arg {
+							Type::Tuple(fixed) => fixed,
+							arg => vec![arg],
+						};
+						let Expr::TupleCtor(tuple) = &mut **call.arg else { unreachable!("call arguments are always tuples") };
+						let found = tuple.items.iter_mut().map(|item| self.expr(item)).collect_vec();
+						if found.len() < fixed.len() {
+							self.error(SemErrorKind::Mismatch { expected: Type::Tuple(fixed), found: Type::Tuple(found) }, *call.arg.source());
+						} else {
+							for ((item, found), expected) in tuple.items.iter().zip(found.iter()).zip(fixed.iter()) {
+								self.expect(item, found, expected);
+							}
+						}
+						*ret
+					},
+					Type::Func { arg, ret, variadic: false } => {
 						self.expr_expecting(&mut call.arg, &arg);
 						*ret
 					},
@@ -346,6 +372,12 @@ impl Analyzer {
 						Type::Unknown
 					},
 				}
+			},
+			Expr::Extern(ext) => {
+				let ty = self.resolve_type(&ext.ty);
+				self.scope.declare(ext.binding.clone(), false, ty.clone());
+				self.externs.push(Symbol { var: ext.binding.clone(), ty });
+				Type::VOID
 			},
 			Expr::Cast(cast) => {
 				let from = self.expr(&mut cast.expr);

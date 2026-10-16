@@ -2,6 +2,8 @@ use std::fmt::{self, Display};
 
 use itertools::Itertools;
 
+use crate::compiler::{parser::node_sets::TypeExpr, source::Sourced};
+
 /// The bits of a `usize`/`isize`. Everything targets 64 bit for now.
 pub const POINTER_BITS: u64 = 64;
 
@@ -21,7 +23,8 @@ pub enum Type {
 	Ptr(Box<Type>),
 	/// The empty tuple is VOID.
 	Tuple(Vec<Type>),
-	Func { arg: Box<Type>, ret: Box<Type> },
+	/// `variadic` functions take any number of extra arguments after `arg`'s items, like C's `printf`.
+	Func { arg: Box<Type>, ret: Box<Type>, variadic: bool },
 
 	/// What a `;` turns a VOID into. The only value that doesn't need to be caught.
 	Nothing,
@@ -107,6 +110,19 @@ impl Type {
 		}
 	}
 
+	/// The type a type expression like `u8`, `(i32, f64)` or `fn(str, ...) -> i32` means. Fails with the first name that isn't a type.
+	pub fn from_type_expr(node: &Sourced<TypeExpr>) -> Result<Type, Sourced<String>> {
+		Ok(match &**node {
+			TypeExpr::Named(name) => Type::from_name(name).ok_or_else(|| Sourced::new(name.clone(), *node.source()))?,
+			TypeExpr::Tuple(items) => Type::Tuple(items.iter().map(Type::from_type_expr).collect::<Result<_, _>>()?),
+			TypeExpr::Func(func) => Type::Func {
+				arg: Box::new(Type::Tuple(func.args.iter().map(Type::from_type_expr).collect::<Result<_, _>>()?)),
+				ret: Box::new(func.ret.as_ref().map(|ret| Type::from_type_expr(ret)).transpose()?.unwrap_or(Type::VOID)),
+				variadic: func.variadic,
+			},
+		})
+	}
+
 	/// The runtime type a name like `i32`, `u7`, `f64`, `b1`, `usize` or `str` refers to.
 	pub fn from_name(name: &str) -> Option<Type> {
 		match name {
@@ -147,10 +163,18 @@ impl Display for Type {
 			Type::Tuple(items) if items.is_empty() => write!(f, "VOID"),
 			Type::Tuple(items) if items.len() == 1 => write!(f, "({},)", items[0]),
 			Type::Tuple(items) => write!(f, "({})", items.iter().join(", ")),
-			Type::Func { arg, ret } => write!(f, "fn{} -> {}", match **arg {
-				Type::Tuple(_) => arg.to_string(),
-				_ => format!("({})", arg),
-			}, ret),
+			Type::Func { arg, ret, variadic } => {
+				let mut args = match &**arg {
+					Type::Tuple(items) => items.iter().map(|item| item.to_string()).collect_vec(),
+					arg => vec![arg.to_string()],
+				};
+				if *variadic {
+					args.push("...".to_string());
+				} else if args.len() == 1 && matches!(**arg, Type::Tuple(_)) {
+					args[0].push(','); // a 1-tuple
+				}
+				write!(f, "fn({}) -> {}", args.join(", "), ret)
+			},
 			Type::Nothing => write!(f, "NOTHING"),
 			Type::Never => write!(f, "never"),
 			Type::Unknown => write!(f, "unknown"),

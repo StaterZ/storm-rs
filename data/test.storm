@@ -1,3 +1,6 @@
+extern printf: fn(str, ...) -> i32;
+extern scanf: fn(str, ...) -> i32;
+
 let times_three = fn(x): x*3;
 
 let str_cmp = fn(mut a, mut b) {

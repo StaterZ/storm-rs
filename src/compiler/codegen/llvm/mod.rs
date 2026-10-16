@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::identity, ops::Deref, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, convert::identity, num::NonZeroU32, ops::Deref, path::PathBuf, str::FromStr};
 
 use inkwell::{
 	builder::{Builder, BuilderError},
@@ -6,14 +6,14 @@ use inkwell::{
 	module::{Linkage, Module},
 	passes::PassBuilderOptions,
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
-	types::{BasicType, BasicTypeEnum},
+	types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
 	values::{BasicValueEnum, FunctionValue, IntValue},
 	AddressSpace,
 	IntPredicate
 };
 use itertools::Itertools;
 
-use crate::compiler::{parser::{node_sets::*, nodes::*}, source::Sourced};
+use crate::compiler::{parser::{node_sets::*, nodes::*}, semantic_analyzer::Type, source::Sourced};
 use value::*;
 
 mod value;
@@ -40,14 +40,6 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 	let builder = context.create_builder();
 	let module = context.create_module("main");
 
-	let i8ptr_type = context.ptr_type(AddressSpace::default());
-	let printf_type = context.i32_type().fn_type(&[i8ptr_type.into()], true);
-	let print_fn = module.add_function("printf", printf_type, Some(Linkage::External));
-
-	let i8ptr_type = context.ptr_type(AddressSpace::default());
-	let scanf_type = context.i32_type().fn_type(&[i8ptr_type.into()], true);
-	let scan_fn = module.add_function("scanf", scanf_type, Some(Linkage::External));
-	
 	let mut func_tbl = Vec::new();
 	{
 		// Create a dummy main function to emit blocks into
@@ -58,9 +50,6 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 		builder.position_at_end(entry);
 	
 		let mut sym_tbl = HashMap::new();
-		decl_extern(print_fn, &builder, &mut sym_tbl); //TODO: super temp
-		decl_extern(scan_fn, &builder, &mut sym_tbl); //TODO: super temp
-
 		let expr_val = gen_expr(&ast, &context, &builder, &module, &mut sym_tbl, &mut func_tbl).map_err(|err| GenError::BuilderError(err))?;
 		gen_return(expr_val, &builder).map_err(|err| GenError::BuilderError(err))?;
 	}
@@ -70,9 +59,15 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 			let entry = context.append_basic_block(job.value, "entry");
 			builder.position_at_end(entry);
 
+			// functions can't see the symbols around them, except for externs
 			let mut sym_tbl = HashMap::new();
-			decl_extern(print_fn, &builder, &mut sym_tbl); //TODO: super temp
-			decl_extern(scan_fn, &builder, &mut sym_tbl); //TODO: super temp
+			let externs = module
+				.get_functions()
+				.filter(|func| func.get_linkage() == Linkage::External && func.count_basic_blocks() == 0)
+				.collect_vec();
+			for func in externs {
+				decl_extern(func, &builder, &mut sym_tbl);
+			}
 
 			let rhs = job.value.get_first_param().unwrap().into();
 			gen_pattern(&job.node.binding, rhs, true, &context, &builder, &module, &mut sym_tbl, &mut func_tbl)?;
@@ -84,6 +79,46 @@ pub fn generate(ast: &Sourced<Expr>, emit_optimized_ir: bool) -> Result<Vec<u8>,
 	err.map_err(|err| GenError::BuilderError(err))?;
 
 	stupid_shit(&module, emit_optimized_ir)
+}
+
+/// The LLVM type for a Storm type, or `None` for VOID.
+fn llvm_type<'ctx>(ty: &Type, context: &'ctx Context) -> Option<BasicTypeEnum<'ctx>> {
+	let int = |bits: u64| context
+		.custom_width_int_type(NonZeroU32::new(bits as u32).unwrap_or_else(|| todo!("zero sized ints")))
+		.unwrap()
+		.into();
+	Some(match ty {
+		Type::Int { bits, .. } | Type::Bool(bits) => int(*bits),
+		Type::Usize | Type::Isize => context.i64_type().into(),
+		Type::Float(16) => context.f16_type().into(),
+		Type::Float(32) => context.f32_type().into(),
+		Type::Float(64) => context.f64_type().into(),
+		Type::Float(128) => context.f128_type().into(),
+		Type::Str | Type::Ptr(_) | Type::Func { .. } => context.ptr_type(AddressSpace::default()).into(),
+		Type::Tuple(items) if items.is_empty() => return None,
+		Type::Tuple(items) => context.struct_type(&items.iter().filter_map(|item| llvm_type(item, context)).collect_vec(), false).into(),
+		ty => todo!("llvm type for {}", ty),
+	})
+}
+
+/// Declares an extern function, like `extern printf: fn(str, ...) -> i32`.
+fn gen_extern<'ctx>(node: &Extern, context: &'ctx Context, module: &Module<'ctx>) -> FunctionValue<'ctx> {
+	let name = node.binding.borrow().name.clone();
+	if let Some(func) = module.get_function(&name) {
+		return func;
+	}
+	let Ok(Type::Func { arg, ret, variadic }) = Type::from_type_expr(&node.ty) else {
+		todo!("externs that aren't functions"); //TODO: extern variables
+	};
+	let params = match *arg {
+		Type::Tuple(items) => items.iter().filter_map(|item| llvm_type(item, context)).map(Into::into).collect_vec(),
+		arg => llvm_type(&arg, context).into_iter().map(Into::into).collect_vec(),
+	};
+	let fn_type = match llvm_type(&ret, context) {
+		Some(ret) => ret.fn_type(&params, variadic),
+		None => context.void_type().fn_type(&params, variadic),
+	};
+	module.add_function(&name, fn_type, Some(Linkage::External))
 }
 
 fn gen_return<'ctx>(value: Option<Value<'ctx>>, builder: &Builder<'ctx>) -> Result<(), BuilderError> {
@@ -254,7 +289,11 @@ fn gen_expr<'a, 'ctx>(
 				.and_then(identity);
 			Ok(expr)
 		},
-		Expr::Stmt(node) => gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl),
+		Expr::Stmt(node) => {
+			// `;` drops the value
+			gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl)?;
+			Ok(None)
+		},
 		Expr::BinOp(node) => {
 			let lhs = gen_expr(&node.lhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
 			let rhs = gen_expr(&node.rhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
@@ -310,6 +349,11 @@ fn gen_expr<'a, 'ctx>(
 			);
 			Ok(Some(Value::Ptr(fn_ptr)))
 		},
+		Expr::Extern(node) => {
+			let func = gen_extern(node, context, module);
+			decl_extern(func, builder, sym_tbl);
+			Ok(None)
+		},
 		Expr::Cast(node) => gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl), //TODO: casts are no-ops until values have real types
 		Expr::Call(node) => {
 			let func_ptr = gen_expr(&node.func, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
@@ -319,6 +363,7 @@ fn gen_expr<'a, 'ctx>(
 				.unwrap()
 				.clone();
 			let arg = gen_expr(&node.arg, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let param_types = Into::<FunctionType>::into(func.clone()).get_param_types();
 			let args: Vec<inkwell::values::BasicMetadataValueEnum<'_>> = if func.get_linkage() == Linkage::External {
 				let arg = arg
 					.into_ptr()
@@ -331,7 +376,12 @@ fn gen_expr<'a, 'ctx>(
 					.enumerate()
 					.map(|(i, ty)| Ok({
 						let field_ptr = builder.build_struct_gep(arg.get_pointee_type().clone(), *arg, i as u32, "call_arg_ptr")?;
-						builder.build_load(ty, field_ptr, "call_arg")?.into()
+						let value = builder.build_load(ty, field_ptr, "call_arg")?;
+						// every int is an i64 for now, so the declared parameters need a cast
+						match (value, param_types.get(i)) {
+							(BasicValueEnum::IntValue(value), Some(BasicMetadataTypeEnum::IntType(param))) => builder.build_int_cast_sign_flag(value, *param, true, "call_arg_cast")?.into(),
+							(value, _) => value.into(),
+						}
 					}))
 					.collect::<Result<Vec<_>, BuilderError>>()?
 			} else {
@@ -346,7 +396,14 @@ fn gen_expr<'a, 'ctx>(
 				&args,
 				"call",
 			)?;
-			Ok(Some(call_site.try_as_basic_value().unwrap_basic().into()))
+			match call_site.try_as_basic_value().basic() {
+				None => Ok(None), // a VOID function
+				// every int is an i64 for now, so narrower results from externs are widened
+				Some(BasicValueEnum::IntValue(value)) if value.get_type().get_bit_width() < 64 => {
+					Ok(Some(Value::Int(builder.build_int_s_extend(value, context.i64_type(), "call_widen")?)))
+				},
+				Some(value) => Ok(Some(value.into())),
+			}
 		},
 
 		Expr::TupleCtor(node) => {

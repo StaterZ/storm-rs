@@ -33,6 +33,7 @@ pub enum Expr {
 	Func(#[tree(flatten)] Func),
 	Call(#[tree(flatten)] Call),
 	Cast(#[tree(flatten)] Cast),
+	Extern(#[tree(flatten)] Extern),
 	
 	TupleCtor(#[tree(flatten)] TupleCtor),
 	BoolLit(#[tree(skip)] bool),
@@ -66,6 +67,7 @@ impl Expr {
 			Expr::Func(_) => None,
 			Expr::Call(_) => None,
 			Expr::Cast(_) => None,
+			Expr::Extern(value) => Some(cformat!("<cyan>{}</>", value.binding.borrow())),
 
 			Expr::TupleCtor(_) => None,
 			Expr::BoolLit(value) => Some(cformat!("<cyan>{}</>", value)),

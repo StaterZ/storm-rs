@@ -73,6 +73,7 @@ Stmt<E>: Sourced<Expr> = {
 	<l:@L> "ret" <r:@R> if E !~ "^(cond|block)$" => node(l, Expr::Return(Return { expr: None }), r),
 	<l:@L> "ret" <expr:Expr<E>> <r:@R> => node(l, Expr::Return(Return { expr: Some(Box::new(expr)) }), r),
 	Break<E>,
+	<l:@L> "extern" <name:"ident"> ":" <ty:TypeExpr> <r:@R> if E == "open" => node(l, Expr::Extern(Extern { binding: var(name), ty }), r),
 	<l:@L> "continue" <r:@R> if E != "block" => node(l, Expr::Continue, r),
 	<l:@L> "unreachable" <r:@R> if E != "block" => node(l, Expr::Unreachable, r),
 	Expr<E>,
@@ -245,6 +246,22 @@ TypeExpr: Sourced<TypeExpr> = {
 	<l:@L> <name:"ident"> <r:@R> => node(l, TypeExpr::Named(name), r),
 	"(" <TypeExpr> ")",
 	<l:@L> <items:Tuple<TypeExpr>> <r:@R> => node(l, TypeExpr::Tuple(items), r),
+	<l:@L> "fn" "(" <args:FuncTypeArgs> ")" <ret:("->" <TypeExpr>)?> <r:@R> => {
+		let (mut args, variadic) = args;
+		args.reverse();
+		node(l, TypeExpr::Func(FuncTypeExpr { args, variadic, ret: ret.map(Box::new) }), r)
+	},
+};
+
+// the arguments of a function type, in reverse order, and whether they end in `...`
+FuncTypeArgs: (Vec<Sourced<TypeExpr>>, bool) = {
+	=> (vec![], false),
+	"..." => (vec![], true),
+	<arg:TypeExpr> => (vec![arg], false),
+	<arg:TypeExpr> "," <mut rest:FuncTypeArgs> => {
+		rest.0.push(arg);
+		rest
+	},
 };
 
 Pattern: Sourced<Pattern> = PatLike =>? into_pattern(<>);
@@ -339,6 +356,7 @@ extern {
 
 	enum Token {
 		"." => Token::Dot,
+		"..." => Token::Ellipsis,
 		".*" => Token::Deref,
 		"," => Token::Comma,
 		":" => Token::Colon,
@@ -351,6 +369,7 @@ extern {
 
 		"+" => Token::Plus,
 		"-" => Token::Dash,
+		"->" => Token::Arrow,
 		"*" => Token::Star,
 		"/" => Token::Slash,
 		"%" => Token::Percent,
@@ -381,6 +400,7 @@ extern {
 
 		"plex" => Token::Plex,
 		"fn" => Token::Fn,
+		"extern" => Token::Extern,
 
 		"loop" => Token::Loop,
 		"while" => Token::While,

@@ -12,14 +12,15 @@ pub enum GenError {
 	Unsupported(&'static str),
 }
 
-/// Helpers the generated code relies on. `printf` and `scanf` stand in for the C functions the LLVM backend links.
+/// Helpers the generated code relies on. `__externs` stands in for C functions the LLVM backend would link.
 const PRELUDE: &str = r#"local __write = io.write
-local function printf(fmt, ...)
+local __externs = {}
+function __externs.printf(fmt, ...)
 	local s = string.format(fmt, ...)
 	__write(s)
 	return #s
 end
-local function scanf(fmt, ...)
+function __externs.scanf(fmt, ...)
 	local refs = {...}
 	local count = 0
 	for spec in fmt:gmatch("%%(%a)") do
@@ -37,6 +38,13 @@ local function scanf(fmt, ...)
 		count = count + 1
 	end
 	return count
+end
+-- an extern is one of the stand-ins above, or else a global like lua's own `print`
+local function __extern(name)
+	local value = __externs[name]
+	if value == nil then value = _G[name] end
+	if value == nil then error("unknown extern '" .. name .. "'") end
+	return value
 end
 local function __div(a, b)
 	if math.type(a) == "integer" and math.type(b) == "integer" then
@@ -427,6 +435,11 @@ impl Gen {
 				};
 				let args = self.values(&items);
 				format!("{}({})", prefix_exp(func), args.join(", "))
+			},
+			Expr::Extern(ext) => {
+				let symbol = ext.binding.borrow().name.clone();
+				self.emit(format!("local {} = __extern(\"{}\")", name(&ext.binding), symbol.escape_default()));
+				"nil".to_string()
 			},
 			Expr::Cast(cast) => {
 				let expr = self.value(&cast.expr);

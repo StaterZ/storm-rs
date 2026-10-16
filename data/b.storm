@@ -1,3 +1,6 @@
+extern printf: fn(str, ...) -> i32;
+extern scanf: fn(str, ...) -> i32;
+
 // let mut x = 0;
 // while x < 32r1000: x = x + 1;
 // let y = if x > 42 {

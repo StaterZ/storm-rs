@@ -84,6 +84,7 @@ mod tests {
 			Expr::Func(n) => format!("(fn {} {})", pattern(&n.binding), expr(&n.body)),
 			Expr::Call(n) => format!("(call {} {})", expr(&n.func), expr(&n.arg)),
 			Expr::Cast(n) => format!("(# {} {})", expr(&n.expr), *n.ty),
+			Expr::Extern(n) => format!("(extern {} {})", n.binding.borrow().name, *n.ty),
 			Expr::TupleCtor(n) => format!("[{}]", n.items.iter().map(|i| expr(i)).join(" ")),
 			Expr::BoolLit(v) => v.to_string(),
 			Expr::IntLit(v) => v.to_string(),
@@ -194,5 +195,19 @@ mod tests {
 		check("let f = fn(x): x * 3;", "(= - (let f) (fn [x] (* x 3)));");
 		check("let f = fn(mut a, b) { a.* - b.* };", "(= - (let f) (fn [(mut a) b] {(- (* a) (* b))}));");
 		check("plex { a: x b: y };", "(plex a:x b:y);");
+	}
+
+	#[test]
+	fn externs() {
+		check("extern printf: fn(str, ...) -> i32;", "(extern printf fn(str, ...) -> i32);");
+		check("extern exit: fn(i32);", "(extern exit fn(i32));");
+		check("extern f: fn();", "(extern f fn());");
+		check("extern f: fn(...);", "(extern f fn(...));");
+		check("extern f: fn(u8, (i8, f32),) -> fn() -> b1;", "(extern f fn(u8, (i8, f32)) -> fn() -> b1);");
+		check("extern @\"weird name\": fn();", "(extern weird name fn());");
+		check("x#fn(u8) -> u8;", "(# x fn(u8) -> u8);");
+		assert!(parse_str("extern f: fn(..., u8);").is_err()); // `...` has to come last
+		assert!(parse_str("extern f;").is_err());
+		assert!(parse_str("let x = extern f: fn();").is_err()); // it's a statement, not an expression
 	}
 }

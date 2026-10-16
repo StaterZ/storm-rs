@@ -22,6 +22,8 @@ pub enum Token {
 
 	#[token(".")]
 	Dot,
+	#[token("...")]
+	Ellipsis,
 	#[token(".*")]
 	Deref,
 	#[token(",")]
@@ -48,6 +50,8 @@ pub enum Token {
 	Plus,
 	#[token("-")]
 	Dash,
+	#[token("->")]
+	Arrow,
 	#[token("*")]
 	Star,
 	#[token("/")]
@@ -106,6 +110,8 @@ pub enum Token {
 	Plex,
 	#[token("fn")]
 	Fn,
+	#[token("extern")]
+	Extern,
 
 	#[token("loop")]
 	Loop,

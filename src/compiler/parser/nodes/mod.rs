@@ -30,6 +30,7 @@ pub use field_access::FieldAccess;
 pub use func::Func;
 pub use call::Call;
 pub use cast::Cast;
+pub use r#extern::Extern;
 
 pub use tuple_ctor::TupleCtor;
 pub use tuple_dtor::TupleDtor;
@@ -55,6 +56,7 @@ mod field_access;
 mod func;
 mod call;
 mod cast;
+mod r#extern;
 
 mod tuple_ctor;
 mod tuple_dtor;

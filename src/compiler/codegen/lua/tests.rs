@@ -15,6 +15,8 @@ fn compile(text: &str) -> String {
 	String::from_utf8(code).unwrap()
 }
 
+const EXTERNS: &str = "extern printf: fn(str, ...) -> i32; extern scanf: fn(str, ...) -> i32;\n";
+
 #[derive(Debug)]
 struct Run {
 	output: String,
@@ -23,7 +25,9 @@ struct Run {
 
 /// Runs a program with `input` as the lines of stdin, catching what it writes and its exit code.
 fn run_with_input(text: &str, input: &[&str]) -> Result<Run, String> {
-	let code = compile(text);
+	// snippets get the C functions the data files declare themselves
+	let text = if text.contains("extern ") { text.to_string() } else { format!("{}{}", EXTERNS, text) };
+	let code = compile(&text);
 	let lua = Lua::new();
 	lua.load(r#"
 		__out = {}
@@ -161,6 +165,13 @@ fn evaluation_order() {
 	// the call runs before the `if`, even though the `if` needs statements first
 	prints("let f = fn(s) { let _ = printf(s,); 1 }; let _ = f(\"a\",) + if true { let _ = f(\"b\",); 1 } else { 2 };", "ab");
 	prints("let f = fn(s) { let _ = printf(s,); 1 }; let _ = (f(\"a\",), { let _ = f(\"b\",); 1 }, f(\"c\",));", "abc");
+}
+
+#[test]
+fn externs() {
+	prints("extern print: fn(str); print(\"from lua\",);", ""); // lua's own print writes to stdout, not io.write
+	assert!(run("extern nope: fn(); nope();").unwrap_err().contains("unknown extern 'nope'"));
+	exits_with("extern tostring: fn(i64) -> str; extern tonumber: fn(str) -> i64; ret tonumber(tostring(41,),) + 1;", 42);
 }
 
 #[test]
