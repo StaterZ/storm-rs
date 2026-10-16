@@ -183,7 +183,8 @@ impl Analyzer {
 					},
 					Some(op) => {
 						let lhs = self.pattern_type(&mut assign.lhs);
-						let result = self.bin_op(op, &lhs, &rhs, range);
+						let (result, op) = self.bin_op(op, &lhs, &rhs, range);
+						assign.op = Some(op);
 						if !result.implicitly_casts_to(&lhs) {
 							self.error(SemErrorKind::Mismatch { expected: lhs.clone(), found: result }, *assign.rhs.source());
 						} else {
@@ -305,9 +306,11 @@ impl Analyzer {
 			Expr::BinOp(bin_op) => {
 				let lhs = self.expr(&mut bin_op.lhs);
 				let rhs = self.expr(&mut bin_op.rhs);
-				let ty = self.bin_op(bin_op.op, &lhs, &rhs, range);
+				let (ty, op) = self.bin_op(bin_op.op, &lhs, &rhs, range);
+				bin_op.op = op;
 				// the shift amount doesn't share the operand type, and comparisons give a b1 instead of it
-				if !matches!(bin_op.op, BinOpKind::Bitwise(_)) && let Some(operand) = lhs.unify(&rhs) {
+				let is_shift = matches!(op, BinOpKind::Bitwise(BitwiseBinOpKind::Shl | BitwiseBinOpKind::Shr));
+				if !is_shift && let Some(operand) = lhs.unify(&rhs) {
 					self.check_literal_fits(&bin_op.lhs, &operand);
 					self.check_literal_fits(&bin_op.rhs, &operand);
 				}
@@ -422,33 +425,42 @@ impl Analyzer {
 		ty
 	}
 
-	fn bin_op(&mut self, op: BinOpKind, lhs: &Type, rhs: &Type, range: source::Range) -> Type {
+	/// The type of a binary operator, and the operator it really is for these types.
+	/// `&&` and `||` are bitwise on bool types wider than b1, and `^` on b1s is `!=`.
+	fn bin_op(&mut self, op: BinOpKind, lhs: &Type, rhs: &Type, range: source::Range) -> (Type, BinOpKind) {
 		let invalid = |this: &mut Self| {
 			this.error(SemErrorKind::InvalidBinOp { op: op.to_string(), lhs: lhs.clone(), rhs: rhs.clone() }, range);
-			Type::Unknown
+			(Type::Unknown, op)
 		};
 
-		if let BinOpKind::Bitwise(_) = op {
+		if let BinOpKind::Bitwise(BitwiseBinOpKind::Shl | BitwiseBinOpKind::Shr) = op {
 			// the shift amount is a count, so it doesn't share the type of the bits
 			if !matches!(lhs, Type::Bool(_) | Type::Unknown | Type::Never) {
 				self.error(SemErrorKind::ShiftNonBool(lhs.clone()), range);
-				return Type::Unknown;
+				return (Type::Unknown, op);
 			}
 			if !rhs.is_int() && !matches!(rhs, Type::Unknown | Type::Never) {
 				return invalid(self);
 			}
-			return lhs.clone();
+			return (lhs.clone(), op);
 		}
 
 		let Some(ty) = lhs.unify(rhs) else {
 			return invalid(self);
 		};
 		let is_unknown = matches!(ty, Type::Unknown | Type::Never);
-		match op {
-			BinOpKind::Arith(_) if is_unknown || ty.is_numeric() => ty,
-			BinOpKind::Cmp(CmpBinOpKind::Eq | CmpBinOpKind::Ne) => Type::Bool(1),
-			BinOpKind::Cmp(_) if is_unknown || ty.is_numeric() => Type::Bool(1),
-			BinOpKind::Logic(_) if is_unknown || ty.implicitly_casts_to(&Type::Bool(1)) => Type::Bool(1),
+		let is_b1 = ty.implicitly_casts_to(&Type::Bool(1)) && !ty.is_numeric();
+		match (op, &ty) {
+			(BinOpKind::Arith(_), _) if is_unknown || ty.is_numeric() => (ty, op),
+			(BinOpKind::Cmp(CmpBinOpKind::Eq | CmpBinOpKind::Ne), _) => (Type::Bool(1), op),
+			(BinOpKind::Cmp(_), _) if is_unknown || ty.is_numeric() => (Type::Bool(1), op),
+			(BinOpKind::Logic(_), _) if is_unknown || is_b1 => (Type::Bool(1), op),
+			(BinOpKind::Logic(LogicBinOpKind::And), Type::Bool(_)) => (ty, BinOpKind::Bitwise(BitwiseBinOpKind::And)),
+			(BinOpKind::Logic(LogicBinOpKind::Or), Type::Bool(_)) => (ty, BinOpKind::Bitwise(BitwiseBinOpKind::Or)),
+			(BinOpKind::Bitwise(BitwiseBinOpKind::Xor), _) if is_b1 => (Type::Bool(1), BinOpKind::Cmp(CmpBinOpKind::Ne)),
+			(BinOpKind::Bitwise(BitwiseBinOpKind::Or), _) if is_b1 => (Type::Bool(1), BinOpKind::Logic(LogicBinOpKind::Or)),
+			(BinOpKind::Bitwise(_), Type::Bool(_)) => (ty, op),
+			(BinOpKind::Bitwise(_), _) if is_unknown => (ty, op),
 			_ => invalid(self),
 		}
 	}

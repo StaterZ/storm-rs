@@ -155,10 +155,10 @@ BinOp: BinOpKind = {
 	LinOp,
 };
 OrOp: BinOpKind = {
-	"||" => BinOpKind::Logic(LogicBinOpKind::Or),
+	"|" => BinOpKind::Logic(LogicBinOpKind::Or),
 };
 AndOp: BinOpKind = {
-	"&&" => BinOpKind::Logic(LogicBinOpKind::And),
+	"&" => BinOpKind::Logic(LogicBinOpKind::And),
 };
 CmpOp: BinOpKind = {
 	"==" => BinOpKind::Cmp(CmpBinOpKind::Eq),
@@ -175,6 +175,7 @@ ConstOp: BinOpKind = {
 BitOp: BinOpKind = {
 	"<<" => BinOpKind::Bitwise(BitwiseBinOpKind::Shl),
 	">>" => BinOpKind::Bitwise(BitwiseBinOpKind::Shr),
+	"^" => BinOpKind::Bitwise(BitwiseBinOpKind::Xor),
 };
 LinOp: BinOpKind = {
 	"*" <wrap:"%"?> => BinOpKind::Arith(ArithBinOp { kind: ArithBinOpKind::Mul, allow_wrap: wrap.is_some() }),
@@ -185,7 +186,7 @@ LinOp: BinOpKind = {
 // prefix operators bind tighter than postfix ones, so `-a.*` is `(-a).*`
 Postfix: Sourced<Cover> = {
 	<l:@L> <expr:Postfix> ".*" <r:@R> =>? una_op(l, UnaOpKind::Deref, expr, r),
-	<l:@L> <expr:Postfix> "&" <r:@R> =>? una_op(l, UnaOpKind::AddressOf, expr, r),
+	<l:@L> <expr:Postfix> ".&" <r:@R> =>? una_op(l, UnaOpKind::AddressOf, expr, r),
 	<l:@L> <expr:Postfix> "." <ident:"ident"> <r:@R> =>? Ok(cover(l, Expr::FieldAccess(FieldAccess {
 		expr: Box::new(into_expr(expr)?),
 		ident: Rc::new(Var::new(ident)),
@@ -358,6 +359,7 @@ extern {
 		"." => Token::Dot,
 		"..." => Token::Ellipsis,
 		".*" => Token::Deref,
+		".&" => Token::AddressOf,
 		"," => Token::Comma,
 		":" => Token::Colon,
 		";" => Token::Semicolon,
@@ -376,6 +378,8 @@ extern {
 		"<<" => Token::LShift,
 		">>" => Token::RShift,
 		"&" => Token::Ampersand,
+		"^" => Token::Caret,
+		"|" => Token::Bar,
 		"#" => Token::Hash,
 
 		"=" => Token::Equals,
@@ -385,8 +389,6 @@ extern {
 		"<=" => Token::Le,
 		">" => Token::Gt,
 		">=" => Token::Ge,
-		"&&" => Token::And,
-		"||" => Token::Or,
 		"!" => Token::Bang,
 
 		"let" => Token::Let,

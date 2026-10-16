@@ -105,9 +105,24 @@ fn arithmetic() {
 
 #[test]
 fn bools() {
-	exits_with("let t = true && 1 < 2; ret if t { 1 } else { 0 };", 1);
-	exits_with("ret if !false || false { 1 } else { 0 };", 1);
+	exits_with("let t = true & 1 < 2; ret if t { 1 } else { 0 };", 1);
+	exits_with("ret if !false | false { 1 } else { 0 };", 1);
 	exits_with("ret !(5#b8)#i8;", -6); // `!` on a bool type flips its bits
+}
+
+#[test]
+fn bool_operators() {
+	exits_with("ret (12#b8 & 10)#i8;", 8);
+	exits_with("ret (12#b8 | 3)#i8;", 15);
+	exits_with("ret (12#b8 ^ 10)#i8;", 6);
+	exits_with("ret (2b8 | 3b8)#i8;", 3);
+	exits_with("ret (12b8 | 3)#i8;", 15);
+	exits_with("ret if false | 1b1 { 1 } else { 0 };", 1);
+	exits_with("ret if true ^ 1b1 { 1 } else { 0 };", 0);
+	exits_with("ret (1#b8 << 2 ^ 1)#i8;", 5); // `^` binds like the shifts, left to right
+	exits_with("ret if true ^ true { 1 } else { 0 };", 0);
+	exits_with("ret if true ^ false { 1 } else { 0 };", 1);
+	exits_with("let mut x = 12#b8; x ^= 5; x &= 0b0000_1101; x |= 0b0001_0000; ret x#i8;", 25);
 }
 
 #[test]
@@ -154,10 +169,10 @@ fn bindings() {
 	exits_with("let t = (1, (2, 3)); let (a, (b, c)) = t; ret a + b * c;", 7);
 	exits_with("let (a, _, c) = (1, 2, 3); ret a + c;", 4);
 	exits_with("let end = 1; let @\"local\" = 2; let __x = 3; ret end + @\"local\" + __x;", 6);
-	exits_with("let mut x = 1#i64; let p = x&; p.* = 5; p.* += 1; ret x;", 6);
-	exits_with("let mut x = 1#i64; let p = x&; let q = p.*&; q.* = 3; ret x;", 3);
-	exits_with("let mut n = 0#i64; let _ = false && { n += 1; true }; let _ = true || { n += 1; true }; ret n;", 0);
-	exits_with("let mut n = 0#i64; let _ = true && { n += 1; true }; ret n;", 1);
+	exits_with("let mut x = 1#i64; let p = x.&; p.* = 5; p.* += 1; ret x;", 6);
+	exits_with("let mut x = 1#i64; let p = x.&; let q = p.*.&; q.* = 3; ret x;", 3);
+	exits_with("let mut n = 0#i64; let _ = false & { n += 1; true }; let _ = true | { n += 1; true }; ret n;", 0);
+	exits_with("let mut n = 0#i64; let _ = true & { n += 1; true }; ret n;", 1);
 }
 
 #[test]
@@ -176,6 +191,6 @@ fn externs() {
 
 #[test]
 fn scanf() {
-	let run = run_with_input("let mut a = 0#i64; let mut b = 0#i64; let _ = scanf(\"%d %d\", a&, b&,); ret a - b;", &["10", "3"]).unwrap();
+	let run = run_with_input("let mut a = 0#i64; let mut b = 0#i64; let _ = scanf(\"%d %d\", a.&, b.&,); ret a - b;", &["10", "3"]).unwrap();
 	assert_eq!(run.exit_code, Some(7));
 }

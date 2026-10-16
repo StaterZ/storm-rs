@@ -483,6 +483,9 @@ fn gen_bin_op<'ctx>(
 		BinOpKind::Bitwise(op) => match op {
 			BitwiseBinOpKind::Shl => builder.build_left_shift(lhs, rhs, "shl_temp")?,
 			BitwiseBinOpKind::Shr => builder.build_right_shift(lhs, rhs, is_signed, "shr_temp")?,
+			BitwiseBinOpKind::And => builder.build_and(lhs, rhs, "band_temp")?,
+			BitwiseBinOpKind::Or => builder.build_or(lhs, rhs, "bor_temp")?,
+			BitwiseBinOpKind::Xor => builder.build_xor(lhs, rhs, "xor_temp")?,
 		},
 		BinOpKind::Cmp(op) => match op {
 			CmpBinOpKind::Eq => builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq_temp")?,

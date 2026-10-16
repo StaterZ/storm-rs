@@ -29,12 +29,20 @@ impl Display for ArithBinOpKind {
 pub enum BitwiseBinOpKind {
 	Shl,
 	Shr,
+	/// What `&` becomes on bool types wider than b1.
+	And,
+	/// What `|` becomes on bool types wider than b1.
+	Or,
+	Xor,
 }
 impl Display for BitwiseBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			BitwiseBinOpKind::Shl => write!(f, "<<"),
 			BitwiseBinOpKind::Shr => write!(f, ">>"),
+			BitwiseBinOpKind::And => write!(f, "&"),
+			BitwiseBinOpKind::Or => write!(f, "|"),
+			BitwiseBinOpKind::Xor => write!(f, "^"),
 		}
 	}
 }
@@ -47,8 +55,8 @@ pub enum LogicBinOpKind {
 impl Display for LogicBinOpKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			LogicBinOpKind::And => write!(f, "&&"),
-			LogicBinOpKind::Or => write!(f, "||"),
+			LogicBinOpKind::And => write!(f, "&"),
+			LogicBinOpKind::Or => write!(f, "|"),
 		}
 	}
 }

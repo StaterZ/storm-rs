@@ -5,7 +5,9 @@ use std::{cell::RefCell, mem, ops::Deref, rc::Rc};
 
 use itertools::Itertools;
 
-use crate::compiler::{parser::{node_sets::*, nodes::*, Var}, source::Sourced};
+use num_traits::Zero;
+
+use crate::compiler::{lexer::literal::IntType, parser::{node_sets::*, nodes::*, Var}, source::Sourced};
 
 #[derive(Debug, strum::AsRefStr)]
 pub enum GenError {
@@ -454,6 +456,8 @@ impl Gen {
 				format!("{{{}}}", items.join(", "))
 			},
 			Expr::BoolLit(value) => value.to_string(),
+			// a b1 is a lua boolean, wider bool types are integers
+			Expr::IntLit(lit) if lit.ty == Some(IntType::Bool(1)) => (!lit.value.is_zero()).to_string(),
 			Expr::IntLit(lit) => lit.value.to_string(),
 			Expr::RealLit(lit) => match lit.to_f64() {
 				value if value.is_infinite() => "math.huge".to_string(),
@@ -688,6 +692,9 @@ fn bin_op_code(op: BinOpKind, lhs: &str, rhs: &str) -> String {
 		},
 		BinOpKind::Bitwise(BitwiseBinOpKind::Shl) => "<<",
 		BinOpKind::Bitwise(BitwiseBinOpKind::Shr) => ">>",
+		BinOpKind::Bitwise(BitwiseBinOpKind::And) => "&",
+		BinOpKind::Bitwise(BitwiseBinOpKind::Or) => "|",
+		BinOpKind::Bitwise(BitwiseBinOpKind::Xor) => "~",
 		BinOpKind::Cmp(op) => match op {
 			CmpBinOpKind::Eq => "==",
 			CmpBinOpKind::Ne => "~=",

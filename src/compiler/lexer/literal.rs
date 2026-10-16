@@ -217,7 +217,10 @@ pub fn parse_num(s: &str) -> Result<NumLit, LexerErrorKind> {
 	}
 
 	let value = digits_value(int_digits, radix);
+	let has_radix_prefix = body.len() != s.len();
 	let ty = match suffix {
+		// a literal written in an explicit base is a bit pattern, as wide as its digits can go, so `0x0f` is a b8
+		None if has_radix_prefix => Some(IntType::Bool(digits_width(int_digits, radix))),
 		None => None,
 		Some(Suffix::Int(ty)) => Some(ty),
 		Some(Suffix::Float(_)) => unreachable!("float suffixes make the literal real"),
@@ -328,13 +331,19 @@ fn digits_value(digits: &str, radix: u32) -> BigUint {
 	BigUint::parse_bytes(&digits, radix).expect("digits are checked against the radix before parsing")
 }
 
+/// The bits it takes to hold any number with this many digits, like 8 for two hex digits or 4 for `0q12`.
+fn digits_width(digits: &str, radix: u32) -> u64 {
+	let digits = digits.chars().filter(|&c| c != '_').count();
+	(BigUint::from(radix).pow(digits as u32) - 1u32).bits()
+}
+
 fn fits(value: &BigUint, ty: IntType) -> bool {
 	match ty {
 		IntType::Unsigned(bits) => value.bits() <= bits,
 		// the sign is a separate token, so the magnitude can reach 2^(bits-1) to allow the smallest value
 		IntType::Signed(0) => value.is_zero(),
 		IntType::Signed(bits) => value.bits() < bits || (value.bits() == bits && value.trailing_zeros() == Some(bits - 1)),
-		IntType::Bool(_) => value.bits() <= 1,
+		IntType::Bool(bits) => value.bits() <= bits,
 	}
 }
 

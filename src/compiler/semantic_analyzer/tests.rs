@@ -111,7 +111,7 @@ fn explicit_casts() {
 	ok("let a = 1.5f32#b32#f32;");
 	ok("let a = 1#b16#b8;");
 	ok("let a = (1, 2.5)#(u8, f32);");
-	ok("let mut a = 0#u8; let b = a&#usize;");
+	ok("let mut a = 0#u8; let b = a.&#usize;");
 	err("let a = 300#u8;", no_fit("300", int(false, 8)));
 	err("let a = -1#u8;", no_fit("-1", int(false, 8)));
 	err("let a = 1i8#b16;", InvalidCast { from: int(true, 8), to: Type::Bool(16) });
@@ -130,15 +130,39 @@ fn operators() {
 	err("let a = 1 << 2;", ShiftNonBool(Type::IntLit));
 	err("let a = 1#b8 << 1.5;", InvalidBinOp { op: "<<".to_string(), lhs: Type::Bool(8), rhs: Type::RealLit });
 	err("let a = 1#b8 + 1#b8;", InvalidBinOp { op: "+".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(8) });
-	ok("let a = true && 1 == 2 || 1u8 < 2;");
+	ok("let a = true & 1 == 2 | 1u8 < 2;");
 	ok("let a = \"a\" == \"b\";");
-	err("let a = 1u8 && true;", InvalidBinOp { op: "&&".to_string(), lhs: int(false, 8), rhs: Type::BoolLit });
+	err("let a = 1u8 & true;", InvalidBinOp { op: "&".to_string(), lhs: int(false, 8), rhs: Type::BoolLit });
 	err("let a = 1u8 == 1i8;", InvalidBinOp { op: "==".to_string(), lhs: int(false, 8), rhs: int(true, 8) });
 	err("let a = true < false;", InvalidBinOp { op: "<".to_string(), lhs: Type::BoolLit, rhs: Type::BoolLit });
 	ok("let a = !true; let b = !(1#b8); let c = -1i8; let d = -1.5; let e = +1u8;");
 	err("let a = !1u8;", InvalidUnaOp { op: "!".to_string(), ty: int(false, 8) });
 	err("let a = -(1u8);", InvalidUnaOp { op: "-".to_string(), ty: int(false, 8) });
 	err("let a = -(1#usize);", InvalidUnaOp { op: "-".to_string(), ty: Type::Usize });
+}
+
+#[test]
+fn bool_operators() {
+	assert_eq!(check_str("12#b8 & 10"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("12#b8 | 3"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("12#b8 ^ 10"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("3 ^ 12#b8"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("true ^ false"), Ok(Type::Bool(1)));
+	assert_eq!(check_str("2b8 | 3b8"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("2b8 | 3"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("true | false"), Ok(Type::Bool(1)));
+	assert_eq!(check_str("true & 1 < 2"), Ok(Type::Bool(1)));
+	ok("let mut a = 0#b16; a ^= 0x00ff; a &= 0x000f; a |= 1;");
+	assert_eq!(check_str("0x0f"), Ok(Type::Bool(8)));
+	assert_eq!(check_str("0b101 ^ 0b011"), Ok(Type::Bool(3)));
+	assert_eq!(check_str("0xffu8 + 1"), Ok(int(false, 8)));
+	err("let a = 0xff + 1;", InvalidBinOp { op: "+".to_string(), lhs: Type::Bool(8), rhs: Type::IntLit });
+	err("let a = 0xff & 0x0fff;", InvalidBinOp { op: "&".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(16) });
+	err("let a = 1#b8 & 1#b16;", InvalidBinOp { op: "&".to_string(), lhs: Type::Bool(8), rhs: Type::Bool(16) });
+	err("let a = 1u8 ^ 2u8;", InvalidBinOp { op: "^".to_string(), lhs: int(false, 8), rhs: int(false, 8) });
+	err("let a = 1 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::IntLit, rhs: Type::IntLit });
+	err("let a = 1.5 ^ 2;", InvalidBinOp { op: "^".to_string(), lhs: Type::RealLit, rhs: Type::IntLit });
+	err("let a = 1#b8 ^ 256;", no_fit("256", Type::Bool(8)));
 }
 
 #[test]
@@ -201,11 +225,11 @@ fn bindings() {
 
 #[test]
 fn pointers() {
-	ok("let mut a = 1u8; let p = a&; p.* = 2;");
-	ok("let mut a = 1u8; let p = a&; let b = p.* + 1;");
-	ok("let mut a = 1u8; let p = a&; p.* += 1;");
-	err("let mut a = 1u8; let p = a&; p.* = 300;", no_fit("300", int(false, 8)));
-	err("let mut a = 1u8; let p = a&; p.* = 1i8;", mismatch(int(false, 8), int(true, 8)));
+	ok("let mut a = 1u8; let p = a.&; p.* = 2;");
+	ok("let mut a = 1u8; let p = a.&; let b = p.* + 1;");
+	ok("let mut a = 1u8; let p = a.&; p.* += 1;");
+	err("let mut a = 1u8; let p = a.&; p.* = 300;", no_fit("300", int(false, 8)));
+	err("let mut a = 1u8; let p = a.&; p.* = 1i8;", mismatch(int(false, 8), int(true, 8)));
 	err("let a = 1u8.*;", NotAPointer(int(false, 8)));
 	err("let a = 1u8; a.* = 1;", NotAPointer(int(false, 8)));
 }
@@ -286,7 +310,7 @@ fn last_statement_type() {
 	assert_eq!(check_str("let a = 1; a + 1.5"), Ok(Type::RealLit));
 	assert_eq!(check_str("let a = 1;"), Ok(Type::Nothing));
 	assert_eq!(check_str("(1, 2.5)#(u8, f32)"), Ok(Type::Tuple(vec![int(false, 8), Type::Float(32)])));
-	assert_eq!(check_str("let a = 1u8; a&"), Ok(Type::Ptr(Box::new(int(false, 8)))));
+	assert_eq!(check_str("let a = 1u8; a.&"), Ok(Type::Ptr(Box::new(int(false, 8)))));
 	assert_eq!(check_str("1 < 2"), Ok(Type::Bool(1)));
 	assert_eq!(check_str("fn(x): 1u8"), Ok(Type::Func { arg: Box::new(Type::Tuple(vec![Type::Unknown])), ret: Box::new(int(false, 8)), variadic: false }));
 }

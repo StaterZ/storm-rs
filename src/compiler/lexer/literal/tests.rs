@@ -65,18 +65,23 @@ fn ints() {
 		("1__0", int("10", None)),
 		("18446744073709551616", int("18446744073709551616", None)),
 		("123456789012345678901234567890123456789", int("123456789012345678901234567890123456789", None)),
-		("0b1010", int("10", None)),
-		("0q123", int("27", None)),
-		("0o777", int("511", None)),
-		("0d99", int("99", None)),
-		("0xff", int("255", None)),
-		("0xFF", int("255", None)),
-		("0xdead_beef", int("3735928559", None)),
-		("2r101", int("5", None)),
-		("16rFF", int("255", None)),
-		("36rzz", int("1295", None)),
-		("0x1f32", int("7986", None)), // f is a hex digit, not a suffix
-		("0x1e3", int("483", None)), // e is a hex digit, not an exponent
+		// an explicit base makes a bool type, as wide as its digits can go
+		("0b1010", int("10", Some(Bool(4)))),
+		("0b0", int("0", Some(Bool(1)))),
+		("0b0000_0001", int("1", Some(Bool(8)))),
+		("0q123", int("27", Some(Bool(6)))),
+		("0o777", int("511", Some(Bool(9)))),
+		("0d99", int("99", Some(Bool(7)))),
+		("0d100", int("100", Some(Bool(10)))),
+		("0xff", int("255", Some(Bool(8)))),
+		("0xFF", int("255", Some(Bool(8)))),
+		("0x00ff", int("255", Some(Bool(16)))), // leading zeros count
+		("0xdead_beef", int("3735928559", Some(Bool(32)))),
+		("2r101", int("5", Some(Bool(3)))),
+		("16rFF", int("255", Some(Bool(8)))),
+		("36rzz", int("1295", Some(Bool(11)))),
+		("0x1f32", int("7986", Some(Bool(16)))), // f is a hex digit, not a suffix
+		("0x1e3", int("483", Some(Bool(12)))), // e is a hex digit, not an exponent
 	]);
 }
 
@@ -117,7 +122,8 @@ fn int_suffixes() {
 		("1b64", int("1", Some(Bool(64)))),
 		("1b7", int("1", Some(Bool(7)))),
 		("0b1b1", int("1", Some(Bool(1)))), // binary prefix with a bool suffix
-		("0b1", int("1", None)), // binary prefix, not a bool
+		("0b1", int("1", Some(Bool(1)))), // binary prefix, so a b1
+		("0xffu8", int("255", Some(Unsigned(8)))), // a suffix wins over the base
 		("12u", suffix("u")),
 		("12i", suffix("i")),
 		("12b", suffix("b")),
@@ -152,7 +158,10 @@ fn int_suffix_ranges() {
 		("170141183460469231731687303715884105728i128", int("170141183460469231731687303715884105728", Some(Signed(128)))),
 		("170141183460469231731687303715884105729i128", no_fit("170141183460469231731687303715884105729", Signed(128))),
 		("0b1b8", int("1", Some(Bool(8)))),
-		("2b8", no_fit("2", Bool(8))),
+		("2b8", int("2", Some(Bool(8)))),
+		("255b8", int("255", Some(Bool(8)))),
+		("256b8", no_fit("256", Bool(8))),
+		("2b1", no_fit("2", Bool(1))),
 	]);
 }
 

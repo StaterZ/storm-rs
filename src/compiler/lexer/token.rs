@@ -26,6 +26,8 @@ pub enum Token {
 	Ellipsis,
 	#[token(".*")]
 	Deref,
+	#[token(".&")]
+	AddressOf,
 	#[token(",")]
 	Comma,
 	#[token(":")]
@@ -68,6 +70,8 @@ pub enum Token {
 	Ampersand,
 	#[token("|")]
 	Bar,
+	#[token("^")]
+	Caret,
 
 	#[token("=")]
 	Equals,
@@ -83,10 +87,6 @@ pub enum Token {
 	Gt,
 	#[token(">=")]
 	Ge,
-	#[token("&&")]
-	And,
-	#[token("||")]
-	Or,
 	#[token("!")]
 	Bang,
 
