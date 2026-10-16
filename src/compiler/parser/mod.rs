@@ -90,7 +90,6 @@ pub fn parse<'a, 'i>(
 ) -> Result<Sourced<Expr>, RuleError> {
 	let mut stream = tokens
 		.iter()
-		.filter(|t| !t.is_whitespace())
 		.peekable()
 		.peeking_map(
 			|t| t,

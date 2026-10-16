@@ -63,8 +63,7 @@ pub fn compile(document: &source::Document, backend: Backend, flags: Flags) -> R
 	let tokens = match tokens {
 		Ok(tokens) => tokens,
 		Err(err) => {
-			let err_meta = err.with_meta(&document);
-			cprintln!("<red>Lexer Failed:</>\n{}", err_meta);
+			err.eprint(&document);
 			return Err(CompilerError::LexerFailed);
 		}
 	};
