@@ -6,7 +6,7 @@ use inkwell::{
 	module::{Linkage, Module},
 	targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
 	types::{BasicType, BasicTypeEnum},
-	values::{BasicValue, FunctionValue},
+	values::{BasicValue, FunctionValue, IntValue},
 	AddressSpace,
 	IntPredicate
 };
@@ -106,9 +106,14 @@ fn gen_expr<'a, 'ctx>(
 ) -> Result<Option<Value<'ctx>>, BuilderError> {
 	match node.deref() {
 		Expr::Assign(value) => {
-			if value.op.is_some() { todo!(); }
-
 			let rhs = gen_expr(&value.rhs, context, builder, module, sym_tbl, func_tbl)?.unwrap();
+			let rhs = match value.op {
+				Some(op) => {
+					let lhs = gen_pattern_load(&value.lhs, context, builder, module, sym_tbl, func_tbl)?;
+					Value::Int(gen_bin_op(op, lhs.into_int().unwrap(), rhs.into_int().unwrap(), builder)?)
+				},
+				None => rhs,
+			};
 			gen_pattern(&value.lhs, rhs, false, context, builder, module, sym_tbl, func_tbl)?;
 			Ok(None)
 		},
@@ -231,44 +236,7 @@ fn gen_expr<'a, 'ctx>(
 		Expr::BinOp(node) => {
 			let lhs = gen_expr(&node.lhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
 			let rhs = gen_expr(&node.rhs, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_int().unwrap();
-			let is_signed = true;
-			
-			let result = match node.op {
-				BinOpKind::Arith(op) => match op.kind {
-					ArithBinOpKind::Add => builder.build_int_add(lhs, rhs, "add_temp")?,
-					ArithBinOpKind::Sub => builder.build_int_sub(lhs, rhs, "sub_temp")?,
-					ArithBinOpKind::Mul => builder.build_int_mul(lhs, rhs, "mul_temp")?,
-					ArithBinOpKind::Div => if is_signed { builder.build_int_signed_div(lhs, rhs, "div_temp")? } else { builder.build_int_unsigned_div(lhs, rhs, "div_temp")? },
-					ArithBinOpKind::Mod => if is_signed {
-						let rem = builder.build_int_signed_rem(lhs, rhs, "rem_temp")?;
-						
-						//TODO: performance?
-						let zero = lhs.get_type().const_zero();
-						let is_negative = builder.build_int_compare(IntPredicate::SLT, rem, zero, "rem_is_negative")?;
-						let rhs_is_negative = builder.build_int_compare(IntPredicate::SLT, rhs, zero, "rhs_is_negative")?;
-						let needs_fix = builder.build_int_compare(IntPredicate::NE, is_negative, rhs_is_negative, "needs_fix")?;
-						let fixed_rem = builder.build_int_add(rem, rhs, "fixed_rem")?;
-						builder.build_select(needs_fix, fixed_rem, rem, "floor_mod")?.into_int_value()
-					} else { builder.build_int_unsigned_rem(lhs, rhs, "rem_temp")? },
-				},
-				BinOpKind::Bitwise(op) => match op {
-					BitwiseBinOpKind::Shl => builder.build_left_shift(lhs, rhs, "shl_temp")?,
-					BitwiseBinOpKind::Shr => builder.build_right_shift(lhs, rhs, is_signed, "shr_temp")?,
-				},
-				BinOpKind::Cmp(op) => match op {
-					CmpBinOpKind::Eq => builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq_temp")?,
-					CmpBinOpKind::Ne => builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne_temp")?,
-					CmpBinOpKind::Lt => builder.build_int_compare(if is_signed { IntPredicate::SLT } else { IntPredicate::ULT }, lhs, rhs, "lt_temp")?,
-					CmpBinOpKind::Le => builder.build_int_compare(if is_signed { IntPredicate::SLE } else { IntPredicate::ULE }, lhs, rhs, "le_temp")?,
-					CmpBinOpKind::Gt => builder.build_int_compare(if is_signed { IntPredicate::SGT } else { IntPredicate::UGT }, lhs, rhs, "gt_temp")?,
-					CmpBinOpKind::Ge => builder.build_int_compare(if is_signed { IntPredicate::SGE } else { IntPredicate::UGE }, lhs, rhs, "ge_temp")?,
-				},
-				BinOpKind::Logic(op) => match op {
-					LogicBinOpKind::And => builder.build_and(lhs, rhs, "and_temp")?,
-					LogicBinOpKind::Or => builder.build_or(lhs, rhs, "bor_temp")?,
-				},
-			};
-			Ok(Some(Value::Int(result)))
+			Ok(Some(Value::Int(gen_bin_op(node.op, lhs, rhs, builder)?)))
 		},
 		Expr::UnaOp(node) => {
 			let expr_val = gen_expr(&node.expr, context, builder, module, sym_tbl, func_tbl)?.unwrap();
@@ -393,6 +361,51 @@ fn gen_expr<'a, 'ctx>(
 	}
 }
 
+fn gen_bin_op<'ctx>(
+	op: BinOpKind,
+	lhs: IntValue<'ctx>,
+	rhs: IntValue<'ctx>,
+	builder: &Builder<'ctx>,
+) -> Result<IntValue<'ctx>, BuilderError> {
+	let is_signed = true;
+	
+	Ok(match op {
+		BinOpKind::Arith(op) => match op.kind {
+			ArithBinOpKind::Add => builder.build_int_add(lhs, rhs, "add_temp")?,
+			ArithBinOpKind::Sub => builder.build_int_sub(lhs, rhs, "sub_temp")?,
+			ArithBinOpKind::Mul => builder.build_int_mul(lhs, rhs, "mul_temp")?,
+			ArithBinOpKind::Div => if is_signed { builder.build_int_signed_div(lhs, rhs, "div_temp")? } else { builder.build_int_unsigned_div(lhs, rhs, "div_temp")? },
+			ArithBinOpKind::Mod => if is_signed {
+				let rem = builder.build_int_signed_rem(lhs, rhs, "rem_temp")?;
+				
+				//TODO: performance?
+				let zero = lhs.get_type().const_zero();
+				let is_negative = builder.build_int_compare(IntPredicate::SLT, rem, zero, "rem_is_negative")?;
+				let rhs_is_negative = builder.build_int_compare(IntPredicate::SLT, rhs, zero, "rhs_is_negative")?;
+				let needs_fix = builder.build_int_compare(IntPredicate::NE, is_negative, rhs_is_negative, "needs_fix")?;
+				let fixed_rem = builder.build_int_add(rem, rhs, "fixed_rem")?;
+				builder.build_select(needs_fix, fixed_rem, rem, "floor_mod")?.into_int_value()
+			} else { builder.build_int_unsigned_rem(lhs, rhs, "rem_temp")? },
+		},
+		BinOpKind::Bitwise(op) => match op {
+			BitwiseBinOpKind::Shl => builder.build_left_shift(lhs, rhs, "shl_temp")?,
+			BitwiseBinOpKind::Shr => builder.build_right_shift(lhs, rhs, is_signed, "shr_temp")?,
+		},
+		BinOpKind::Cmp(op) => match op {
+			CmpBinOpKind::Eq => builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq_temp")?,
+			CmpBinOpKind::Ne => builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne_temp")?,
+			CmpBinOpKind::Lt => builder.build_int_compare(if is_signed { IntPredicate::SLT } else { IntPredicate::ULT }, lhs, rhs, "lt_temp")?,
+			CmpBinOpKind::Le => builder.build_int_compare(if is_signed { IntPredicate::SLE } else { IntPredicate::ULE }, lhs, rhs, "le_temp")?,
+			CmpBinOpKind::Gt => builder.build_int_compare(if is_signed { IntPredicate::SGT } else { IntPredicate::UGT }, lhs, rhs, "gt_temp")?,
+			CmpBinOpKind::Ge => builder.build_int_compare(if is_signed { IntPredicate::SGE } else { IntPredicate::UGE }, lhs, rhs, "ge_temp")?,
+		},
+		BinOpKind::Logic(op) => match op {
+			LogicBinOpKind::And => builder.build_and(lhs, rhs, "and_temp")?,
+			LogicBinOpKind::Or => builder.build_or(lhs, rhs, "bor_temp")?,
+		},
+	})
+}
+
 fn gen_pattern<'a, 'ctx>(
 	node: &'a Sourced<Pattern>,
 	rhs: Value<'ctx>,
@@ -436,6 +449,29 @@ fn gen_pattern<'a, 'ctx>(
 			Ok(())
 		},
 		Pattern::Discard => Ok(()),
+	}
+}
+fn gen_pattern_load<'a, 'ctx>(
+	node: &'a Sourced<Pattern>,
+	context: &'ctx Context,
+	builder: &Builder<'ctx>,
+	module: &Module<'ctx>,
+	sym_tbl: &mut HashMap<String, PtrValue<'ctx>>,
+	func_tbl: &mut Vec<FuncJob<'a, 'ctx>>,
+) -> Result<Value<'ctx>, BuilderError> {
+	match node.deref() {
+		Pattern::Mut(node) => gen_pattern_load(&node.pat, context, builder, module, sym_tbl, func_tbl),
+		Pattern::Deref(node) => {
+			let ptr = gen_expr(node, context, builder, module, sym_tbl, func_tbl)?.unwrap().into_ptr().unwrap();
+			Ok(builder.build_load(ptr.get_pointee_type().clone(), *ptr, "deref")?.into())
+		},
+		Pattern::Binding(node) => {
+			let binding = &node.borrow().name;
+			let sym = sym_tbl[binding.as_str()].clone();
+			let val = builder.build_load(sym.get_pointee_type().clone(), *sym, binding.as_str())?;
+			Ok(Value::new(val, sym.get_pointee_type().clone()))
+		},
+		Pattern::Let(_) | Pattern::TupleDtor(_) | Pattern::Discard => todo!("compound assignment to this pattern"),
 	}
 }
 fn gen_pattern_type<'ctx>(
