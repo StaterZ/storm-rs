@@ -48,7 +48,6 @@ impl<T> Sourced<T> {
 		&self.range
 	}
 
-	
 	pub fn with_meta<'a>(self, document: &'a DocumentMeta) -> SourcedMeta<'a, T> {
 		SourcedMeta::new_with_document(self, document)
 	}
